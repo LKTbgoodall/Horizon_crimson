@@ -46,4 +46,5 @@ The rise is the first thing anyone sees of the mod, so it is **an event in its o
 - **Seen from everywhere**: red light comes in through windows and the sound carries through walls, so people want to go outside.
 
 ## Next
-- Preview page with **3 truly different stagings** of the full minute; Bastien picks one or mixes them.
+- Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picks one or mixes them.
+- In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.

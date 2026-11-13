@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Crimson Eclipse: blood moon rise preview</title>
+<!--
+  Preview of the blood moon rise (vault/04 - Design/Blood moon rise.md): three stagings of the same
+  sequence. Self-contained, no dependency. Open it in a browser.
+  The sky is ONE full-screen fragment shader, as it will be in game (RenderHooks::world_drawn, drawn
+  where the world depth says "sky"). The terrain here is only a stand-in for a Minecraft world.
+  URL parameters: ?v=a|b|c  &t=<seconds>  &play=0  &ui=0
+-->
+<style>
+  :root { --red:#ff3b2f; --dim:#b9a7a5; --bg:rgba(12,4,5,.72); --line:rgba(255,90,70,.22); }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:#000; color:#f3e9e7; overflow:hidden;
+    font:14px/1.45 system-ui,"Segoe UI",Roboto,sans-serif; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
+  .ui { transition:opacity .35s; }
+  body.hide .ui { opacity:0; pointer-events:none; }
+  #cap { position:fixed; left:18px; top:14px; max-width:min(520px,70vw); text-shadow:0 1px 6px #000,0 0 2px #000; pointer-events:none; }
+  #cap .v { font-size:22px; font-weight:700; letter-spacing:.02em; }
+  #cap .v b { color:var(--red); margin-right:.35em; }
+  #cap .tag { color:var(--dim); margin-top:2px; }
+  #cap .ph { margin-top:8px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#ffb4a8; }
+  #cross { position:fixed; left:50%; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; pointer-events:none; opacity:.55;
+    background:linear-gradient(#fff,#fff) center/2px 14px no-repeat,linear-gradient(#fff,#fff) center/14px 2px no-repeat; mix-blend-mode:difference; }
+  #bar { position:fixed; left:0; right:0; bottom:0; padding:10px 16px 12px; background:linear-gradient(transparent,rgba(0,0,0,.82) 45%);
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; }
+  button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:7px; padding:6px 11px; cursor:pointer; white-space:nowrap; }
+  button:hover { border-color:var(--red); }
+  button.on { background:#7d120d; border-color:var(--red); }
+  #play { width:42px; font-size:15px; }
+  #time { font-variant-numeric:tabular-nums; color:var(--dim); min-width:92px; }
+  #track { position:relative; flex:1 1 320px; height:34px; cursor:pointer; touch-action:none; }
+  #segs { position:absolute; left:0; right:0; top:0; height:14px; display:flex; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); }
+  #segs span { overflow:hidden; white-space:nowrap; border-left:1px solid var(--line); padding-left:5px; }
+  #rail { position:absolute; left:0; right:0; top:19px; height:8px; border-radius:4px; background:rgba(255,255,255,.13); overflow:hidden; }
+  #fill { height:100%; width:0; background:linear-gradient(90deg,#7d120d,var(--red)); }
+  #knob { position:absolute; top:15px; width:4px; height:16px; margin-left:-2px; border-radius:2px; background:#fff; box-shadow:0 0 8px var(--red); }
+  .vers { display:flex; gap:6px; }
+  #notes { position:fixed; right:14px; top:14px; bottom:86px; width:min(430px,92vw); overflow:auto; padding:14px 16px; background:rgba(10,3,4,.9);
+    border:1px solid var(--line); border-radius:10px; display:none; font-size:13px; }
+  #notes.open { display:block; }
+  #notes h2 { margin:0 0 8px; font-size:15px; color:#ffb4a8; }
+  #notes h3 { margin:14px 0 4px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); }
+  #notes table { width:100%; border-collapse:collapse; }
+  #notes td { vertical-align:top; padding:5px 6px 5px 0; border-top:1px solid rgba(255,255,255,.08); }
+  #notes td:first-child { width:38%; color:#fff; }
+  #notes code { color:#ffb4a8; font-size:12px; }
+  #notes p { margin:6px 0; color:var(--dim); }
+  #err { position:fixed; inset:0; display:none; place-items:center; padding:30px; text-align:center; color:#ffb4a8; white-space:pre-wrap; }
+  #hint { position:fixed; left:50%; bottom:74px; transform:translateX(-50%); font-size:12px; color:var(--dim); text-shadow:0 1px 4px #000; pointer-events:none; white-space:nowrap; }
+  @media (max-width:1250px){ #hint{display:none} }
+  @media (max-width:760px){ #cap .tag{display:none} }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cross" class="ui"></div>
+<div id="cap" class="ui"><div class="v"><b id="vk"></b><span id="vn"></span></div><div class="tag" id="vt"></div><div class="ph" id="ph"></div></div>
+<div id="hint" class="ui">Move the mouse to look around · Space play/pause · 1 2 3 versions · ← → seek · H hide UI</div>
+<div id="notes" class="ui">
+  <h2>How each thing is rendered in Horizon</h2>
+  <p>Checked against the pin <code>9f42064</code> (<code>native_render.rs</code>, <code>docs/native-mods.md</code>). Read in source, not yet seen in game unless noted.</p>
+  <table>
+    <tr><td>Moon, eclipse shadow, moon cracks, flame corona, blood aurora, sky cracks, the eye, stars going out</td><td>One full-screen fragment shader in <code>RenderHooks::world_drawn</code>, written only where the world depth is 0 (the sky; <code>render_needs.world_depth</code>). It paints over the vanilla moon and stars: there is no moon hook at the pin. This page's GLSL ports to WGSL almost line for line.</td></tr>
+    <tr><td>Glow / bloom</td><td>Same hook: copy the colour target out, bright pass, blur, add back.</td></tr>
+    <tr><td>World turning red, tinted shadows</td><td>Colour grade in the same pass on non-sky pixels (depth gives the distance). Alternative: <code>world_fragment</code> of a <code>world_warp</code>.</td></tr>
+    <tr><td>Burgundy grass and leaves</td><td><code>native_biome_colors</code>, swapped once mid-eclipse (a refresh rebuilds sections); the grade makes the change look continuous.</td></tr>
+    <tr><td>Red fog closing in</td><td><code>compute_fog_color</code> + <code>render_fog</code>.</td></tr>
+    <tr><td>Heartbeat pulse of red light near the player</td><td><code>visuals</code> coloured lights (seen working on Cagebound), 8 per mod within 32 blocks; further away the grade carries it.</td></tr>
+    <tr><td>Shake at the climax</td><td><code>camera_shake</code> (≤ 10°, scaled by the player's Distortion Effects setting). The player keeps control.</td></tr>
+    <tr><td>Embers, glass glints, rising dust</td><td>Controlled particles (<code>ParticleEngine::controlled</code>), full bright.</td></tr>
+    <tr><td>Eye following the player</td><td>The pass gets the camera matrices every frame; the pure core decides gaze, blink and pupil.</td></tr>
+    <tr><td>Heartbeat, drone, the crack</td><td><code>music_layers</code> + <code>play_sound</code>. The Sound button here is a rough synth stand-in, not the final audio.</td></tr>
+  </table>
+  <h3>To check in game (❓)</h3>
+  <p>Long moon shadows: the preview casts them from a height map. Whether the engine casts moon shadows without a shader pack is not verified; fallback is screen-space shadows from the depth buffer in our pass.</p>
+  <p>Vanilla clouds are drawn before our pass: whether they write depth (and so cover our sky) is not verified. The preview has no clouds.</p>
+  <h3>Not shown here</h3>
+  <p>Nervous animals at sunset (gameplay), red light through windows, the golden dawn (event #11). The camera turn from the sunset to the moon at 0:11 is this preview's, not the game's.</p>
+</div>
+<div id="bar" class="ui">
+  <button id="play" title="Play / pause (Space)">❚❚</button>
+  <span id="time">0:00 / 1:44</span>
+  <div id="track"><div id="segs"></div><div id="rail"><div id="fill"></div></div><div id="knob"></div></div>
+  <div class="vers" id="vers"></div>
+  <button id="snd" title="Rough synth stand-in for heartbeat, drone and crack">🔇 Sound</button>
+  <button id="nb">Render notes</button>
+</div>
+<div id="err"></div>
+
+<script>
+'use strict';
+// ───────────────────────── timeline ─────────────────────────
+const T0 = 14, TE = 74, TN = 80, TT = 104;          // eclipse start, climax, night, end (seconds)
+const F0 = .75, F1 = 2.3;                            // heartbeat, Hz, at the start and end of the eclipse
+const PHASES = [['Omens', 0], ['Eclipse', T0], ['The eye', TE], ['Night', TN]];
+const VERS = [
+  { key:'A', name:'The Wound', tag:'Organic, slow dread. A low heavy moon fills with blood from below, the sky grows veins that beat with the heart, and the lid peels open like something waking up.',
+    el0:6, el1:17, r0:.15, r1:.15, pitch:11, cos:.25, rot:0, pulse:1, shake:.9, vel:[0,.035,0], pcol:[1,.24,.05] },
+  { key:'B', name:'Shattered Sky', tag:'Sharp and violent. A hard black disc cuts across the moon, the sky breaks into glass panes on the heartbeat, and the eye snaps open in a single crack with a shock wave.',
+    el0:30, el1:38, r0:.10, r1:.10, pitch:21, cos:.5, rot:.5, pulse:.5, shake:2.2, vel:[0,-.11,0], pcol:[1,.6,.5] },
+  { key:'C', name:'The Abyss', tag:'Cosmic and huge. The moon swells while a spiral void eats it from the centre, stars are dragged in, the sky tears. Total darkness for a breath, then a giant eye.',
+    el0:8, el1:27, r0:.12, r1:.29, pitch:15, cos:.8, rot:-.1, pulse:.3, shake:1.5, vel:null, pcol:[.85,.2,.6] },
+];
+const DEG = Math.PI / 180;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const mix = (a, b, k) => a + (b - a) * k;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const mix3 = (a, b, k) => [mix(a[0], b[0], k), mix(a[1], b[1], k), mix(a[2], b[2], k)];
+const mul3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const phaseOf = p => 60 * (F0 * p + (F1 - F0) * p * p / 2);                       // beats since the eclipse began
+const pOfPhase = n => (-F0 + Math.sqrt(F0 * F0 + 2 * (F1 - F0) * n / 60)) / (F1 - F0);
+
+// Everything the picture needs, as a pure function of (time, version): scrubbing is exact.
+function state(t, v) {
+  const V = VERS[v], p = clamp((t - T0) / 60), tc = v === 2 ? 74.5 : 74;
+  let ph = 0, beat = 0;
+  if (t >= T0 && t < TE) ph = phaseOf(p); else if (t >= TN - 1) ph = 1000 + (t - TN + 1) * .6;
+  if (ph > 0) { const x = ph - Math.floor(ph); beat = Math.max(Math.exp(-x * 8), x > .3 ? .7 * Math.exp(-(x - .3) * 8) : 0); }
+  const pq = t >= TE ? 1 : pOfPhase(Math.floor(phaseOf(p) / 3) * 3);              // B: progress in steps of 3 beats
+
+  let open, seam, flash = 0, dark = 1, shock = 0, shockK = 0;
+  if (v === 0) {
+    open = sstep(75, 79.5, t); seam = clamp((t - 73) / 1.4);
+    if (t >= 74) flash = .45 * Math.exp(-(t - 74) * 1.8);
+  } else if (v === 1) {
+    const x = (t - 74.12) / .5;
+    open = x <= 0 ? 0 : x < 1 ? x * x * (3 - 2 * x) : 1 + .12 * Math.exp(-(x - 1) * 3) * Math.sin((x - 1) * 14);
+    seam = clamp((t - 74) / .08);
+    if (t >= 74) { flash = 1.3 * Math.exp(-(t - 74) * 2.6); if (t < 77) { shock = (t - 74) * .8; shockK = 1 - (t - 74) / 3; } }
+  } else {
+    open = sstep(74.5, 77, t); seam = clamp((t - 74.1) / .4);
+    if (t >= 72.3 && t < 74.5) dark = 1 - .96 * sstep(72.3, 73.5, t);
+    if (t >= 74.5) { dark = mix(.04, 1, clamp((t - 74.5) / .35)); flash = 1.1 * Math.exp(-(t - 74.5) * 1.6);
+      if (t < 78.5) { shock = (t - 74.5) * .5; shockK = 1 - (t - 74.5) / 4; } }
+  }
+  for (const tb of [87, 96.5]) { const d = Math.abs(t - tb) / .22; if (d < 1) open *= d * d; }   // blinks
+
+  let shake = t >= T0 && t < TE ? .04 + .2 * p * p : 0;
+  if (t >= tc) shake += V.shake * Math.exp(-(t - tc) * 1.4);
+
+  const k1 = sstep(3, 14, t), kb = sstep(0, .7, p);
+  const hor = mix3(mix3(mix3([1, .5, .22], [1, .15, .04], sstep(0, 7, t)), [.30, .06, .07], k1), [.5, .035, .03], kb);
+  const zen = mix3(mix3([.20, .13, .32], [.025, .02, .06], k1), [.055, 0, .008], kb);
+  const amb = mix3(mix3([.62, .42, .40], [.16, .14, .25], k1), [.34, .07, .07], p);
+
+  const sunEl = mix(7, -6, clamp(t / 13)) * DEG;
+  const sun = norm([-Math.cos(sunEl), Math.sin(sunEl), .17]);
+  const mEl = (mix(-10, V.el0, sstep(8, 14, t)) + (V.el1 - V.el0) * sstep(0, 1, p)) * DEG;
+  const moon = [Math.cos(mEl), Math.sin(mEl), 0];
+  let L, lcol;
+  if (t < 13) {
+    const e = Math.max(sunEl, 4 * DEG); L = norm([-Math.cos(e), Math.sin(e), .17]);
+    lcol = mul3([1.15, .5, .22], 1 - sstep(8, 13, t));
+  } else {
+    const e = Math.max(mEl, 9 * DEG); L = [Math.cos(e), Math.sin(e), 0];
+    const dip = 1 - .45 * Math.exp(-(((p - .85) / .12) ** 2)) * (t < TE ? 1 : 0);
+    const night = t >= TE ? .75 + .35 * clamp(open) : 1;
+    lcol = mul3(mix3([.42, .5, .7], [2.1, .24, .15], sstep(.1, .8, p)), sstep(13, 17, t) * dip * night * (1 + V.pulse * .35 * beat));
+  }
+  let corona = sstep(.03, .6, p) * (.45 + .55 * p) * (1 + .3 * V.pulse * beat) + .25 * clamp(open);
+  let rev = v === 1 ? 1.7 * Math.pow(pq, 1.1) + 1.5 * sstep(74, 74.3, t) : 1.6 * Math.pow(p, 1.3) + (v === 0 ? .5 * sstep(74, 76, t) : 0);
+  return {
+    p, pq, beat, beatN: Math.floor(ph), open, seam, flash, dark, shock, shockK, shake, hor, zen, amb, sun, moon, L, lcol, corona, rev, tc,
+    moonRad: mix(V.r0, V.r1, sstep(0, 1, p)), fog: mul3(hor, mix(.85, .5, sstep(0, .8, p))), fogDen: mix(.010, .016, sstep(0, .9, p)),
+    sunset: 1 - sstep(8, 14, t), stars: sstep(9, 15, t), blood: sstep(.8, 1, p), grade: .7 * sstep(.1, .9, p), fol: sstep(.15, .75, p),
+    bead: v === 1 && t < TE ? Math.exp(-(((p - .955) / .03) ** 2)) : 0, part: sstep(.25, .8, p),
+    baseYaw: Math.PI * (1 - sstep(10.5, 14.5, t)),
+  };
+}
+
+// ───────────────────────── shaders ─────────────────────────
+const NOISE = `
+float h11(float n){return fract(sin(n)*43758.5453);}
+float h21(vec2 p){p=fract(p*vec2(123.34,456.21));p+=dot(p,p+45.32);return fract(p.x*p.y);}
+vec2 h22(vec2 p){float n=h21(p);return vec2(n,h21(p+n+17.1));}
+float vnoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
+  return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float a=.5,s=0.;for(int i=0;i<5;i++){s+=a*vnoise(p);p=p*2.03+vec2(17.3,9.1);a*=.5;}return s;}
+float pn(float a,float x,float f){return fbm(vec2(cos(a),sin(a))*f+vec2(x,-x*.7));}
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+// x: distance to the nearest cell edge, y: cell hash, z: distance to the cell point
+vec3 voro(vec2 p){
+  vec2 n=floor(p),f=fract(p),mg=vec2(0),mr=vec2(0);float md=8.;
+  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){vec2 g=vec2(float(i),float(j));vec2 r=g+h22(n+g)-f;float d=dot(r,r);if(d<md){md=d;mr=r;mg=g;}}
+  float ed=8.;
+  for(int j=-2;j<=2;j++)for(int i=-2;i<=2;i++){vec2 g=mg+vec2(float(i),float(j));vec2 r=g+h22(n+g)-f;
+    if(dot(mr-r,mr-r)>1e-5)ed=min(ed,dot(.5*(mr+r),normalize(r-mr)));}
+  return vec3(ed,h21(n+mg),sqrt(md));
+}`;
+const VS_FULL = `#version 300 es
+void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}`;
+
+// The sky. In game: the same maths in WGSL, drawn where depth == 0.
+const FS_SKY = `#version 300 es
+precision highp float;
+out vec4 o;
+uniform vec2 uRes,uGaze;
+uniform vec3 uF,uR,uU,uMoon,uSun,uHor,uZen,uFog;
+uniform float uTan,uAsp,uT,uP,uPq,uSunset,uBeat,uOpen,uSeam,uPupil,uFlash,uShock,uShockK,uMoonRad,uCos,uEyeRot,uStars,uCorona,uRev,uBlood,uBead,uPulse;
+uniform int uVer;
+${NOISE}
+vec4 aurora(vec3 d,float ang,float a){
+  float k=smoothstep(.08,.5,uP); if(k<=0.) return vec4(0.);
+  float el=asin(clamp(d.y,-1.,1.)),az=atan(d.z,d.x),I=0.,B=0.;
+  if(uVer==2){
+    float sp=a*2.-log(ang+.02)*3.5+uT*.25;
+    float ray=.4+.6*vnoise(vec2(a*14.+uT*.2,ang*5.));
+    I=smoothstep(.35,1.,sin(sp))*ray*exp(-ang*1.1)*smoothstep(0.,.25,ang)*1.3;
+    B=smoothstep(.3,1.,sin(sp+2.6))*exp(-ang*.8);
+  }else{
+    float sp=uVer==1?.9:.22,hgt=uVer==1?.16:.42,rf=uVer==1?70.:38.;
+    for(int i=0;i<3;i++){
+      float fi=float(i);
+      float w=az*(1.3+fi*.7)+uT*sp*(.6+fi*.3)+fi*2.1;
+      float wave=uVer==1?(abs(fract(w*.5)-.5)*2.-.5)*.3:sin(w)*.13+sin(w*2.7+1.)*.05;
+      float e0=.38+fi*.2+wave;
+      float v=(el-e0)/hgt;
+      float ray=.35+.65*vnoise(vec2(az*rf+fi*9.,uT*.5+fi));
+      I+=smoothstep(0.,.06,v)*exp(-v*3.2)*ray;
+      float v2=(el-e0+.11)/hgt;
+      B+=smoothstep(0.,.05,v2)*exp(-v2*4.)*(uVer==0?1.:.6);
+    }
+  }
+  vec3 c=mix(vec3(.75,.02,.05),vec3(1.,.28,.12),clamp(I*.6,0.,1.))*I;
+  return vec4(c*k,clamp(B*k,0.,.92));
+}
+float stars(vec3 d,float ang,float a){
+  vec2 g=uVer==2?vec2(a/6.2832*88.,log(ang+.03)*9.+uP*uP*5.):vec2(atan(d.z,d.x),asin(clamp(d.y,-1.,1.)))*60.;
+  vec2 id=floor(g),f=fract(g)-.5;float h=h21(id);
+  if(h<.86) return 0.;
+  vec2 s=f-(h22(id+3.)-.5)*.6;
+  if(uVer==2) s.y/=1.+uP*6.;
+  float alive=step(uP*1.12,h21(id+7.));
+  return smoothstep(.09,0.,length(s))*(.7+.3*sin(uT*3.+h*90.))*alive*(.5+.5*h21(id+1.));
+}
+// x: crack core, y: crack glow, z: torn-open sky. refr: xy bends the sky behind a glass pane, z shades it.
+vec3 skyCracks(vec2 qa,float ang,float a,out vec3 refr){
+  refr=vec3(0.);
+  float m=smoothstep(uRev,uRev-.18,ang)*smoothstep(uMoonRad*.95,uMoonRad*1.12,ang);
+  if(m<=0.) return vec3(0.);
+  float e,gate=1.,vd=0.,w,gl;
+  float far=clamp(ang/max(uRev,.01),0.,1.);
+  if(uVer==0){
+    vec2 wq=qa+.07*vec2(fbm(qa*5.),fbm(qa*5.+7.))-.035;
+    e=voro(wq*4.5).x/4.5;
+    gate=smoothstep(.5,.62,vnoise(qa*3.1+3.7)+.35*exp(-ang*2.5))*(.35+.65*smoothstep(.3,.7,vnoise(qa*9.+1.)));
+    w=mix(.006,.0013,far);gl=70.;
+  }else if(uVer==1){
+    vec3 v=voro(qa*3.4+11.);e=v.x/3.4;
+    refr=vec3((h22(vec2(v.y*91.,v.y*17.))-.5)*.06,(v.y-.5)*.5)*m;
+    w=.0026;gl=160.;
+  }else{
+    float N=26.,k=a/6.2832*N+.4*(pn(a,ang*3.,2.)-.5),sid=floor(k);
+    float da=(.5-abs(fract(k)-.5))*(6.2832/N)*ang;
+    float lr=log(ang*10.+1.)*4.5+.35*h11(sid*7.3),rid=floor(lr);
+    float dr=h21(vec2(sid,rid))<.45?1.:(.5-abs(fract(lr)-.5))*(ang*10.+1.)/45.;
+    e=min(da,dr);
+    vd=step(h21(vec2(sid,rid)+5.3),uP*.3-.04);
+    w=mix(.004,.0016,far);gl=90.;
+  }
+  return vec3(smoothstep(w,w*.3,e)*gate,exp(-e*gl)*gate,vd)*m;
+}
+vec3 eye(vec2 e,float L,float dy){
+  float Ri=uVer==2?.47:.4;
+  vec2 ie=e-uGaze*.17;float il=length(ie),ir=il/Ri;vec2 dv=ie/(il+1e-4);
+  vec3 scl=vec3(.16,.005,.012)+vec3(.9,.12,.03)*exp(-voro(e*7.+50.).x*22.)*.5;
+  scl=mix(scl,vec3(.02,0.,.04)+vec3(1.)*pow(h21(floor(e*140.)),70.),uCos*.8);
+  // reptile: fibres, hot centre, glowing veins
+  float fib=fbm(dv*7.+ir*.9+3.);
+  vec3 dr=mix(vec3(1.,.8,.22),vec3(1.,.27,.03),smoothstep(.1,.6,ir));
+  dr=mix(dr,vec3(.3,.01,.015),smoothstep(.6,1.,ir))*(.45+1.1*fib);
+  dr+=vec3(1.,.55,.15)*exp(-voro(ie*10.+70.).x*26.)*.6*(1.-ir*.5)*(.7+.6*uBeat);
+  // cosmic: a red nebula swirling into the pupil, with stars
+  vec2 ne=rot(1.4/(ir+.35)+uT*.12)*ie;
+  float n1=fbm(ne*5.+9.),n2=fbm(ne*9.-4.);
+  vec3 nb=vec3(.85,.07,.1)*n1*1.5+vec3(.45,.08,.65)*n2*n2*1.6+vec3(1.,.5,.2)*pow(n1,4.)*1.5;
+  nb+=vec3(1.,.9,.85)*pow(h21(floor(ne*120.)),50.)*1.5;
+  nb*=smoothstep(1.05,.5,ir)+.25;
+  vec3 c=mix(dr*(1.-uCos*.75)+nb*uCos*1.25,scl,smoothstep(.96,1.03,ir));
+  c*=mix(1.,.35,exp(-pow((ir-1.)*14.,2.)));
+  // slit pupil: a void
+  float ph=Ri*.93,yy=ie.y/ph;
+  float dp=abs(yy)<1.?abs(ie.x)-uPupil*Ri*(1.-yy*yy):abs(ie.x)+(abs(yy)-1.)*ph;
+  float pm=smoothstep(.012,-.012,dp);
+  c=mix(c,vec3(.5,.1,.6)*pow(h21(floor(ie*200.)),90.)*uCos,pm);
+  c+=mix(vec3(1.,.45,.1),vec3(1.,.85,.7),uCos)*exp(-abs(dp)*55.)*(1.-pm)*.9;
+  vec2 gp=ie-vec2(-.13,.15);
+  c+=vec3(1.,.85,.8)*exp(-dot(gp,gp)*260.)*.8*(1.-uCos*.6);
+  c*=.3+.7*smoothstep(0.,.13,L-dy);
+  return c*1.25;
+}
+vec3 moonCol(vec2 q,float r,float a){
+  float z=sqrt(max(1.-r*r,0.));
+  float alb=(.5+.5*fbm(q*2.6+4.))*(.85+.3*vnoise(q*9.));
+  float s;
+  if(uVer==0){float lvl=-1.15+2.4*uP,wave=.07*sin(q.x*7.+uT*.6)+.05*fbm(q*3.+uT*.1);s=smoothstep(.06,-.06,q.y-lvl-wave);}
+  else if(uVer==1){s=smoothstep(1.04,.98,length(q-vec2(-2.08,.2)*(1.-uP)));}
+  else{s=smoothstep(.08,-.08,r-uP*1.35-.12*sin(a*3.+r*9.-uT*.8)*smoothstep(0.,.3,uP));}
+  vec2 wq=q;if(uVer==0) wq+=.06*vec2(fbm(q*4.),fbm(q*4.+9.));
+  vec3 v=voro(wq*3.3+31.);
+  float on=uVer==1?step(v.y,uPq*.75):smoothstep(0.,.12,uP*1.25-(vnoise(q*1.5+2.)*.8+(uVer==2?r*.3:(q.y+1.)*.15)))*smoothstep(.38,.55,vnoise(q*2.7+8.));
+  vec3 lit=mix(vec3(.95,.93,.86),vec3(1.,.62,.36),uP*.85)*alb*(.55+.6*z);
+  vec3 drk=mix(vec3(.22,.012,.012),vec3(.8,.07,.04),uBlood)*alb*(.7+.5*z);
+  vec3 c=mix(lit,drk,s);
+  c+=vec3(1.,.35,.06)*4.*s*(1.-s)*.9;
+  c+=vec3(1.,.4,.08)*(smoothstep(.022,.004,v.x)*1.6+exp(-v.x*22.)*.3)*on*(.6+.9*uBeat*uPulse);
+  if(uSeam>0.){
+    vec2 e=rot(-uEyeRot)*q;float W=.93,H=uVer==2?.5:.43,xn=e.x/W;
+    if(abs(xn)<1.){
+      float shape=pow(1.-xn*xn,.75),L=uOpen*H*shape;
+      float dy=abs(e.y-.07*(vnoise(vec2(e.x*7.,3.))-.5)*clamp(1.-uOpen,0.,1.));
+      float sOn=step(abs(xn),uSeam);
+      if(dy<L) c=eye(e,L,dy);
+      c+=vec3(1.,.45,.1)*exp(-abs(dy-L)*45.)*sOn*(1.2+uBeat)*pow(shape,.3);
+    }
+  }
+  return c;
+}
+void main(){
+  vec2 ndc=gl_FragCoord.xy/uRes*2.-1.;
+  vec3 d=normalize(uF+uR*(ndc.x*uAsp*uTan)+uU*(ndc.y*uTan));
+  vec3 M=uMoon,mr=normalize(cross(M,vec3(0,1,0))),mu=cross(mr,M);
+  float ang=acos(clamp(dot(d,M),-1.,1.));
+  vec2 qa=normalize(vec2(dot(d,mr),dot(d,mu))+1e-6)*ang;      // radians around the moon
+  vec2 q=qa/uMoonRad;float r=length(q),a=atan(q.y,q.x);
+  vec3 refr;vec3 ck=skyCracks(qa,ang,a,refr);
+  vec3 d2=normalize(d+mr*refr.x+mu*refr.y);
+  float ang2=acos(clamp(dot(d2,M),-1.,1.));
+  vec3 col=mix(uHor,uZen,pow(smoothstep(-.02,.75,d2.y),.6));
+  float sd=max(dot(d2,uSun),0.);
+  col+=uSunset*(vec3(1.,.2,.04)*pow(sd,6.)*.9+vec3(1.,.5,.2)*pow(sd,60.)*.8+vec3(3.,.5,.12)*smoothstep(.9975,.9982,sd));
+  col+=vec3(1.,.95,.9)*stars(d2,ang2,a)*uStars;
+  vec4 au=aurora(d2,ang2,a);col=col*(1.-au.a)+au.rgb;
+  col*=1.+refr.z;
+  if(ck.z>0.){
+    vec3 vc=vec3(.03,0.,.06)+vec3(.35,.02,.3)*pow(fbm(qa*6.+uT*.02),2.)+vec3(1.)*pow(h21(floor(qa*220.)),60.);
+    col=mix(col,vc,ck.z);
+  }
+  col+=(vec3(1.,.12,.06)*ck.y*.7+vec3(1.,.75,.6)*ck.x*1.6)*(.7+.8*uBeat*uPulse+uFlash);
+  col+=vec3(1.,.4,.3)*exp(-abs(ang-uShock)*35.)*uShockK*2.;
+  if(ang<1.7){
+    float rr=max(r-1.,0.),I;
+    if(uVer==0){
+      float fl=pn(a,rr*1.6-uT*.28,2.2);
+      I=exp(-rr*(5.5-4.2*fl))*(.35+fl)*1.3+pow(pn(a,rr*.5-uT*.1,6.),5.)*exp(-rr*1.1)*3.;
+    }else if(uVer==1){
+      float sp=pow(abs(sin(a*9.+2.*pn(a,0.,1.5))),30.)+.6*pow(abs(sin(a*23.+1.7)),60.);
+      I=exp(-rr*9.)*1.6+sp*exp(-rr*1.3)*(.8+.2*sin(uT*9.+a*5.))*.9+exp(-rr*3.)*.3;
+    }else{
+      float sw=a+2.2*log(max(r,.2))-uT*.45;
+      I=exp(-rr*2.)*(pn(sw,rr*1.2,2.)*.7+.5*pow(.5+.5*sin(sw*3.),3.))*1.8+exp(-rr*7.);
+    }
+    I*=uCorona;
+    col+=vec3(1.,.2,.04)*I+vec3(1.,.7,.3)*I*I*.5;
+    col+=vec3(3.,2.2,1.8)*uBead*exp(-length(q-vec2(1.,-.07))*14.);
+    if(r<1.03) col=mix(col,moonCol(q,r,a),smoothstep(1.,.985,r));
+  }
+  col=mix(col,uFog,exp(-max(d.y,0.)*14.)*.65);
+  if(d.y<0.) col=uFog;
+  col+=uFlash*vec3(1.,.55,.45)*(.3+.7*exp(-ang*1.5));
+  o=vec4(col,1.);
+}`;
+
+// The stand-in world: blocks with 16-texel procedural textures, moon shadows from a height map.
+const VS_WORLD = `#version 300 es
+in vec3 aPos;in vec3 aNor;in float aMat;uniform mat4 uVP;out vec3 vW;out vec3 vN;out float vMat;
+void main(){vW=aPos;vN=aNor;vMat=aMat;gl_Position=uVP*vec4(aPos,1.);}`;
+const FS_WORLD = `#version 300 es
+precision highp float;
+in vec3 vW;in vec3 vN;in float vMat;out vec4 o;
+uniform sampler2D uHgt;
+uniform vec3 uCam,uL,uLCol,uAmb,uFog,uTint;
+uniform float uFol,uGrade,uFogDen,uFlash,uT,uGrid;
+float h31(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
+void main(){
+  vec3 N=normalize(vN),p=vW-N*.002,tx=floor(p*16.);
+  float rnd=h31(tx),rnd2=h31(tx.zxy+7.);
+  int m=int(vMat+.5);
+  vec3 grass=mix(vec3(.33,.56,.18),vec3(.46,.08,.11),uFol);
+  vec3 leaf=mix(vec3(.17,.42,.10),vec3(.33,.04,.08),uFol);
+  vec3 dirt=vec3(.47,.33,.22)*(.78+.3*rnd),b=dirt;
+  if(m==0) b=grass*(.78+.4*rnd);
+  else if(m==1){if(fract(p.y)*16.>13.-floor(rnd2*3.)) b=grass*(.7+.4*rnd);}
+  else if(m==2) b=vec3(.5)*(.7+.35*rnd);
+  else if(m==3) b=vec3(.36,.27,.16)*(.65+.45*h31(vec3(tx.x+tx.z*3.,floor(tx.y/5.),1.)));
+  else if(m==4){b=leaf*(.5+.75*rnd);if(rnd2<.22) b*=.45;}
+  else if(m==5) b=mix(vec3(.10,.22,.42),vec3(.16,.02,.04),uFol);
+  else if(m==6) b=vec3(.80,.74,.52)*(.8+.25*rnd);
+  float face=N.y>.5?1.:(N.y<-.5?.5:(abs(N.x)>.5?.62:.8));
+  float ndl=max(dot(N,uL),0.),sh=1.;
+  if(ndl>0.){
+    vec3 sp=p+N*.06;
+    for(int i=1;i<=40;i++){
+      vec3 s=sp+uL*(float(i)*.55);
+      if(s.y>60.) break;
+      if(texture(uHgt,s.xz/uGrid+.5).r*255.>s.y+.02){sh=0.;break;}
+    }
+  }
+  vec3 c=b*(uAmb*face+uLCol*ndl*sh);
+  if(m==5){
+    vec3 V=normalize(vW-uCam);vec2 rp=floor(p.xz*8.);float ft=floor(uT*3.);
+    vec3 Rn=normalize(vec3((h31(vec3(rp,ft))-.5)*.14,1.,(h31(vec3(rp.yx,ft+9.))-.5)*.14));
+    float sd=max(dot(reflect(V,Rn),uL),0.);
+    c=mix(c,uFog*.8,.35)+uLCol*(pow(sd,500.)*5.+pow(sd,40.)*.5);
+  }
+  c=mix(c,dot(c,vec3(.3,.5,.2))*uTint,uGrade);
+  float f=1.-exp(-pow(length(vW-uCam)*uFogDen,1.6));
+  c=mix(c,uFog,f);
+  c+=uFlash*vec3(1.,.5,.4)*.5*(1.-f);
+  o=vec4(c,1.);
+}`;
+const VS_PART = `#version 300 es
+in vec4 aSeed;uniform mat4 uVP;uniform vec3 uCam,uVel;uniform float uT,uK,uSize;out float vA;
+void main(){
+  vec3 b=fract(aSeed.xyz+uVel*uT*(.6+.8*aSeed.w)+vec3(sin(uT*.7+aSeed.w*40.),0.,cos(uT*.5+aSeed.w*30.))*.01)-.5;
+  gl_Position=uVP*vec4(uCam+b*vec3(44.,26.,44.)+vec3(0.,6.,0.),1.);
+  vA=uK*(.45+.55*sin(uT*(2.+aSeed.w*5.)+aSeed.w*60.))*step(aSeed.w,uK+.05);
+  gl_PointSize=uSize*(.5+aSeed.w)/max(gl_Position.w,.5);
+}`;
+const FS_PART = `#version 300 es
+precision highp float;in float vA;out vec4 o;uniform vec3 uCol;void main(){o=vec4(uCol*vA*1.6,1.);}`;
+const FS_BRIGHT = `#version 300 es
+precision highp float;out vec4 o;uniform sampler2D uTex;uniform vec2 uRes;
+void main(){vec3 c=texture(uTex,gl_FragCoord.xy/uRes).rgb;o=vec4(max(c-.72,0.),1.);}`;
+const FS_BLUR = `#version 300 es
+precision highp float;out vec4 o;uniform sampler2D uTex;uniform vec2 uRes,uDir;
+void main(){vec2 uv=gl_FragCoord.xy/uRes;vec3 c=texture(uTex,uv).rgb*.227;
+  c+=(texture(uTex,uv+uDir*1.385).rgb+texture(uTex,uv-uDir*1.385).rgb)*.316;
+  c+=(texture(uTex,uv+uDir*3.231).rgb+texture(uTex,uv-uDir*3.231).rgb)*.07;o=vec4(c,1.);}`;
+const FS_COMP = `#version 300 es
+precision highp float;out vec4 o;uniform sampler2D uTex,uBloom;uniform vec2 uRes;uniform float uDark;
+void main(){vec2 uv=gl_FragCoord.xy/uRes;
+  vec3 c=(texture(uTex,uv).rgb+texture(uBloom,uv).rgb*.9)*uDark;
+  c=1.-exp(-c*1.2);
+  c*=1.-.4*pow(length(uv-.5)*1.3,2.5);
+  o=vec4(c,1.);}`;
+
+// ───────────────────────── GL setup ─────────────────────────
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl2', { antialias: false, alpha: false });
+function fail(msg) { const e = document.getElementById('err'); e.style.display = 'grid'; e.textContent = msg; throw new Error(msg); }
+if (!gl) fail('This preview needs WebGL 2. Open it in a recent Chrome, Edge or Firefox.');
+const HDR = !!gl.getExtension('EXT_color_buffer_float');
+function prog(vs, fs, name) {
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail('Shader "' + name + '" failed:\n' + gl.getShaderInfoLog(s));
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) fail('Link "' + name + '" failed:\n' + gl.getProgramInfoLog(p));
+  const locs = {};
+  return { p, loc: k => (k in locs ? locs[k] : (locs[k] = gl.getUniformLocation(p, k))) };
+}
+function setU(pr, o) {
+  gl.useProgram(pr.p);
+  for (const k in o) {
+    const l = pr.loc(k), v = o[k]; if (l == null) continue;
+    if (k === 'uVer' || k === 'uTex' || k === 'uBloom' || k === 'uHgt') gl.uniform1i(l, v);
+    else if (typeof v === 'number') gl.uniform1f(l, v);
+    else if (v.length === 2) gl.uniform2fv(l, v);
+    else if (v.length === 3) gl.uniform3fv(l, v);
+    else gl.uniformMatrix4fv(l, false, v);
+  }
+}
+const P = {
+  sky: prog(VS_FULL, FS_SKY, 'sky'), world: prog(VS_WORLD, FS_WORLD, 'world'), part: prog(VS_PART, FS_PART, 'particles'),
+  bright: prog(VS_FULL, FS_BRIGHT, 'bright'), blur: prog(VS_FULL, FS_BLUR, 'blur'), comp: prog(VS_FULL, FS_COMP, 'composite'),
+};
+
+// ───────────────────────── the stand-in world ─────────────────────────
+const G = 176, HALF = G / 2, WL = 9;
+const hsh = (x, y) => { const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return n - Math.floor(n); };
+function n2(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), w = yf * yf * (3 - 2 * yf);
+  return mix(mix(hsh(xi, yi), hsh(xi + 1, yi), u), mix(hsh(xi, yi + 1), hsh(xi + 1, yi + 1), u), w);
+}
+function heightAt(x, z) {
+  let h = 13 + 8 * (n2(x / 38, z / 38) - .5) + 5 * (n2(x / 13 + 5, z / 13 + 9) - .5);
+  h += 7 * Math.exp(-(((x - 62) / 14) ** 2)) * (.6 + .8 * n2(z / 20 + 3, 1.7));
+  h += 5 * Math.exp(-(((x + 60) / 16) ** 2)) * n2(z / 17 + 8, 4.2);
+  h -= 9 * Math.exp(-((((x - 27) / 13) ** 2) + (((z + 2) / 20) ** 2)));
+  const k = Math.exp(-(x * x + z * z) / 60);
+  return Math.max(3, Math.floor(h * (1 - k) + 14.4 * k));
+}
+const hmap = new Int16Array(G * G), smap = new Uint8Array(G * G);
+const HI = (x, z) => (z + HALF) * G + (x + HALF);
+for (let z = -HALF; z < HALF; z++) for (let x = -HALF; x < HALF; x++) { const h = heightAt(x, z); hmap[HI(x, z)] = h; smap[HI(x, z)] = Math.max(h, WL - 1); }
+const verts = [], idx = [];
+function quad(a, b, c, d, n, m) {
+  const i = verts.length / 7;
+  for (const p of [a, b, c, d]) verts.push(p[0], p[1], p[2], n[0], n[1], n[2], m);
+  idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+}
+function box(x0, y0, z0, x1, y1, z1, m, top = true) {
+  if (top) quad([x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], [0, 1, 0], m);
+  quad([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0], m);
+  quad([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1, 0, 0], m);
+  quad([x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1], [-1, 0, 0], m);
+  quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], m);
+  quad([x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [0, 0, -1], m);
+}
+for (let z = -HALF; z < HALF; z++) for (let x = -HALF; x < HALF; x++) {
+  const h = hmap[HI(x, z)], wet = h < WL, sand = h <= WL;
+  quad([x, h, z], [x + 1, h, z], [x + 1, h, z + 1], [x, h, z + 1], [0, 1, 0], sand ? 6 : 0);
+  if (wet) { const y = WL - .12; quad([x, y, z], [x + 1, y, z], [x + 1, y, z + 1], [x, y, z + 1], [0, 1, 0], 5); }
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const nx = x + dx, nz = z + dz; if (nx < -HALF || nx >= HALF || nz < -HALF || nz >= HALF) continue;
+    const nh = hmap[HI(nx, nz)]; if (nh >= h) continue;
+    const ax = dx > 0 ? x + 1 : x, bx = dx < 0 ? x : x + 1, az = dz > 0 ? z + 1 : z, bz = dz < 0 ? z : z + 1;
+    const side = (y0, y1, m) => dx ? quad([ax, y0, z], [ax, y1, z], [ax, y1, z + 1], [ax, y0, z + 1], [dx, 0, 0], m)
+                                   : quad([x, y0, az], [x + 1, y0, az], [x + 1, y1, az], [x, y1, az], [0, 0, dz], m);
+    void bx; void bz;
+    side(h - 1, h, sand ? 6 : 1);
+    if (h - 1 > nh) { side(Math.max(nh, h - 4), h - 1, 7); if (h - 4 > nh) side(nh, h - 4, 2); }
+  }
+}
+let trees = 0;
+for (let z = -HALF + 4; z < HALF - 4; z++) for (let x = -HALF + 4; x < HALF - 4; x++) {
+  const h = hmap[HI(x, z)]; if (h <= WL) continue;
+  const dens = .016 + .02 * n2(x / 25 + 40, z / 25 + 12);
+  if (hsh(x * 1.37 + 11, z * 2.11 + 5) > dens) continue;
+  if (x * x + z * z < 30 || (x > 0 && x < 14 && Math.abs(z) < 2.5 + x * .12) || (x <= 0 && x > -40 && Math.abs(z) < 4 - x * .3)) continue;
+  const th = 4 + Math.floor(hsh(x + 3, z + 9) * 3), top = h + th;
+  box(x, h, z, x + 1, top, z + 1, 3, false);
+  box(x - 2, top - 2, z - 2, x + 3, top, z + 3, 4);
+  box(x - 1, top, z - 1, x + 2, top + 2, z + 2, 4);
+  for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) {
+    const k = HI(x + i, z + j), hh = Math.abs(i) < 2 && Math.abs(j) < 2 ? top + 2 : top;
+    if (smap[k] < hh) smap[k] = hh;
+  }
+  trees++;
+}
+const worldVAO = gl.createVertexArray(); gl.bindVertexArray(worldVAO);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+[['aPos', 3, 0], ['aNor', 3, 12], ['aMat', 1, 24]].forEach(([n, s, off]) => {
+  const l = gl.getAttribLocation(P.world.p, n); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, s, gl.FLOAT, false, 28, off);
+});
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
+const worldCount = idx.length;
+const hgtTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, hgtTex);
+gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, G, G, 0, gl.RED, gl.UNSIGNED_BYTE, smap);
+for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+const NPART = 500, partVAO = gl.createVertexArray(); gl.bindVertexArray(partVAO);
+{ const d = new Float32Array(NPART * 4); for (let i = 0; i < d.length; i++) d[i] = hsh(i * .731, i * 1.913 + 2);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
+  const l = gl.getAttribLocation(P.part.p, 'aSeed'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 4, gl.FLOAT, false, 0, 0); }
+const fullVAO = gl.createVertexArray();
+const CAM = [.5, hmap[HI(0, 0)] + 1.62, .5];
+
+// render targets
+let W = 0, H = 0, scene, bl = [];
+function target(w, h, depth) {
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  if (HDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  let rb = null;
+  if (depth) { rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb); }
+  return { tex, fb, rb, w, h };
+}
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  const w = Math.max(2, Math.floor(cv.clientWidth * dpr)), h = Math.max(2, Math.floor(cv.clientHeight * dpr));
+  if (w === W && h === H) return;
+  for (const t of [scene, ...bl]) if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); if (t.rb) gl.deleteRenderbuffer(t.rb); }
+  W = cv.width = w; H = cv.height = h;
+  scene = target(W, H, true);
+  bl = [target(W >> 2 || 1, H >> 2 || 1), target(W >> 2 || 1, H >> 2 || 1)];
+}
+function mul(a, b) { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; }
+
+// ───────────────────────── player state ─────────────────────────
+const q = new URLSearchParams(location.search);
+let ver = Math.max(0, 'abc'.indexOf((q.get('v') || 'a').toLowerCase()));
+let time = clamp(parseFloat(q.get('t')) || 0, 0, TT), playing = q.get('play') !== '0';
+if (q.get('ui') === '0') document.body.classList.add('hide');
+let mx = 0, my = 0, lookX = 0, lookY = 0, gaze = [0, 0], pupil = .3, lastNow = performance.now(), realT = 0, prevTime = time;
+const FOV = 65 * DEG;
+
+function frame(now) {
+  const dt = Math.min(.1, (now - lastNow) / 1000); lastNow = now; realT += dt;
+  if (playing) { time += dt; if (time >= TT) { time = TT; setPlaying(false); } }
+  resize();
+  const V = VERS[ver], S = state(time, ver);
+  // camera: the player's own look (mouse), plus the preview's turn from sunset to moonrise, plus shake
+  lookX += (mx * .75 - lookX) * (1 - Math.exp(-dt * 6)); lookY += (-my * .4 - lookY) * (1 - Math.exp(-dt * 6));
+  const sk = S.shake * DEG, yaw = S.baseYaw + lookX + sk * (Math.sin(realT * 37) + Math.sin(realT * 23.7)) * .5;
+  const pitch = clamp(V.pitch * DEG * (1 - .5 * (S.baseYaw / Math.PI)) + lookY + sk * (Math.sin(realT * 31.3) + Math.cos(realT * 19.1)) * .5, -1.2, 1.4);
+  const F = [Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw)];
+  const R = norm(cross(F, [0, 1, 0])), U = cross(R, F), asp = W / H, tf = Math.tan(FOV / 2), f = 1 / tf, near = .1, far = 400;
+  const view = new Float32Array([R[0], U[0], -F[0], 0, R[1], U[1], -F[1], 0, R[2], U[2], -F[2], 0, -dot(R, CAM), -dot(U, CAM), dot(F, CAM), 1]);
+  const proj = new Float32Array([f / asp, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0]);
+  const VP = mul(proj, view);
+  // the eye: looks around when it opens, then tracks where the player looks; the pupil narrows when stared at
+  const mr = norm(cross(S.moon, [0, 1, 0])), mu = cross(mr, S.moon);
+  const raw = [dot(F, mr), dot(F, mu)], rl = Math.hypot(raw[0], raw[1]);
+  let tg = [raw[0] * 2.5, raw[1] * 2.5]; const tl = Math.hypot(tg[0], tg[1]); if (tl > 1) tg = [tg[0] / tl, tg[1] / tl];
+  const since = time - S.tc - (ver === 0 ? 1.6 : ver === 2 ? 1 : .3);
+  if (since < .7) tg = [-.85, .2]; else if (since < 1.5) tg = [.8, -.25];
+  const cr = Math.cos(V.rot), sr = Math.sin(V.rot); tg = [tg[0] * cr + tg[1] * sr, -tg[0] * sr + tg[1] * cr];
+  const gk = 1 - Math.exp(-dt * (since < 1.5 ? 14 : 8));
+  gaze[0] += (tg[0] - gaze[0]) * gk; gaze[1] += (tg[1] - gaze[1]) * gk;
+  const stare = rl < .09 && dot(F, S.moon) > 0 && since > 1.5;
+  pupil += ((since < .4 ? .34 : stare ? .06 : .2 + .03 * S.beat) - pupil) * (1 - Math.exp(-dt * 5));
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, scene.fb); gl.viewport(0, 0, W, H);
+  gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.bindVertexArray(fullVAO);
+  setU(P.sky, { uRes: [W, H], uF: F, uR: R, uU: U, uTan: tf, uAsp: asp, uT: time, uP: S.p, uPq: S.pq, uVer: ver, uMoon: S.moon, uSun: S.sun, uHor: S.hor, uZen: S.zen,
+    uFog: S.fog, uSunset: S.sunset, uBeat: S.beat, uOpen: Math.max(S.open, 0), uSeam: S.seam, uPupil: pupil, uGaze: gaze, uFlash: S.flash, uShock: S.shock, uShockK: S.shockK,
+    uMoonRad: S.moonRad, uCos: V.cos, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uBead: S.bead, uPulse: V.pulse });
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.enable(gl.DEPTH_TEST); gl.bindVertexArray(worldVAO);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, hgtTex);
+  setU(P.world, { uVP: VP, uHgt: 0, uCam: CAM, uL: S.L, uLCol: S.lcol, uAmb: S.amb, uFog: S.fog, uTint: [1.5, .16, .12], uFol: S.fol, uGrade: S.grade,
+    uFogDen: S.fogDen, uFlash: S.flash, uT: time, uGrid: G });
+  gl.drawElements(gl.TRIANGLES, worldCount, gl.UNSIGNED_INT, 0);
+  if (S.part > 0) {
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false); gl.bindVertexArray(partVAO);
+    setU(P.part, { uVP: VP, uCam: CAM, uVel: V.vel || mul3(S.moon, .06), uT: time, uK: S.part, uSize: H * .05, uCol: V.pcol });
+    gl.drawArrays(gl.POINTS, 0, NPART); gl.depthMask(true); gl.disable(gl.BLEND);
+  }
+  // bloom, then composite
+  gl.disable(gl.DEPTH_TEST); gl.bindVertexArray(fullVAO);
+  const pass = (pr, src, dst, u) => { gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fb : null); const w = dst ? dst.w : W, h = dst ? dst.h : H; gl.viewport(0, 0, w, h);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); setU(pr, Object.assign({ uTex: 0, uRes: [w, h] }, u)); gl.drawArrays(gl.TRIANGLES, 0, 3); };
+  pass(P.bright, scene, bl[0]);
+  for (let i = 0; i < 3; i++) { const s = 1 + i * .8; pass(P.blur, bl[0], bl[1], { uDir: [s / bl[0].w, 0] }); pass(P.blur, bl[1], bl[0], { uDir: [0, s / bl[0].h] }); }
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bl[0].tex);
+  pass(P.comp, scene, null, { uBloom: 1, uDark: S.dark });
+
+  audioFrame(S); updateUI(); prevTime = time;
+  requestAnimationFrame(frame);
+}
+
+// ───────────────────────── sound (rough synth stand-in) ─────────────────────────
+let AC = null, master, droneG, sndOn = false, lastBeat = -1;
+function audioInit() {
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value = 0; master.connect(AC.destination);
+  droneG = AC.createGain(); droneG.gain.value = 0; droneG.connect(master);
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 170; lp.connect(droneG);
+  for (const fq of [36.7, 55.3, 73.9, 110.6]) { const o = AC.createOscillator(); o.type = 'sawtooth'; o.frequency.value = fq; o.connect(lp); o.start(); }
+}
+function thump(str) {
+  const t = AC.currentTime;
+  [0, .17].forEach((d, i) => { const o = AC.createOscillator(), g = AC.createGain(); o.frequency.setValueAtTime(95, t + d); o.frequency.exponentialRampToValueAtTime(38, t + d + .16);
+    g.gain.setValueAtTime(.0001, t + d); g.gain.linearRampToValueAtTime(str * (i ? .55 : 1), t + d + .012); g.gain.exponentialRampToValueAtTime(.0001, t + d + .3);
+    o.connect(g); g.connect(master); o.start(t + d); o.stop(t + d + .35); });
+}
+function crackSound() {
+  const t = AC.currentTime, len = AC.sampleRate * 3, buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) { const x = i / len; d[i] = (Math.random() * 2 - 1) * (Math.exp(-x * 30) + .35 * Math.exp(-x * 5) * (Math.random() < .02 ? 3 : .4)); }
+  const s = AC.createBufferSource(); s.buffer = buf;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(2400, t); bp.frequency.exponentialRampToValueAtTime(180, t + 2.5); bp.Q.value = .6;
+  const g = AC.createGain(); g.gain.value = 1.4; const dl = AC.createDelay(1); dl.delayTime.value = .42; const fb = AC.createGain(); fb.gain.value = .45;
+  s.connect(bp); bp.connect(g); g.connect(master); g.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(master); s.start(t);
+  const o = AC.createOscillator(), og = AC.createGain(); o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(24, t + 1.8);
+  og.gain.setValueAtTime(1.2, t); og.gain.exponentialRampToValueAtTime(.0001, t + 2.2); o.connect(og); og.connect(master); o.start(t); o.stop(t + 2.3);
+}
+function audioFrame(S) {
+  if (!AC) return;
+  const on = sndOn && playing, t = AC.currentTime;
+  master.gain.setTargetAtTime(on ? .7 * (ver === 2 ? clamp(S.dark * 3) : 1) : 0, t, .08);
+  droneG.gain.setTargetAtTime(.03 * (1 - S.sunset * .5) + .3 * S.p * S.p, t, .1);
+  if (!on) { lastBeat = S.beatN; return; }
+  if (S.beatN !== lastBeat && S.beatN > 0) thump(.35 + .5 * S.p);
+  lastBeat = S.beatN;
+  if (prevTime < S.tc && time >= S.tc && time - prevTime < .5) crackSound();
+}
+
+// ───────────────────────── UI ─────────────────────────
+const $ = id => document.getElementById(id);
+const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+PHASES.forEach(([n, s], i) => { const e = document.createElement('span'); e.textContent = n; e.style.width = ((i + 1 < PHASES.length ? PHASES[i + 1][1] : TT) - s) / TT * 100 + '%'; $('segs').appendChild(e); });
+VERS.forEach((V, i) => { const b = document.createElement('button'); b.textContent = V.key + ' · ' + V.name; b.onclick = () => setVer(i); $('vers').appendChild(b); });
+function setVer(i) { ver = i; [...$('vers').children].forEach((b, j) => b.classList.toggle('on', j === i)); $('vk').textContent = VERS[i].key; $('vn').textContent = VERS[i].name; $('vt').textContent = VERS[i].tag; }
+function setPlaying(p) { if (p && time >= TT) time = 0; playing = p; $('play').textContent = p ? '❚❚' : '▶'; }
+function updateUI() {
+  const k = time / TT * 100; $('fill').style.width = k + '%'; $('knob').style.left = k + '%';
+  $('time').textContent = fmt(time) + ' / ' + fmt(TT);
+  let n = PHASES[0][0]; for (const [name, s] of PHASES) if (time >= s) n = name;
+  if ($('ph').textContent !== n) $('ph').textContent = n;
+}
+$('play').onclick = () => setPlaying(!playing);
+$('nb').onclick = () => { $('notes').classList.toggle('open'); $('nb').classList.toggle('on'); };
+$('snd').onclick = () => { if (!AC) audioInit(); AC.resume(); sndOn = !sndOn; $('snd').textContent = (sndOn ? '🔊' : '🔇') + ' Sound'; $('snd').classList.toggle('on', sndOn); };
+const track = $('track');
+const seek = e => { const r = track.getBoundingClientRect(); time = clamp((e.clientX - r.left) / r.width) * TT; };
+track.addEventListener('pointerdown', e => { track.setPointerCapture(e.pointerId); seek(e); });
+track.addEventListener('pointermove', e => { if (e.buttons & 1) seek(e); });
+cv.addEventListener('pointermove', e => { mx = e.clientX / innerWidth * 2 - 1; my = e.clientY / innerHeight * 2 - 1; });
+cv.addEventListener('pointerleave', () => { mx = my = 0; });
+addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+  else if (e.key >= '1' && e.key <= '3') setVer(+e.key - 1);
+  else if (e.key === 'ArrowLeft') time = clamp(time - 5, 0, TT);
+  else if (e.key === 'ArrowRight') time = clamp(time + 5, 0, TT);
+  else if (e.key.toLowerCase() === 'h') document.body.classList.toggle('hide');
+});
+setVer(ver); setPlaying(playing);
+console.log('world: ' + worldCount / 6 + ' quads, ' + trees + ' trees, HDR ' + HDR);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

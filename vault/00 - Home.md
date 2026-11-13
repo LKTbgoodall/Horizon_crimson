@@ -10,14 +10,14 @@ updated: 2026-11-14
 ## 📍 Where we are
 | | |
 |---|---|
-| **Phase** | **Phase 0: fresh start** (2026-11-14). Folder, vault and tools set up from Cagebound and Horizon Quests. No code |
+| **Phase** | **Phase 1, preview step** (2026-11-14). The blood moon rise preview page is ready with 3 stagings (`preview/blood-moon-rise.html`); waiting for Bastien's pick. No mod code yet |
 | **Proven before** | On Cagebound (same author, same Horizon pin `9f42064`): a typed-API native mod built and ran in game; block entity drawing, hologram text, coloured lights, glue checked against the pin before any build → [[From Cagebound]] |
 | **Key choices** | Blood moon as the trigger for events ([[ADR-014 Fresh start as Crimson Eclipse]]); rendering through our own GPU passes ([[ADR-015 Rendering through our own GPU passes]]) |
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-1. **Claude**: an animated preview page with 3 different stagings of the [[Blood moon rise]] (preview first).
-2. **Bastien**: pick or mix one, confirm the name; then phase 1 ([[Roadmap]]).
+1. **Bastien**: open `preview/blood-moon-rise.html`, pick **A · The Wound**, **B · Shattered Sky** or **C · The Abyss** (or a mix); confirm the name.
+2. **Claude**: write the choice into [[Blood moon rise]], then the repo skeleton and the pure core ([[Roadmap]] phase 1).
 
 ## 🗺️ Vault map
 ### 01 · Project
