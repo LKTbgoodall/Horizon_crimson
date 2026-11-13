@@ -16,8 +16,8 @@ updated: 2026-11-14
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-1. **Bastien**: pick the events he wants first in [[Events]] (or "all of them"), confirm the name.
-2. **Claude**: an animated preview page of the blood moon and the chosen events (preview first), then phase 1 ([[Roadmap]]).
+1. **Claude**: an animated preview page with 3 different stagings of the [[Blood moon rise]] (preview first).
+2. **Bastien**: pick or mix one, confirm the name; then phase 1 ([[Roadmap]]).
 
 ## 🗺️ Vault map
 ### 01 · Project
@@ -35,6 +35,7 @@ updated: 2026-11-14
 ### 04 · Design
 - [[Concept]]: ⭐ the mod and Bastien's rules
 - [[Events]]: ⭐ the event catalogue
+- [[Blood moon rise]]: ⭐ spec of the rise (first impression)
 - [[Rendering toolkit]]: how each look is made on Horizon
 
 ### 05 · Decisions
