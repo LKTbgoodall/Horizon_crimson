@@ -1,0 +1,4 @@
+target/
+build/
+ext/
+vault/.obsidian/workspace*.json
