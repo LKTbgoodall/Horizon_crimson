@@ -45,6 +45,16 @@ The rise is the first thing anyone sees of the mod, so it is **an event in its o
 - **The player stays in control**: nothing takes the camera. The show is meant to be strong enough that people stop on their own. No mob spawns during the eclipse minute.
 - **Seen from everywhere**: red light comes in through windows and the sound carries through walls, so people want to go outside.
 
+## Chosen staging: C · The Abyss (Bastien, 2026-11-14)
+Bastien's words: C is extraordinary; he loves **the sky breaking and showing space behind it**. That torn sky is the signature of the rise: keep it, and push it rather than tone it down.
+- The moon **swells** (about 2.4 times) as it rises while a **spiral void** eats it from the centre.
+- Stars are **dragged toward the moon** and stretched before they go out.
+- Sky cracks are a **spider web** (radial lines and ring segments) centred on the moon; **cells of the web tear open on a void** with a violet nebula and stars.
+- Aurora in **spiral arms** around the moon; corona as a swirling accretion ring.
+- Climax: about **2 s of total darkness**, then a flash and a **giant eye**, mostly cosmic (nebula iris, void pupil), opening over 2.5 s.
+- Reference for every number: version C in `preview/blood-moon-rise.html` (`VERS[2]`, the `uVer==2` branches).
+- A and B stay in the preview as a source of ideas (B's snap opening and shock wave), not as the plan.
+
 ## Next
-- Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picks one or mixes them.
+- Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.

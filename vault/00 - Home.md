@@ -10,14 +10,14 @@ updated: 2026-11-14
 ## 📍 Where we are
 | | |
 |---|---|
-| **Phase** | **Phase 1, preview step** (2026-11-14). The blood moon rise preview page is ready with 3 stagings (`preview/blood-moon-rise.html`); waiting for Bastien's pick. No mod code yet |
+| **Phase** | **Phase 1, preview step** (2026-11-14). The blood moon rise preview page is ready with 3 stagings (`preview/blood-moon-rise.html`); Bastien picked **C · The Abyss** (the sky tearing open on space). No mod code yet |
 | **Proven before** | On Cagebound (same author, same Horizon pin `9f42064`): a typed-API native mod built and ran in game; block entity drawing, hologram text, coloured lights, glue checked against the pin before any build → [[From Cagebound]] |
 | **Key choices** | Blood moon as the trigger for events ([[ADR-014 Fresh start as Crimson Eclipse]]); rendering through our own GPU passes ([[ADR-015 Rendering through our own GPU passes]]) |
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-1. **Bastien**: open `preview/blood-moon-rise.html`, pick **A · The Wound**, **B · Shattered Sky** or **C · The Abyss** (or a mix); confirm the name.
-2. **Claude**: write the choice into [[Blood moon rise]], then the repo skeleton and the pure core ([[Roadmap]] phase 1).
+1. **Claude**: repo skeleton and the pure core ([[Roadmap]] phase 1), then the sky pass for staging C of the [[Blood moon rise]].
+2. **Bastien**: confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
 
 ## 🗺️ Vault map
 ### 01 · Project

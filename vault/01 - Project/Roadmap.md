@@ -14,7 +14,7 @@ Back: [[00 - Home]]
 ## Phase 1: the rendering base and the blood moon 🔴
 - [ ] Animated preview of the blood moon and the chosen events; Bastien picks
   - [x] Rise preview page, 3 stagings: `preview/blood-moon-rise.html` (2026-11-14)
-  - [ ] Bastien picks or mixes
+  - [x] Bastien picked **C · The Abyss** (2026-11-14)
 - [ ] Repo skeleton: workspace, pure crate `crimson-core`, bundle `mod/crimson_eclipse` (typed API), content mod
 - [ ] Pure core: when a blood moon happens, its phases (rise, peak, dawn), the event scheduler, tested
 - [ ] Our GPU passes (`RenderHooks`): selective glow / bloom, start from Cagebound's `fx.rs`
