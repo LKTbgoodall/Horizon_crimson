@@ -128,6 +128,20 @@ Bastien's screenshots of 0.2.0: the openings looked like blobs ("des pâtés"), 
 - **0.2.4 seen**: the shards just appear from nowhere, nothing breaks; not interesting. 0.2.5: a break in three beats (`shard_break` in WGSL): the outline cracks first (1.2 s, `BREAK_LEAD`, tip running round it, light leaking), then the piece of sky falls away (down, turning, shrinking toward the other world, darkening, edge lit) while seven burning debris scatter, and the hole is what it leaves. Each break is heard twice (`Plan::sounds_between`).
 - **Dawn** (Bastien, seen at sunrise in 0.2.0): the holes close and vanish. `fissures::seal`: the lips close over the first 20 s of dawn (tick 22800) with a golden seam along each crack, the lines fade 15 s later, before sunrise.
 
+### The break redone: the sky is a thick shell (2026-11-14, after 0.2.5)
+Bastien on 0.2.5: the break is not realistic, the sky breaking onto the second world does not look natural; this is the most important part. Diagnosis of 0.2.x:
+- the sky was a sheet with no thickness: a hole was a flat cut-out with a glowing outline;
+- holes were separate pentagons stuck on crack lines: cracks and holes were two systems, so no piece was ever bounded by cracks;
+- the shell left standing never moved: nothing showed it was a surface;
+- pieces fell as flat shapes shrinking in 2D; everything glowed orange, which reads as energy, not as a break.
+
+New preview `preview/sky-break.html` (only the break; 26 s loop, cracks from 0:03, climax at 0:14). One fracture network decides everything: small facets (one-pass Voronoi on integer cells) grouped into slabs. Cracks run along slab borders as a front leaving the moon in jumps (hot at the tip, then a dark hairline with a highlight on one side); a cracked slab sits askew (the sky painted on it shifts, its tint changes: stars break across a crack); before a slab leaves, the pale light of the other world leaks round it; the hole is exactly the slab's outline; the shell's broken wall shows on the upper edge of every hole (dark on our side, pale on the far side); a loose slab tumbles in 3D carrying its piece of sky, its back pale. Three candidates:
+- **B1 · Impact glass**: radial network around the moon (small near, huge far); slabs fall on our side, tumbling, crumbling facet by facet.
+- **B2 · Eggshell**: irregular plates, no centre; loose plates are drawn into the other world and sink into its fog.
+- **B3 · Blown out**: radial network; at the climax the pressure behind bursts the shell, slabs fly toward us.
+
+Checked with headless Chrome at 1280x720 (B1 at 0:09, 0:11, 0:15, 0:19, 0:20; B2 at 0:15.5, 0:19; B3 at 0:14.5, 0:14.7, 0:19): compiles, renders. **Not checked**: motion in real time, frame rate (many hashes per pixel). Waiting for Bastien's pick. The port will replace `fissures.rs`' polylines and pentagons and the WGSL `fissures` / `shard_break`; the moon's travel during the night (the preview keeps it still) and the dawn sealing are to redo on the new network.
+
 ## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.
