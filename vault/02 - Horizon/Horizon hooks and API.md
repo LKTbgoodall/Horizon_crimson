@@ -152,3 +152,9 @@ Read in `ext/src-9f42064` (shallow fetch of the Nightly) and in the generated `m
 - **Fog and shake** (same status): `compute_fog_color`: `event.rgb: &mut [f32; 3]` (0..=1), `event.fog_type: horizon_client::fog::FogType` (`Atmospheric`, `Water`, `Lava`, `PowderSnow`), `event.partial`; `camera_shake`: add degrees to `event.shake.pitch / yaw / roll` and blocks to `offset`.
 - Re-exports: `Direction` (Down, Up, North, South, West, East), `ParticleType::ElectricSpark`, `Text::colored` / `literal`, `parse_snbt`.
 - **Checking a typed-API mod without the launcher**: a standalone workspace with the [api] crate, `horizon-client` as a path into the source, Horizon's `Cargo.lock`, and **Horizon's own `[patch.crates-io]`** (its forks of `wgpu-hal`, `naga`, `libmimalloc-sys` under `third_party/`). Without the patches `horizon-client-render` fails to compile (`dx12::disk_cache`).
+
+## Levels and crossing (read 2026-11-14 on `9f42064`)
+- ❌ **No custom dimension**: the game knows three levels only, hard-coded (`horizon-client/src/game.rs` 3170 `enum Dim { Overworld, Nether, End }`, `horizon-hooks/src/lib.rs` 169 `enum Dimension`). A data pack's `dimension/*.json` is only read to warn that the world is "unstable" (`save.rs` `datapack_dimensions`, test `world_stem_compatibility_reads_data_pack_dimensions`); the mod browser says data pack worldgen does not run.
+- ✅ **Moving a player across levels**: `native_run_command` runs a console command (level 4), so `execute in <dimension> run tp <player> <x> <y> <z>` works (API 21, `docs/native-mods.md` 250). `player_changed_dimension` hears it afterwards.
+- ✅ **Building blocks fast**: `native_edit_blocks(dimension, edit)` (API 126) writes columns straight into chunks; `native_spawn_falling_block` (API 81) throws real falling blocks (debris).
+- ✅ `native_level_load` / `native_level_unload` (API 134): the End opens when someone first goes there.
