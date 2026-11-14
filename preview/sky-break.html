@@ -26,7 +26,7 @@
   <span id="vers"></span>
   <div id="track"><div id="fill"></div><div class="mark" id="mk"></div></div>
   <span id="clock">0:00</span>
-  <span>1 2 3: candidate · space: pause · C: climax · mouse: look</span>
+  <span>1 2 3 4: candidate · space: pause · C: climax · mouse: look</span>
 </div>
 <div id="err"></div>
 <script>
@@ -39,6 +39,7 @@ const VERS = [
   ['B1 · Impact glass', 'Radial fracture from the moon. Slabs come loose and fall on our side, tumbling, their back pale, burning away.'],
   ['B2 · Eggshell', 'Irregular plates, no centre. Loose plates are drawn into the other world and sink into its fog.'],
   ['B3 · Blown out', 'Radial fracture. At the climax the pressure behind bursts the shell: slabs fly toward us.'],
+  ['B4 · Mix', 'The first fracture from the moon. Each loose slab goes its own way: some fall on our side and burn away, others are drawn into the other world.'],
 ];
 
 const VS = `#version 300 es
@@ -65,7 +66,7 @@ vec3 C,E1,E2;                  // the impact (where the moon is) and its tangent
 bool RADIAL;float A,KFLAT;     // log-polar around the impact, or flat
 vec2 FS,CS;                    // facet grid = w*FS; a slab is about CS wide in w
 int NYF,NYC;                   // rows around the impact, for facets and for slabs (0: no wrap)
-int MODE;float LIFE,SPREAD;    // how a loose slab leaves: 0 falls, 1 drawn in, 2 blown out
+float SPREAD,THA,THB;bool FIRST,BEHIND;    // how a loose slab leaves: 0 falls, 1 drawn in, 2 blown out
 vec2 toP(vec3 d){float ang=acos(clamp(dot(d,C),-1.,1.));vec2 q=vec2(dot(d,E1),dot(d,E2));return q/max(length(q),1e-6)*ang;}
 vec3 toD(vec2 p){float r=length(p);return C*cos(r)+(E1*p.x+E2*p.y)/max(r,1e-6)*sin(r);}
 vec2 toW(vec2 p,out float sc){
@@ -102,7 +103,7 @@ Sch sched(ivec2 cw){Sch q;
   vec2 p=fromW((vec2(cw)+.5+(h22(cw+ivec2(91,37))-.5)*.7)*CS);float r=length(p);
   q.dir=toD(p);q.size=.5*min(CS.x,CS.y)*(RADIAL?r/A:1./KFLAT);q.h=hi2(cw+ivec2(7,13));q.tf=1e9;
   float n=vnoise(p*2.4+vec2(5.3,1.7));
-  if(r>.2&&r<2.2&&n>mix(.56,.9,ss(.3,1.5,r))){
+  if(r>.2&&r<2.2&&n>mix(THA,THB,ss(.3,1.5,r))){
     q.tf=TC+.15+r*SPREAD+q.h*.5;
     if(q.h<.22&&r<.9) q.tf=min(tCrack(p)+1.5+8.*q.h,TC-.5);}
   return q;}
@@ -167,7 +168,9 @@ vec4 pieces(vec3 d,vec2 wPix){
   ivec2 n=ivec2(floor(wPix/CS));vec4 res=vec4(0);
   for(int j=-2;j<=2;j++)for(int i=-2;i<=2;i++){
     ivec2 cw=ivec2(n.x+i,wrap(n.y+j,NYC));Sch q=sched(cw);float age=uT-q.tf;
+    int MODE=uVar==3?(hi2(cw+ivec2(63,21))<.5?0:1):uVar;float LIFE=MODE==0?1.5:MODE==1?2.8:.9;
     if(age<=0.||age>=LIFE) continue;
+    if(MODE==1&&res.a>0.) continue;                                             // a slab on our side hides one behind
     float k=age/LIFE;vec3 c=q.dir;float dc=dot(d,c);if(dc<.2) continue;
     vec3 t1=normalize(cross(vec3(0.,1.,0.),c)),t2=cross(c,t1);
     vec2 x=vec2(dot(d,t1),dot(d,t2))/dc;
@@ -189,16 +192,20 @@ vec4 pieces(vec3 d,vec2 wPix){
     else{col=PALE*(.35+.5*abs(ct))*(.75+.4*fbm(s.w*3.));                       // its back: the other world's side
       col=mix(col,vec3(.25,.03,.03),ss(.55,.7,fbm(s.w*6.+4.))*.6);}
     col=mix(col,PALE*1.15,exp(-e/.0035)*.85);                                   // its broken edge, lit from behind
-    if(MODE==0&&hi2(s.id+ivec2(31,4))<ss(.4,1.,k)*1.05) continue;               // it crumbles, facet by facet, as it falls
+    if(MODE==0&&FIRST){float er=vnoise(s.w*2.5+q.h*10.),th=1.15-1.3*ss(.45,1.,k);  // it burns away as it falls
+      if(er>th) continue;col+=vec3(3.,1.1,.3)*ss(th-.1,th,er);}
+    if(MODE==0&&!FIRST&&hi2(s.id+ivec2(31,4))<ss(.4,1.,k)*1.05) continue;       // or crumbles, facet by facet
     if(MODE==1) col=mix(col,PALE,ss(.1,1.,k)*.92);                              // it sinks into the fog
     if(MODE==2) col*=1.+.6*k;
-    if(alpha>res.a) res=vec4(col,alpha);}
+    if(alpha>res.a||(MODE!=1&&BEHIND)){res=vec4(col,alpha);BEHIND=MODE==1;}}
   return res;}
 
 void main(){
-  RADIAL=uVar!=1;A=48./TAU;KFLAT=10.;
-  if(RADIAL){FS=vec2(.36,1.);CS=vec2(4.2,4.);NYF=48;NYC=12;}else{FS=vec2(1.);CS=vec2(2.6);NYF=0;NYC=0;}
-  MODE=uVar;LIFE=uVar==0?1.5:uVar==1?2.8:.9;SPREAD=uVar==0?1.1:uVar==1?2.:.45;
+  RADIAL=uVar!=1;FIRST=uVar==0||uVar==3;A=(FIRST?36.:48.)/TAU;KFLAT=10.;BEHIND=false;
+  if(FIRST){FS=vec2(.625,1.);CS=vec2(3.2,3.);NYF=36;NYC=12;}                    // the first network, the one Bastien preferred
+  else if(RADIAL){FS=vec2(.36,1.);CS=vec2(4.2,4.);NYF=48;NYC=12;}else{FS=vec2(1.);CS=vec2(2.6);NYF=0;NYC=0;}
+  THA=FIRST?.3:.56;THB=FIRST?.78:.9;
+  SPREAD=uVar==0?1.1:uVar==1?2.:uVar==2?.45:1.5;
   float el=.47;C=vec3(cos(el),sin(el),0.);E1=normalize(cross(vec3(0.,1.,0.),C));E2=cross(C,E1);
   float yaw=uLook.x*.5,pit=.4-uLook.y*.3;
   vec3 F=vec3(cos(pit)*cos(yaw),sin(pit),cos(pit)*sin(yaw)),Rv=normalize(cross(F,vec3(0.,1.,0.))),Uv=cross(Rv,F);
@@ -218,9 +225,9 @@ void main(){
     if(ageA<=0.){
       col=shardCol(d,s,crk,crkMin,heat);
       if(major){
-        float pre=max(ss(-1.3,0.,ageA),ageB<=0.?ss(-1.3,0.,ageB):0.),lw=.0016*(1.+2.2*pre);
+        float pre=max(ss(-1.3,0.,ageA),ageB<=0.?ss(-1.3,0.,ageB):0.),lw=.0016*(1.+(FIRST?3.5:2.2)*pre);
         col+=PALE*(1.4*ss(lw,lw*.3,s.ed)*pre+.45*exp(-s.ed/.006)*pre*pre);       // it comes loose: light leaks round it
-        col+=PALE*press*crk*(ss(.0022,0.,s.ed)+.18*exp(-s.ed/.006));
+        col+=PALE*press*crk*(FIRST?ss(.0035,0.,s.ed)+.3*exp(-s.ed/.008):ss(.0022,0.,s.ed)+.18*exp(-s.ed/.006));
         if(ageB>0.){col=mix(col,PALE*1.1,ss(.004,.0005,s.ed));                    // the lip of a hole
           col+=PALE*exp(-ageB*4.)*exp(-s.ed/.012)*.8;}}
     }else{
@@ -238,7 +245,7 @@ void main(){
     float cor=(exp(-max(ang-Rm,0.)*5.)*.5+exp(-max(ang-Rm,0.)*22.))*(1.-.75*open);
     col+=vec3(1.,.2,.05)*cor*(.8+.2*sin(uT*5.4));
     vec4 pc=pieces(d,s.w);
-    if(MODE==1) pc.a*=open;                                                      // drawn in: seen through the holes only
+    if(BEHIND) pc.a*=open;                                                      // drawn in: seen through the holes only
     col=mix(col,pc.rgb,pc.a);
     if(ang<Rm){vec2 q=p/Rm;float r=length(q);
       vec3 mc=vec3(.75,.08,.04)*(.55+.6*fbm(q*3.+2.))*sqrt(max(1.-r*r*.8,0.));
@@ -289,7 +296,7 @@ cv.addEventListener('pointermove', e => { mx = e.clientX / innerWidth * 2 - 1; m
 cv.addEventListener('pointerleave', () => { mx = my = 0; });
 addEventListener('keydown', e => {
   if (e.key === ' ') { setPlaying(!playing); e.preventDefault(); }
-  if (e.key >= '1' && e.key <= '3') setVer(+e.key - 1);
+  if (e.key >= '1' && e.key <= '4') setVer(+e.key - 1);
   if (e.key === 'c' || e.key === 'C') { time = TC - 3; setPlaying(true); }
 });
 function draw() {

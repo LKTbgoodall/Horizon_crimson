@@ -140,6 +140,8 @@ New preview `preview/sky-break.html` (only the break; 26 s loop, cracks from 0:0
 - **B2 · Eggshell**: irregular plates, no centre; loose plates are drawn into the other world and sink into its fog.
 - **B3 · Blown out**: radial network; at the climax the pressure behind bursts the shell, slabs fly toward us.
 
+**Bastien's first look**: he preferred B1 as first written (before the tuning: 36 facets round the moon, rounder facets, more slabs falling, slabs burning away, thicker light lines) and likes B2 as it is; he asks for a mix of the two. So B1 is back to its first state, and **B4 · Mix** is added: B1's first network, each loose slab going its own way (half fall on our side and burn away, half are drawn into the other world as in B2). B3 keeps the tuned network. Checked B4 at 0:15.2 and 0:16.5.
+
 Checked with headless Chrome at 1280x720 (B1 at 0:09, 0:11, 0:15, 0:19, 0:20; B2 at 0:15.5, 0:19; B3 at 0:14.5, 0:14.7, 0:19): compiles, renders. **Not checked**: motion in real time, frame rate (many hashes per pixel). Waiting for Bastien's pick. The port will replace `fissures.rs`' polylines and pentagons and the WGSL `fissures` / `shard_break`; the moon's travel during the night (the preview keeps it still) and the dawn sealing are to redo on the new network.
 
 ## Next
