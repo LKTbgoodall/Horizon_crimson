@@ -9,9 +9,9 @@ use crate::moon::{day_of, is_full_moon, time_of_day, DAY, TICKS_PER_SECOND};
 use crate::rng::{mix, unit_of};
 
 /// The sunset turns too red: one minute before the eclipse.
-pub const OMENS_START: i64 = 11_800;
-/// The eclipse begins, the moon just above the horizon.
-pub const ECLIPSE_START: i64 = 13_000;
+pub const OMENS_START: i64 = 12_200;
+/// The eclipse begins, the moon about 10 degrees above the horizon (30 when it ends).
+pub const ECLIPSE_START: i64 = 13_400;
 /// The eclipse lasts a minute.
 pub const ECLIPSE_TICKS: i64 = 1_200;
 /// The climax: darkness, then the eye opens.

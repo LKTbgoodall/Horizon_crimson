@@ -19,8 +19,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
-/// Floats in the uniform block: a 4 × 4 matrix and ten `vec4`s.
-const UNIFORM_FLOATS: usize = 56;
+/// Floats in the uniform block: a 4 × 4 matrix and eleven `vec4`s.
+const UNIFORM_FLOATS: usize = 60;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -152,6 +152,7 @@ impl RenderHooks for Sky {
         ]);
         u.extend_from_slice(&[colors.horizon[0], colors.horizon[1], colors.horizon[2], 0.0]);
         u.extend_from_slice(&[colors.zenith[0], colors.zenith[1], colors.zenith[2], 0.0]);
+        u.extend_from_slice(&[frame.fog_rgb[0], frame.fog_rgb[1], frame.fog_rgb[2], 0.0]);
         debug_assert_eq!(u.len(), UNIFORM_FLOATS);
         let bytes: Vec<u8> = u.iter().flat_map(|f| f.to_le_bytes()).collect();
         w.queue.write_buffer(&gpu.uniform, 0, &bytes);
@@ -382,6 +383,7 @@ struct U {
     f: vec4<f32>,       // gaze x and y, moon weight, 1 when the target is sRGB
     hor: vec4<f32>,
     zen: vec4<f32>,
+    fog: vec4<f32>,     // the colour the land's fog goes to
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var depth_tex: texture_depth_2d;
@@ -411,12 +413,21 @@ fn ss(a: f32, b: f32, x: f32) -> f32 {
     let t = clamp((x - a) / (b - a), 0.0, 1.0);
     return t * t * (3.0 - 2.0 * t);
 }
-fn h11(n: f32) -> f32 { return fract(sin(n) * 43758.5453); }
-fn h21(p0: vec2<f32>) -> f32 {
-    var p = fract(p0 * vec2<f32>(123.34, 456.21));
-    p = p + dot(p, p + 45.32);
-    return fract(p.x * p.y);
+// Hashes work on the bits of their input. A float hash (fract of a big
+// product) gave different values at two places of the shader for the same
+// cell on some GPUs, which filled whole Voronoi cells with white.
+fn hashu(x: u32) -> u32 {
+    let s = x * 747796405u + 2891336453u;
+    let w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
+    return (w >> 22u) ^ w;
 }
+fn h21(p0: vec2<f32>) -> f32 {
+    // -0.0 and 0.0 are the same cell.
+    let p = select(p0, vec2<f32>(0.0), p0 == vec2<f32>(0.0));
+    let b = bitcast<vec2<u32>>(p);
+    return f32(hashu(b.x ^ hashu(b.y + 0x9e3779b9u)) >> 8u) / 16777216.0;
+}
+fn h11(n: f32) -> f32 { return h21(vec2<f32>(n, 0.5)); }
 fn h22(p: vec2<f32>) -> vec2<f32> {
     let n = h21(p);
     return vec2<f32>(n, h21(p + n + 17.1));
@@ -466,14 +477,14 @@ fn voro(p: vec2<f32>) -> vec3<f32> {
     var ed = 8.0;
     for (var j = -2; j <= 2; j++) {
         for (var i = -2; i <= 2; i++) {
-            let g = mg + vec2<f32>(f32(i), f32(j));
-            let r = g + h22(n + g) - f;
-            if (dot(mr - r, mr - r) > 0.00001) {
+            if (i != 0 || j != 0) {
+                let g = mg + vec2<f32>(f32(i), f32(j));
+                let r = g + h22(n + g) - f;
                 ed = min(ed, dot(0.5 * (mr + r), normalize(r - mr)));
             }
         }
     }
-    return vec3<f32>(ed, h21(n + mg), sqrt(md));
+    return vec3<f32>(max(ed, 0.0), h21(n + mg), sqrt(md));
 }
 
 // The spiral aurora around the moon. rgb: its light, a: how much sky it hides.
@@ -566,11 +577,16 @@ fn moon_col(q: vec2<f32>, r: f32, a: f32) -> vec3<f32> {
     let p = u.a.y;
     let beat = u.a.z;
     let z = sqrt(max(1.0 - r * r, 0.0));
-    let alb = (0.5 + 0.5 * fbm(q * 2.6 + 4.0)) * (0.85 + 0.3 * vnoise(q * 9.0));
+    // Seas, craters with a lit rim, fine grain: a moon, not a cloud.
+    let cr = voro(q * 4.6 + 3.0);
+    let crater = ss(0.34, 0.2, cr.z) * (0.4 + 0.6 * cr.y);
+    let rim = ss(0.07, 0.0, abs(cr.z - 0.33)) * cr.y;
+    let seas = ss(0.42, 0.62, fbm(q * 1.6 + 4.0));
+    let alb = (0.8 + 0.2 * fbm(q * 7.0 + 1.0)) * (1.0 - 0.3 * seas) * (1.0 - 0.25 * crater) + 0.1 * rim;
     let s = ss(0.08, -0.08, r - u.b.x - 0.12 * sin(a * 3.0 + r * 9.0 - t * 0.8) * ss(0.0, 0.3, p));
     let v = voro(q * 3.3 + 31.0);
     let on = ss(0.0, 0.12, p * 1.25 - (vnoise(q * 1.5 + 2.0) * 0.8 + r * 0.3)) * ss(0.38, 0.55, vnoise(q * 2.7 + 8.0));
-    let lit = mix(vec3<f32>(0.95, 0.93, 0.86), vec3<f32>(1.0, 0.62, 0.36), p * 0.85) * alb * (0.55 + 0.6 * z);
+    let lit = mix(vec3<f32>(1.0, 0.72, 0.44), vec3<f32>(1.0, 0.46, 0.22), p * 0.85) * alb * (0.5 + 0.65 * z);
     let drk = mix(vec3<f32>(0.22, 0.012, 0.012), vec3<f32>(0.8, 0.07, 0.04), u.c.x) * alb * (0.7 + 0.5 * z);
     var c = mix(lit, drk, s);
     c += vec3<f32>(1.0, 0.35, 0.06) * 4.0 * s * (1.0 - s) * 0.9;
@@ -631,7 +647,11 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
             weight = max(weight, disc * u.f.z);
         }
     }
-    if (d.y < 0.0) { col = u.hor.rgb; weight = u.c.w; }
+    // Without bloom the bright parts would clip to white: compress them.
+    col = vec3<f32>(1.0) - exp(-col * 1.2);
+    // The sky sinks into the land's fog near the horizon and below it.
+    let haze = max(exp(-max(d.y, 0.0) * 14.0) * 0.65, ss(0.0, -0.1, d.y));
+    col = mix(col, u.fog.rgb, haze);
     return vec4<f32>(col, clamp(weight, 0.0, 1.0));
 }
 

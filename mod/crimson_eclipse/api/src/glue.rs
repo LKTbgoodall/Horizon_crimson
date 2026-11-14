@@ -7,7 +7,7 @@ use crate::server::{self, Shared};
 use crate::sky_pass::Sky;
 use horizon_client::mod_api::{
     CameraShakeEvent, ComputeFogColorEvent, Flow, Hooks, Host, LevelTickPostEvent,
-    PerformCommandEvent, RegisterCommandsEvent, RenderHooks,
+    PerformCommandEvent, RegisterCommandsEvent, RenderHooks, TickEvent,
 };
 use std::sync::Arc;
 
@@ -41,6 +41,10 @@ impl Hooks for CrimsonEclipse {
 
     fn level_tick_post(&self, host: &mut dyn Host, event: &mut LevelTickPostEvent<'_>) {
         server::level_tick_post(&self.shared, host, event.dimension);
+    }
+
+    fn tick(&self, host: &mut dyn Host, _event: &mut TickEvent) {
+        client::tick(&self.shared, host);
     }
 
     fn compute_fog_color(&self, host: &dyn Host, event: &mut ComputeFogColorEvent<'_>) {

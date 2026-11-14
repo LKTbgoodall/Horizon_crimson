@@ -26,6 +26,8 @@ pub struct Shared {
     /// (which has no host): the day time, the fraction of a tick past it, and
     /// when the client last said so.
     clock: Mutex<Option<(i64, f32, Instant)>>,
+    /// The hour of the last client tick that asked for sounds, or [`NO_DAY`].
+    sound_tick: AtomicI64,
 }
 
 impl Default for Shared {
@@ -34,6 +36,7 @@ impl Default for Shared {
             night: Mutex::new(Night::default()),
             showing: AtomicI64::new(NO_DAY),
             clock: Mutex::new(None),
+            sound_tick: AtomicI64::new(NO_DAY),
         }
     }
 }
@@ -57,6 +60,13 @@ impl Shared {
     pub fn client_clock(&self) -> Option<(i64, f32)> {
         let (day_time, partial, at) = (*self.clock())?;
         (at.elapsed().as_secs_f32() < 0.5 && self.shows(day_time)).then_some((day_time, partial))
+    }
+
+    /// Notes the hour of this client tick and gives the last one's, if a
+    /// blood moon showed then too. `None` forgets it.
+    pub fn swap_sound_tick(&self, now: Option<i64>) -> Option<i64> {
+        let last = self.sound_tick.swap(now.unwrap_or(NO_DAY), Ordering::Relaxed);
+        (last != NO_DAY).then_some(last)
     }
 
     fn clock(&self) -> MutexGuard<'_, Option<(i64, f32, Instant)>> {

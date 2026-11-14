@@ -9,17 +9,44 @@ use crate::rise::{Frame, EYE_OPENING_SECONDS, EYE_OPENS};
 /// The vanilla moon's disc, in radians from its centre to its edge.
 pub const MOON_RADIUS: f32 = 0.12;
 
-/// The sun's angle at `time_of_day` (ticks, 0 to 24000), in degrees: 0 at
-/// noon, growing with time, as vanilla's `visual/sun_angle`.
-/// Assumed linear in time; to check against the game's moon.
-pub fn sun_angle_degrees(time_of_day: f32) -> f32 {
-    time_of_day / DAY as f32 * 360.0 - 90.0
+/// The easing of vanilla's day timeline (`data/minecraft/timeline/day.json`,
+/// read in game 26.3): a cubic Bézier from noon to the next noon.
+const EASE: [f32; 4] = [0.362, 0.241, 0.638, 0.759];
+
+/// How far the sky has turned since noon at `time_of_day` (ticks, 0 to
+/// 24000), 0 to 1: vanilla eases it, so the sun and the moon move slower
+/// around noon and midnight than a steady turn would.
+pub fn day_turn(time_of_day: f32) -> f32 {
+    let x = ((time_of_day - 6_000.0) / DAY as f32).rem_euclid(1.0);
+    if !x.is_finite() {
+        return 0.0;
+    }
+    // The curve's x is increasing: find its parameter by halving.
+    let curve = |s: f32, a: f32, b: f32| {
+        3.0 * (1.0 - s) * (1.0 - s) * s * a + 3.0 * (1.0 - s) * s * s * b + s * s * s
+    };
+    let (mut low, mut high) = (0.0f32, 1.0f32);
+    for _ in 0..24 {
+        let mid = (low + high) / 2.0;
+        if curve(mid, EASE[0], EASE[2]) < x {
+            low = mid;
+        } else {
+            high = mid;
+        }
+    }
+    curve((low + high) / 2.0, EASE[1], EASE[3])
+}
+
+/// The moon's angle at `time_of_day`, in degrees, as vanilla's
+/// `visual/moon_angle`: 180 at noon (under the world), 360 at midnight (overhead).
+pub fn moon_angle_degrees(time_of_day: f32) -> f32 {
+    180.0 + 360.0 * day_turn(time_of_day)
 }
 
 /// The direction of the moon in the world at `time_of_day`: a unit vector,
-/// x east, y up. The moon is opposite the sun and both turn in the x/y plane.
+/// x east, y up, as the game places its moon.
 pub fn moon_direction(time_of_day: f32) -> [f32; 3] {
-    let a = (sun_angle_degrees(time_of_day) + 180.0).to_radians();
+    let a = moon_angle_degrees(time_of_day).to_radians();
     [-a.sin(), a.cos(), 0.0]
 }
 

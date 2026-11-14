@@ -10,3 +10,4 @@ pub mod rise;
 pub mod rng;
 pub mod schedule;
 pub mod sky;
+pub mod sound;

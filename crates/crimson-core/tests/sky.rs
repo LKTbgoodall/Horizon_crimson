@@ -1,7 +1,7 @@
 use crimson_core::night::{presence, CLIMAX_START, DAWN_START, ECLIPSE_START, OMENS_START};
 use crimson_core::rise::{frame, EYE_OPENS};
 use crimson_core::sky::{
-    colors, lid, look, moon_direction, since_open, sun_angle_degrees, MOON_RADIUS,
+    colors, day_turn, lid, look, moon_angle_degrees, moon_direction, since_open, MOON_RADIUS,
 };
 
 fn close(a: f32, b: f32) -> bool {
@@ -9,28 +9,48 @@ fn close(a: f32, b: f32) -> bool {
 }
 
 #[test]
-fn the_moon_rises_in_the_east_at_sunset_and_stands_overhead_at_midnight() {
-    assert!(close(sun_angle_degrees(6_000.0), 0.0), "noon");
-    let rising = moon_direction(12_000.0);
-    assert!(
-        close(rising[0], 1.0) && close(rising[1], 0.0),
-        "on the eastern horizon: {rising:?}"
-    );
+fn the_moon_follows_the_games_eased_path() {
+    assert!(close(day_turn(6_000.0), 0.0), "noon");
+    assert!(close(day_turn(18_000.0), 0.5), "midnight");
+    assert!(close(moon_angle_degrees(18_000.0), 360.0));
     let midnight = moon_direction(18_000.0);
     assert!(close(midnight[1], 1.0), "overhead: {midnight:?}");
-    let setting = moon_direction(0.0);
-    assert!(
-        close(setting[0], -1.0),
-        "in the west at sunrise: {setting:?}"
-    );
-    for t in (0..24_000).step_by(250) {
+    // Values of the game's own timeline (cubic Bezier 0.362, 0.241, 0.638, 0.759).
+    for (tick, degrees_up) in [
+        (12_500.0, -4.5),
+        (13_000.0, 3.5),
+        (13_400.0, 10.1),
+        (14_600.0, 30.2),
+        (22_800.0, 6.8),
+    ] {
+        let d = moon_direction(tick);
+        let up = d[1].asin().to_degrees();
+        assert!(
+            (up - degrees_up).abs() < 0.15,
+            "{up} degrees up at {tick}, the game says {degrees_up}"
+        );
+        assert_eq!(
+            d[0] > 0.0,
+            tick < 18_000.0,
+            "east in the evening, west in the morning"
+        );
+    }
+    let mut last = day_turn(6_000.0);
+    for t in (6_010..30_000).step_by(10) {
+        let now = day_turn(t as f32);
         let d = moon_direction(t as f32);
         assert!(close(d[0] * d[0] + d[1] * d[1] + d[2] * d[2], 1.0));
+        assert!(
+            now >= last - 1e-4 && now - last < 0.001,
+            "the sky turns steadily: {last} to {now} at {t}"
+        );
+        last = now;
     }
+    assert!(day_turn(f32::NAN).is_finite());
 }
 
 #[test]
-fn the_moon_is_up_for_the_whole_eclipse_and_the_omens_end_as_it_rises() {
+fn the_moon_is_well_up_for_the_whole_eclipse() {
     assert!(
         moon_direction(OMENS_START as f32)[1] < 0.0,
         "still under the horizon when the omens start"
@@ -38,15 +58,15 @@ fn the_moon_is_up_for_the_whole_eclipse_and_the_omens_end_as_it_rises() {
     let start = moon_direction(ECLIPSE_START as f32)[1].asin().to_degrees();
     let end = moon_direction(CLIMAX_START as f32)[1].asin().to_degrees();
     assert!(
-        (14.0..16.0).contains(&start),
+        (9.5..10.5).contains(&start),
         "{start} degrees up when the eclipse starts"
     );
     assert!(
-        (32.0..34.0).contains(&end),
+        (29.5..31.0).contains(&end),
         "{end} degrees up when the eye opens"
     );
     // Even swollen 2.4 times, its lower edge clears the horizon at the climax.
-    assert!(end.to_radians() - MOON_RADIUS * 2.42 > 0.25);
+    assert!(end.to_radians() - MOON_RADIUS * 2.42 > 0.2);
 }
 
 #[test]
@@ -124,7 +144,7 @@ fn the_eye_wakes_a_second_after_the_lid_moves() {
 
 #[test]
 fn the_players_look_is_read_from_the_moon() {
-    let moon = moon_direction(13_500.0);
+    let moon = moon_direction(14_000.0);
     let at_it = look(moon, moon);
     assert!(at_it.facing && close(at_it.offset[0], 0.0) && close(at_it.offset[1], 0.0));
     let away = look([-moon[0], -moon[1], -moon[2]], moon);
