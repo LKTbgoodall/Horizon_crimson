@@ -23,7 +23,7 @@ The Pale Realm is a **reserved region of the End**, far from the vanilla islands
 A real new level needs the engine: `Dim` is a three-value enum used at 255 places in 31 files of `horizon-client` (`game/levels.rs` `open_level(dim: Dim)`). No mod can add one through hooks. The way to a real dimension is a contribution to Horizon:
 - mod API work (a native mod declaring its own level: id, dimension type, and its chunks from a mod generator) goes to the mod API fork `arismoko/horizon` (CONTRIBUTING.md); data pack dimensions as vanilla loads them would go to `horizon-rust/horizon`;
 - ideas go first to the suggestion queue (playhorizon.dev/hub or `/suggest` on Discord), not to issues; pull requests should stay under ~500 lines, so the work splits (string level ids instead of `Dim`, then registering a level, then the mod hook).
-Plan if Bastien agrees: suggest it, then contribute; meanwhile the far-End region carries the Realm with the same pure generator, so the move to a real dimension later changes only the glue.
+Update: Horizon's issue #11282 already turns `Dim` into a level key and plans data pack levels; our part is the mod side → [[Proposal - mod dimensions]]. Plan if Bastien agrees: suggest it, then contribute; meanwhile the far-End region carries the Realm with the same pure generator, so the move to a real dimension later changes only the glue.
 
 ## Rejected
 - A zone of the Overworld (far away or high up): not a real other level, no loading crossing, the Overworld's own sky and mobs leak in.
