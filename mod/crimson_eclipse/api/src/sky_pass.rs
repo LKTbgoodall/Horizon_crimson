@@ -508,18 +508,40 @@ fn aurora(ang: f32, a: f32) -> vec4<f32> {
     return vec4<f32>(c * k, clamp(b * k, 0.0, 0.92));
 }
 
-// Stars on rings around the moon: dragged inward, stretched, and put out.
-fn stars(ang: f32, a: f32) -> f32 {
+// Stars: small points of one size everywhere. Near the moon they sit on rings
+// that flow inward and they stretch a little toward it; far from it they are
+// a plain field. All of them go out as the eclipse advances.
+fn stars(d: vec3<f32>, ang: f32, a: f32) -> f32 {
     let pull = u.c.y;
-    let g = vec2<f32>(a / 6.2832 * 88.0, log(ang + 0.03) * 9.0 + pull * pull * 5.0);
-    let id = floor(g);
-    let f = fract(g) - 0.5;
-    let h = h21(id);
-    if (h < 0.86) { return 0.0; }
-    var s = f - (h22(id + 3.0) - 0.5) * 0.6;
-    s.y = s.y / (1.0 + pull * 6.0);
-    let alive = step(pull * 1.12, h21(id + 7.0));
-    return ss(0.09, 0.0, length(s)) * (0.7 + 0.3 * sin(u.a.x * 3.0 + h * 90.0)) * alive * (0.5 + 0.5 * h21(id + 1.0));
+    let twinkle_t = u.a.x * 3.0;
+    var near = 0.0;
+    if (ang < 1.0) {
+        let g = vec2<f32>(a / 6.2832 * 88.0, log(ang + 0.03) * 9.0 + pull * pull * 5.0);
+        let id = floor(g);
+        let h = h21(id);
+        if (h >= 0.86) {
+            let s = fract(g) - 0.5 - (h22(id + 3.0) - 0.5) * 0.6;
+            // From cell units to radians: a cell is ang * 2 pi / 88 wide and (ang + 0.03) / 9 deep.
+            let m = vec2<f32>(s.x * ang * 0.0714, s.y * (ang + 0.03) / 9.0);
+            let stretch = 1.0 + pull * 3.0 * exp(-ang * 1.5);
+            near = ss(0.004, 0.0, length(vec2<f32>(m.x, m.y / stretch)))
+                * (0.7 + 0.3 * sin(twinkle_t + h * 90.0)) * step(pull * 1.12, h21(id + 7.0)) * (0.5 + 0.5 * h21(id + 1.0));
+        }
+    }
+    var far = 0.0;
+    if (ang > 0.5) {
+        let el = asin(clamp(d.y, -1.0, 1.0));
+        let g = vec2<f32>(atan2(d.z, d.x), el) * 46.0;
+        let id = floor(g);
+        let h = h21(id + 31.0);
+        if (h >= 0.8) {
+            let s = fract(g) - 0.5 - (h22(id + 13.0) - 0.5) * 0.6;
+            let m = vec2<f32>(s.x * cos(el), s.y) / 46.0;
+            far = ss(0.0035, 0.0, length(m))
+                * (0.7 + 0.3 * sin(twinkle_t + h * 90.0)) * step(pull * 1.12, h21(id + 17.0)) * (0.4 + 0.6 * h21(id + 11.0));
+        }
+    }
+    return mix(near, far, ss(0.5, 1.0, ang));
 }
 
 // The web of cracks around the moon. x: crack core, y: crack glow, z: sky torn open.
@@ -631,7 +653,7 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     var weight = u.c.w;
 
     var col = mix(u.hor.rgb, u.zen.rgb, pow(ss(-0.02, 0.75, d.y), 0.6));
-    col += vec3<f32>(1.0, 0.95, 0.9) * stars(ang, a);
+    col += vec3<f32>(1.0, 0.95, 0.9) * stars(d, ang, a);
     let au = aurora(ang, a);
     col = col * (1.0 - au.a) + au.rgb;
     let ck = sky_cracks(ang, a);

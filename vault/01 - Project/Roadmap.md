@@ -25,7 +25,8 @@ Back: [[00 - Home]]
 - [x] 0.1.3: our moon solid from the omens, drawn over the haze (2026-11-14)
 - [x] 0.1.3 seen in game (Bastien): amber shapes in the moon, portal noises disliked, blackout disliked, torn pieces look bugged
 - [x] 0.1.4: own sounds, one-pass cracks, hush instead of blackout, torn pieces outlined (2026-11-14)
-- [ ] 0.1.4 seen and heard in game (Bastien)
+- [x] 0.1.5: stars of one size, slight stretch near the moon only (seen stretched in 0.1.4) (2026-11-14)
+- [ ] 0.1.4 and 0.1.5 judged in game (Bastien): sounds, hush, moon cracks, torn pieces, stars
 - [x] Our own sound files: `tools/make-sounds.py` (numpy + soundfile in `build/audio-venv`) (2026-11-14)
 - [x] Sky pass written (`RenderHooks::world_drawn`, staging C, frame copy + land grade), type-checked, shader validated (2026-11-14); **not seen in game**
 - [ ] Bloom on top of it (from Cagebound's `fx.rs`)

@@ -16,6 +16,10 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.1.5
+- **Stars are small points again** (seen in 0.1.4: huge stretched streaks far from the moon). One size
+  everywhere, a slight stretch toward the moon only close to it, a plain field elsewhere.
+
 ## New in 0.1.4 (after Bastien's look at 0.1.3)
 - **Our own sounds** instead of nether portal and other vanilla noises: heartbeat, drone, omen, crack, the
   eye. They are synthesised by `tools/make-sounds.py` into `content/assets/crimson_eclipse/sounds/` and
