@@ -1,6 +1,6 @@
 ---
 tags: [horizon, contribution]
-status: draft (not posted)
+status: posted 2026-11-14
 date: 2026-11-14
 source: https://github.com/horizon-rust/horizon/issues/11282, https://github.com/horizon-rust/horizon/pull/15041
 ---
