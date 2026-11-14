@@ -56,6 +56,13 @@ Bastien's words: C is extraordinary; he loves **the sky breaking and showing spa
 - Reference for every number: version C in `preview/blood-moon-rise.html` (`VERS[2]`, the `uVer==2` branches).
 - A and B stay in the preview as a source of ideas (B's snap opening and shock wave), not as the plan.
 
+## Climax push (2026-11-14)
+Bastien on C in game: cool, but not masterclass enough; he asked for something truly incredible, naming the break behind the moon and the eye opening. Three candidates in `preview/abyss-climax.html` (same minute, only those two moments change):
+- **C1 · Shell of Light**: the sky is a shell with blinding light behind it. Impact-glass cracks run from the moon, white-hot at the tip then cooling red; at the climax the near shards blow out and god rays pour through (and through the trees). The eye strains open against strands of flesh that stretch and snap, snaps wide with an overshoot, a third eyelid sweeps across, then the pupil locks on.
+- **C2 · Glass Abyss**: shards bend the sky behind them, glint and split light like a prism, then fall away in a wave onto deep space (galaxy spiralling into the moon). No lid: the void that ate the moon was a pupil dilated in the dark; at the flash it snaps into a slit on a spring and the iris ignites, hottest where just uncovered.
+- **C3 · The Sky Opens**: one jagged rift grows across the sky in steps on the heartbeat; at the climax it lights up horizon to horizon and the sky opens like an eyelid (~110° wide). The moon becomes the pupil of an eye the size of the sky, which follows the player.
+- Shared tech: crack network is one-pass F2-F1 Voronoi in log-polar coordinates (radial axis squeezed 0.42, jittered) on integer PCG hashes; god rays are one radial blur of the bright pass toward the moon (extra pass in `world_drawn`, ❓ in game).
+
 ## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.

@@ -14,6 +14,8 @@ Back: [[00 - Home]]
 ## Phase 1: the rendering base and the blood moon 🔴
 - [ ] Animated preview of the blood moon and the chosen events; Bastien picks
   - [x] Rise preview page, 3 stagings: `preview/blood-moon-rise.html` (2026-11-14)
+  - [x] Climax push of C, 3 candidates (C1 Shell of Light, C2 Glass Abyss, C3 The Sky Opens): `preview/abyss-climax.html` (2026-11-14)
+  - [ ] Bastien picks a climax candidate, then port it to `sky_pass.rs`
   - [x] Bastien picked **C · The Abyss** (2026-11-14)
 - [x] Repo skeleton: workspace, pure crate `crimson-core`, bundle `mod/crimson_eclipse` (typed API), content mod (manifest only) (2026-11-14)
 - [x] Pure core: when a blood moon happens, its phases, the rise's timeline (staging C), the eye, the event scheduler; 31 tests (2026-11-14)

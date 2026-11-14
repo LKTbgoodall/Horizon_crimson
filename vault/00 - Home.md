@@ -16,7 +16,7 @@ updated: 2026-11-14
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-1. **Bastien**: build 0.1.5 (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
+1. **Bastien**: pick a climax candidate in `preview/abyss-climax.html` (C1 / C2 / C3, or a mix). Build 0.1.5 (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
 2. **Claude**: fix what the first in-game look shows (moon position, depth, colours), then bloom, burgundy foliage (`biome_colors`), embers, sound.
 
 ## 🗺️ Vault map

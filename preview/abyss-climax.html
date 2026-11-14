@@ -1,0 +1,818 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Abyss climax</title>
+<!--
+  Preview of staging C pushed further (vault/04 - Design/Blood moon rise.md): three candidates for the two
+  big moments, the sky breaking behind the moon and the eye opening. Self-contained, no dependency.
+  Same timeline as preview/blood-moon-rise.html (climax at 1:14.5). The sky is ONE full-screen fragment
+  shader, as in game; the god rays are one extra radial blur on the bright pass.
+  Hashes are integer (PCG) and the crack network is one-pass F2-F1 Voronoi: the two traps seen in game.
+  URL parameters: ?v=c1|c2|c3  &t=<seconds>  &play=0  &ui=0
+-->
+<style>
+  :root { --red:#ff3b2f; --dim:#b9a7a5; --bg:rgba(12,4,5,.72); --line:rgba(255,90,70,.22); }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:#000; color:#f3e9e7; overflow:hidden;
+    font:14px/1.45 system-ui,"Segoe UI",Roboto,sans-serif; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:crosshair; }
+  .ui { transition:opacity .35s; }
+  body.hide .ui { opacity:0; pointer-events:none; }
+  #cap { position:fixed; left:18px; top:14px; max-width:min(560px,70vw); text-shadow:0 1px 6px #000,0 0 2px #000; pointer-events:none; }
+  #cap .v { font-size:22px; font-weight:700; letter-spacing:.02em; }
+  #cap .v b { color:var(--red); margin-right:.35em; }
+  #cap .tag { color:var(--dim); margin-top:2px; }
+  #cap .ph { margin-top:8px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#ffb4a8; }
+  #cross { position:fixed; left:50%; top:50%; width:14px; height:14px; margin:-7px 0 0 -7px; pointer-events:none; opacity:.55;
+    background:linear-gradient(#fff,#fff) center/2px 14px no-repeat,linear-gradient(#fff,#fff) center/14px 2px no-repeat; mix-blend-mode:difference; }
+  #bar { position:fixed; left:0; right:0; bottom:0; padding:10px 16px 12px; background:linear-gradient(transparent,rgba(0,0,0,.82) 45%);
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; }
+  button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:7px; padding:6px 11px; cursor:pointer; white-space:nowrap; }
+  button:hover { border-color:var(--red); }
+  button.on { background:#7d120d; border-color:var(--red); }
+  #play { width:42px; font-size:15px; }
+  #time { font-variant-numeric:tabular-nums; color:var(--dim); min-width:92px; }
+  #track { position:relative; flex:1 1 320px; height:34px; cursor:pointer; touch-action:none; }
+  #segs { position:absolute; left:0; right:0; top:0; height:14px; display:flex; font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); }
+  #segs span { overflow:hidden; white-space:nowrap; border-left:1px solid var(--line); padding-left:5px; }
+  #rail { position:absolute; left:0; right:0; top:19px; height:8px; border-radius:4px; background:rgba(255,255,255,.13); overflow:hidden; }
+  #fill { height:100%; width:0; background:linear-gradient(90deg,#7d120d,var(--red)); }
+  #knob { position:absolute; top:15px; width:4px; height:16px; margin-left:-2px; border-radius:2px; background:#fff; box-shadow:0 0 8px var(--red); }
+  .vers { display:flex; gap:6px; flex-wrap:wrap; }
+  #notes { position:fixed; right:14px; top:14px; bottom:86px; width:min(440px,92vw); overflow:auto; padding:14px 16px; background:rgba(10,3,4,.92);
+    border:1px solid var(--line); border-radius:10px; display:none; font-size:13px; }
+  #notes.open { display:block; }
+  #notes h2 { margin:0 0 8px; font-size:15px; color:#ffb4a8; }
+  #notes h3 { margin:14px 0 4px; font-size:12px; letter-spacing:.12em; text-transform:uppercase; color:var(--dim); }
+  #notes table { width:100%; border-collapse:collapse; }
+  #notes td { vertical-align:top; padding:5px 6px 5px 0; border-top:1px solid rgba(255,255,255,.08); }
+  #notes td:first-child { width:34%; color:#fff; }
+  #notes code { color:#ffb4a8; font-size:12px; }
+  #notes p { margin:6px 0; color:var(--dim); }
+  #err { position:fixed; inset:0; display:none; place-items:center; padding:30px; text-align:center; color:#ffb4a8; white-space:pre-wrap; }
+  #hint { position:fixed; left:50%; bottom:74px; transform:translateX(-50%); font-size:12px; color:var(--dim); text-shadow:0 1px 4px #000; pointer-events:none; white-space:nowrap; }
+  @media (max-width:1250px){ #hint{display:none} }
+  @media (max-width:760px){ #cap .tag{display:none} }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="cross" class="ui"></div>
+<div id="cap" class="ui"><div class="v"><b id="vk"></b><span id="vn"></span></div><div class="tag" id="vt"></div><div class="ph" id="ph"></div></div>
+<div id="hint" class="ui">Look at the moon with the mouse · Space play/pause · 1 2 3 candidates · C replay the climax · ← → seek · H hide UI</div>
+<div id="notes" class="ui">
+  <h2>What changes from C, and how it renders</h2>
+  <p>All three keep C's minute (swelling moon, spiral void, accretion corona, spiral aurora, the hush). Only the sky's breaking and the eye change.</p>
+  <table>
+    <tr><td>C1 · Shell of Light</td><td>The sky is a shell with blinding light behind it. Cracks run out from the moon like impact glass, white-hot at their tip then cooling to red. At the climax the shards near the moon blow out and light pours through: god rays fall across the sky and through the trees. The eye opens slowly, held by strands of flesh that stretch and snap, then snaps wide; a third eyelid sweeps across it, then the pupil locks onto you.</td></tr>
+    <tr><td>C2 · Glass Abyss</td><td>The sky is glass. Each shard bends the sky behind it, catches glints, and the cracks split light like a prism. At the climax the shards fall away in a wave from the moon and leave a hole onto deep space with a galaxy spiralling into the moon. The eye has no lid: the void that ate the moon was a pupil dilated in the dark. At the flash it contracts into a slit and the iris ignites, hottest where it was just uncovered.</td></tr>
+    <tr><td>C3 · The Sky Opens</td><td>One rift grows across the whole sky through the eclipse, in steps on the heartbeat, with cracks branching off it. At the climax it lights up from horizon to horizon, then the sky itself opens like an eyelid, 130° wide. The moon becomes the pupil of an eye the size of the sky, and it follows you across it.</td></tr>
+  </table>
+  <h3>In Horizon</h3>
+  <p>The sky, the cracks, the holes, the eye: the same single <code>world_drawn</code> pass as 0.1.5 (WGSL port of this shader). The crack network is log-polar (conformal) one-pass Voronoi on integer cells, so nothing is computed twice.</p>
+  <p>God rays: one extra full-screen pass in the same hook, a 48-tap radial blur toward the moon on a quarter-size bright copy. Needs our own intermediate texture (we already copy the frame). Not tried in game yet (❓).</p>
+  <p>The glow itself is the bloom still on the list; until it exists in game, bright parts are compressed as in 0.1.1.</p>
+</div>
+<div id="bar" class="ui">
+  <button id="play" title="Play / pause (Space)">❚❚</button>
+  <span id="time">0:00 / 1:44</span>
+  <div id="track"><div id="segs"></div><div id="rail"><div id="fill"></div></div><div id="knob"></div></div>
+  <div class="vers" id="vers"></div>
+  <button id="clx" title="Jump to 1:04 (C)">⟲ Climax</button>
+  <button id="snd" title="Rough synth stand-in">🔇 Sound</button>
+  <button id="nb">Notes</button>
+</div>
+<div id="err"></div>
+
+<script>
+'use strict';
+// ───────────────────────── timeline ─────────────────────────
+const T0 = 14, TE = 74, TC = 74.5, TN = 80, TT = 104;   // eclipse start, end of eclipse, climax, night, end (seconds)
+const F0 = .75, F1 = 2.3;                                // heartbeat, Hz, at the start and end of the eclipse
+const PHASES = [['Omens', 0], ['Eclipse', T0], ['The eye', TE], ['Night', TN]];
+const VERS = [
+  { key:'C1', name:'Shell of Light', tag:'The sky is a shell and something blinding is behind it. Cracks run white-hot from the moon, shards blow out and light pours through in shafts. The eye tears open against strands of flesh, then a third eyelid sweeps across it.',
+    rot:-.1, rays:1.2, shake:1.7, since:3.9 },
+  { key:'C2', name:'Glass Abyss', tag:'The sky is glass: shards bend the stars, split light like a prism, then fall away in a wave onto deep space. No lid: the void that ate the moon was a pupil dilated in the dark, and at the flash it snaps into a slit.',
+    rot:0, rays:.85, shake:1.3, since:.55 },
+  { key:'C3', name:'The Sky Opens', tag:'One rift grows across the whole sky through the eclipse. At the climax it lights up from horizon to horizon and the sky itself opens like an eyelid. The moon becomes the pupil of an eye as big as the sky, and it follows you.',
+    rot:-.12, rays:1.15, shake:1.1, since:3.4 },
+];
+const DEG = Math.PI / 180;
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const mix = (a, b, k) => a + (b - a) * k;
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const mix3 = (a, b, k) => [mix(a[0], b[0], k), mix(a[1], b[1], k), mix(a[2], b[2], k)];
+const mul3 = (a, k) => [a[0] * k, a[1] * k, a[2] * k];
+const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const phaseOf = p => 60 * (F0 * p + (F1 - F0) * p * p / 2);
+const pOfPhase = n => (-F0 + Math.sqrt(F0 * F0 + 2 * (F1 - F0) * n / 60)) / (F1 - F0);
+
+// Everything the picture needs, as a pure function of (time, candidate): scrubbing is exact.
+function state(t, v) {
+  const V = VERS[v], p = clamp((t - T0) / 60), u = t - TC;
+  let ph = 0, beat = 0;
+  if (t >= T0 && t < TE) ph = phaseOf(p); else if (t >= TN - 1) ph = 1000 + (t - TN + 1) * .6;
+  if (ph > 0) { const x = ph - Math.floor(ph); beat = Math.max(Math.exp(-x * 8), x > .3 ? .7 * Math.exp(-(x - .3) * 8) : 0); }
+  const pq = t >= TE ? 1 : pOfPhase(Math.floor(phaseOf(p) / 2) * 2);          // progress in steps of 2 beats
+  const hush = t >= 72.3 && t < TC ? sstep(72.3, 73.5, t) : 0;
+
+  let open = 0, seam = 0, flash = 0, mem = -9, burst = 0, rift = 0, shock = 0, shockK = 0;
+  if (u >= 0 && u < 4) { shock = u * .5; shockK = 1 - u / 4; }
+  if (v === 0) {
+    seam = clamp((t - 74.1) / .4);
+    if (u >= 0) {
+      // sticky: strains open against the strands, jerks when they snap, then snaps wide with an overshoot
+      if (u < 1.3) open = .3 * sstep(0, 1.3, u);
+      else if (u < 1.55) open = .3 + .06 * sstep(1.3, 1.55, u);
+      else { const x = (u - 1.55) / .4; open = x < 1 ? .36 + .64 * x * x * (3 - 2 * x) : 1 + .1 * Math.exp(-(x - 1) * 3) * Math.sin((x - 1) * 12); }
+      flash = 1.25 * Math.exp(-u * 1.5); burst = sstep(0, .9, u);
+      if (u >= 2.3 && u < 3.2) mem = mix(-1.25, 1.25, sstep(2.3, 2.8, u));
+      else if (u >= 3.2 && u < 3.8) mem = mix(1.25, -1.25, sstep(3.2, 3.7, u));
+    }
+    for (const tb of [87, 96.5]) if (Math.abs(t - tb) < .45) mem = mix(-1.25, 1.25, t < tb ? sstep(tb - .45, tb - .1, t) : 1 - sstep(tb + .1, tb + .45, t));
+  } else if (v === 1) {
+    if (u >= 0) flash = .95 * Math.exp(-u * 2.2);
+  } else {
+    rift = t >= TE ? 1.15 : 1.15 * Math.pow(clamp((pq - .3) / .66), 1.3);
+    seam = sstep(74.3, 74.6, t) * (1 - .7 * sstep(75, 77, t));
+    open = .05 * sstep(74.5, 74.8, t) + .95 * sstep(74.9, 78.4, t);
+    if (u >= 0) flash = .7 * Math.exp(-u * 1.1);
+    for (const tb of [87, 96.5]) { const d = Math.abs(t - tb) / .4; if (d < 1) open *= .15 + .85 * d * d; }
+  }
+
+  let shake = t >= T0 && t < TE ? .04 + .2 * p * p : 0;
+  if (u >= 0) shake += V.shake * Math.exp(-u * 1.4);
+  if (v === 2) shake += .5 * sstep(74.9, 75.5, t) * (1 - sstep(77.5, 78.6, t));
+
+  const k1 = sstep(3, 14, t), kb = sstep(0, .7, p);
+  const hor = mix3(mix3(mix3([1, .5, .22], [1, .15, .04], sstep(0, 7, t)), [.30, .06, .07], k1), [.5, .035, .03], kb);
+  const zen = mix3(mix3([.20, .13, .32], [.025, .02, .06], k1), [.055, 0, .008], kb);
+  const amb = mix3(mix3([.62, .42, .40], [.16, .14, .25], k1), [.34, .07, .07], p);
+
+  const sunEl = mix(7, -6, clamp(t / 13)) * DEG;
+  const sun = norm([-Math.cos(sunEl), Math.sin(sunEl), .17]);
+  const mEl = (mix(-10, 8, sstep(8, 14, t)) + 19 * sstep(0, 1, p)) * DEG;
+  const moon = [Math.cos(mEl), Math.sin(mEl), 0];
+  const eyeK = u >= 0 ? sstep(0, 2, u) : 0;
+  let L, lcol;
+  if (t < 13) {
+    const e = Math.max(sunEl, 4 * DEG); L = norm([-Math.cos(e), Math.sin(e), .17]);
+    lcol = mul3([1.15, .5, .22], 1 - sstep(8, 13, t));
+  } else {
+    const e = Math.max(mEl, 9 * DEG); L = [Math.cos(e), Math.sin(e), 0];
+    const night = u >= 0 ? .75 + .4 * eyeK + (v === 0 ? .35 * burst : 0) : 1 - .3 * hush;
+    lcol = mul3(mix3([.42, .5, .7], [2.1, .24, .15], sstep(.1, .8, p)), sstep(13, 17, t) * night * (1 + .1 * beat));
+  }
+  const corona = (sstep(.03, .6, p) * (.45 + .55 * p) * (1 + .09 * beat) + .25 * eyeK) * (1 - .85 * hush);
+  const rev = v === 2 ? .9 * Math.pow(p, 1.3) : 1.6 * Math.pow(p, 1.3) + .6 * sstep(TC, 76, t);
+  return {
+    p, beat, beatN: Math.floor(ph), open, seam, flash, mem, burst, rift, shock, shockK, shake, hor, zen, amb, sun, moon, L, lcol, corona, rev,
+    att: 1 - .6 * hush + (u >= 0 ? .5 * Math.exp(-u * .8) : 0), dark: 1 - .3 * hush, u,
+    moonRad: mix(.12, v === 2 ? .22 : .29, sstep(0, 1, p)), fog: mul3(hor, mix(.85, .5, sstep(0, .8, p))), fogDen: mix(.010, .016, sstep(0, .9, p)),
+    sunset: 1 - sstep(8, 14, t), stars: sstep(9, 15, t), blood: sstep(.8, 1, p), grade: .7 * sstep(.1, .9, p), fol: sstep(.15, .75, p),
+    part: sstep(.25, .8, p), baseYaw: Math.PI * (1 - sstep(10.5, 14.5, t)),
+    rays: V.rays * (.2 + .8 * sstep(.3, 1, p)) * (1 - .6 * hush) * (1 + (u >= 0 ? 1.5 * Math.exp(-u * .9) : 0)),
+  };
+}
+
+// ───────────────────────── shaders ─────────────────────────
+const NOISE = `
+uint pcg(uint v){uint s=v*747796405u+2891336453u;uint w=((s>>((s>>28u)+4u))^s)*277803737u;return (w>>22u)^w;}
+float hi(int x){return float(pcg(uint(x)))*(1./4294967295.);}
+float hi2(ivec2 c){return float(pcg(pcg(uint(c.x))+uint(c.y)*1597334677u))*(1./4294967295.);}
+vec2 h22(ivec2 c){return vec2(hi2(c),hi2(c+ivec2(17,59)));}
+float vnoise(vec2 p){vec2 fl=floor(p);ivec2 i=ivec2(fl);vec2 f=p-fl;f=f*f*(3.-2.*f);
+  return mix(mix(hi2(i),hi2(i+ivec2(1,0)),f.x),mix(hi2(i+ivec2(0,1)),hi2(i+ivec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float a=.5,s=0.;for(int i=0;i<5;i++){s+=a*vnoise(p);p=p*2.03+vec2(17.3,9.1);a*=.5;}return s;}
+float pn(float a,float x,float f){return fbm(vec2(cos(a),sin(a))*f+vec2(x,-x*.7));}
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+// one-pass Voronoi on integer cells: half the gap between the two nearest points (never negative)
+float voro2(vec2 p){vec2 fl=floor(p);ivec2 n=ivec2(fl);vec2 f=p-fl;float d1=9.,d2=9.;
+  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){ivec2 g=ivec2(i,j);vec2 r=vec2(g)+.12+.76*h22(n+g)-f;float d=dot(r,r);
+    if(d<d1){d2=d1;d1=d;}else if(d<d2)d2=d;}
+  return (sqrt(d2)-sqrt(d1))*.5;}`;
+const VS_FULL = `#version 300 es
+void main(){vec2 p=vec2(float((gl_VertexID<<1)&2),float(gl_VertexID&2));gl_Position=vec4(p*2.-1.,0.,1.);}`;
+
+const FS_SKY = `#version 300 es
+precision highp float;
+out vec4 o;
+uniform vec2 uRes,uGaze;
+uniform vec3 uF,uR,uU,uMoon,uSun,uHor,uZen,uFog;
+uniform float uTan,uAsp,uT,uP,uSunset,uBeat,uOpen,uSeam,uPupil,uFlash,uShock,uShockK,uMoonRad,uEyeRot,uStars,uCorona,uRev,uBlood,uTc,uMem,uBurst,uRift,uAtt;
+uniform int uVar;
+${NOISE}
+// Impact-glass network around the moon: Voronoi in conformal log-polar coordinates, so the shards are
+// thin wedges near the moon and grow with distance. x: distance to the crack (radians),
+// y: 0 on the crack, 1 at the shard's centre, z: angle of the shard's centre from the moon.
+vec3 net(float ang,float a,int N,out ivec2 cell){
+  float K=float(N)/6.2831853,KR=K*.42;           // radial axis squeezed: long radial shards, like impact glass
+  vec2 p=vec2((a+3.14159265)*K,log(ang)*KR);
+  p+=.18*vec2(vnoise(p*1.7+3.),vnoise(p*1.7+11.))-.09;   // jagged, not a regular honeycomb
+  vec2 fl=floor(p);ivec2 n=ivec2(fl);vec2 f=p-fl;
+  float d1=9.,d2=9.;vec2 r1=vec2(0);cell=ivec2(0);
+  for(int j=-1;j<=1;j++)for(int i=-1;i<=1;i++){
+    ivec2 g=ivec2(i,j),c=n+g,cw=ivec2((c.x+2*N)%N,c.y);
+    vec2 r=vec2(g)+.12+.76*h22(cw+ivec2(N*7,0))-f;float d=dot(r,r);
+    if(d<d1){d2=d1;d1=d;r1=r;cell=cw;}else if(d<d2)d2=d;
+  }
+  float s1=sqrt(d1),e=(sqrt(d2)-s1)*.5;
+  return vec3(e*ang/K,e/(e+s1+1e-5),exp((p.y+r1.y)/KR));
+}
+float starLayer(vec3 d,float sc,float dens,float sz){
+  vec2 g=vec2(atan(d.z,d.x),asin(clamp(d.y,-1.,1.)))*sc;
+  vec2 fl=floor(g);ivec2 id=ivec2(fl);vec2 f=g-fl-.5;
+  float h=hi2(id);if(h>dens) return 0.;
+  vec2 s=f-(h22(id+ivec2(3,7))-.5)*.5;
+  return smoothstep(sz,sz*.25,length(s)/sc)*(.4+.6*hi2(id+ivec2(1,1)))*(.75+.25*sin(uT*3.+h*900.));
+}
+vec4 aurora(float ang,float a){
+  float k=smoothstep(.08,.5,uP);if(k<=0.) return vec4(0.);
+  float sp=a*2.-log(ang+.02)*3.5+uT*.25;
+  float ray=.4+.6*vnoise(vec2(cos(a),sin(a))*7.+vec2(uT*.2,ang*5.));
+  float I=smoothstep(.35,1.,sin(sp))*ray*exp(-ang*1.1)*smoothstep(0.,.25,ang)*1.3;
+  float B=smoothstep(.3,1.,sin(sp+2.6))*exp(-ang*.8);
+  vec3 c=mix(vec3(.75,.02,.05),vec3(1.,.28,.12),clamp(I*.6,0.,1.))*I;
+  return vec4(c*k,clamp(B*k,0.,.92));
+}
+// Behind the sky. C1: blinding light. C2 / C3: deep space with a galaxy spiralling into the moon.
+vec3 lightBehind(vec2 qa,float ang){
+  float n=fbm(qa*6.+vec2(uT*.15,-uT*.1)),n2=fbm(qa*16.-uT*.3);
+  vec3 c=mix(vec3(2.4,.35,.12),vec3(4.,2.6,1.8),smoothstep(.45,.85,n));
+  return c*(.55+.6*n2)+vec3(3.,2.,1.6)*exp(-ang*3.);
+}
+vec3 deepSpace(vec3 d,vec2 qa,float ang,float a){
+  float sw=a+2.6*log(ang+.04)-uT*.06;
+  vec2 nq=rot(1.2/(ang+.25)+uT*.02)*qa;
+  float n1=fbm(nq*5.+3.),n2=fbm(nq*11.-7.);
+  float arms=pow(.5+.5*cos(2.*sw+3.*n1),4.)*exp(-ang*1.3);
+  vec3 c=vec3(.006,0.,.016)+vec3(.45,.04,.3)*pow(n1,3.)*1.4*exp(-ang*.8)+vec3(.9,.13,.08)*arms*(.25+n2)*.7+vec3(.15,.2,.8)*pow(n2,4.)*.6;
+  c+=vec3(1.,.5,.3)*exp(-ang*9.)*.5;
+  c+=vec3(1.,.92,.88)*(starLayer(d,150.,.14,.0026)+1.5*starLayer(d,62.,.09,.004))*1.6;
+  c+=vec3(1.,.8,.7)*arms*pow(hi2(ivec2(floor(nq*300.))),40.)*3.;
+  return c;
+}
+// The eye, in iris units (iris radius 1). Mostly cosmic: nebula iris, slit pupil that is a void with stars.
+vec3 eyeShade(vec2 n){
+  vec2 io=uVar==1?vec2(0):uGaze*.42,po=uVar==1?uGaze*.3:io;
+  vec2 ie=n-io;float ir=length(ie);vec2 dv=ie/(ir+1e-4);
+  // sclera: dark flesh with glowing veins and cosmic dust
+  float vn=voro2(n*2.6+.4*vec2(fbm(n*3.),fbm(n*3.+5.)));
+  vec3 scl=vec3(.10,.006,.014)*(.7+.6*fbm(n*4.))+vec3(.9,.1,.03)*exp(-vn*70.)*.4*smoothstep(.35,.7,vnoise(n*3.+2.))+vec3(1.,.8,.8)*pow(hi2(ivec2(floor(n*90.))),60.)*.8;
+  // iris: radial fibres through a red nebula swirling into the pupil
+  float fib=vnoise(dv*22.+ir*1.5)*.6+fbm(dv*6.+ir*2.)*.6;
+  vec2 ne=rot(1.6/(ir+.3)+uT*.15)*ie;
+  float n1=fbm(ne*4.+9.),n2=fbm(ne*9.-4.);
+  vec3 ic=vec3(.95,.07,.05)*n1*1.7+vec3(.45,.05,.5)*n2*n2*1.1+vec3(1.,.55,.15)*pow(n1,3.)*2.4;
+  ic+=vec3(1.,.9,.85)*pow(hi2(ivec2(floor(ne*90.))),45.)*2.;
+  ic*=.55+.9*fib;
+  ic+=vec3(1.,.45,.12)*smoothstep(.6,.25,ir)*.7*(.6+.6*uBeat);
+  ic*=mix(1.,.3,smoothstep(.82,1.,ir));
+  if(uVar==1&&uTc>0.) ic+=vec3(1.,.65,.35)*exp(-max(uTc-(1.-ir)*.35,0.)*2.2)*(fib+.35)*2.4;   // ignition
+  vec3 c=mix(ic,scl,smoothstep(.97,1.03,ir));
+  c+=vec3(1.,.25,.06)*exp(-pow((ir-1.)*12.,2.))*.6;
+  // slit pupil: a void with a burning rim
+  vec2 pe=n-po;float yy=pe.y/.93;
+  float w=uPupil*sqrt(max(1.-yy*yy,0.));
+  float dp=abs(yy)<1.?abs(pe.x)-w:length(vec2(pe.x,abs(pe.y)-.93));
+  float pm=smoothstep(.015,-.015,dp);
+  vec3 pv=vec3(.01,0.,.02)+vec3(.4,.05,.5)*pow(fbm(pe*6.+uT*.1),3.)*.6+vec3(1.)*pow(hi2(ivec2(floor(pe*160.))),70.)*1.5;
+  c=mix(c,pv,pm);
+  c+=vec3(1.,.7,.35)*exp(-abs(dp)*70.)*(1.-pm*.5)*1.1;
+  vec2 gp=n-vec2(-.35,.42);c+=vec3(1.,.9,.85)*exp(-dot(gp,gp)*60.)*.45;
+  return c*1.2;
+}
+// C's moon: a spiral void eats it from the centre while it cracks. In C2 that void is already the pupil.
+vec3 moonSurf(vec2 q,float r,float a){
+  float z=sqrt(max(1.-r*r,0.));
+  float alb=(.5+.5*fbm(q*2.6+4.))*(.85+.3*vnoise(q*9.));
+  float s=smoothstep(.08,-.08,r-uP*1.35-.12*sin(a*3.+r*9.-uT*.8)*smoothstep(0.,.3,uP));
+  vec3 lit=mix(vec3(.95,.93,.86),vec3(1.,.62,.36),uP*.85)*alb*(.55+.6*z);
+  vec3 drk=uVar==1
+    ?vec3(.01,0.,.02)+vec3(.4,.05,.5)*pow(fbm(rot(uT*.1)*q*3.),3.)*.7+vec3(1.)*pow(hi2(ivec2(floor(q*90.))),70.)*1.5
+    :mix(vec3(.22,.012,.012),vec3(.8,.07,.04),uBlood)*alb*(.7+.5*z);
+  vec3 c=mix(lit,drk,s);
+  c+=vec3(1.,.35,.06)*4.*s*(1.-s)*.9;
+  float v=voro2(q*3.3+31.);
+  float on=smoothstep(0.,.12,uP*1.25-(vnoise(q*1.5+2.)*.8+r*.3))*smoothstep(.38,.55,vnoise(q*2.7+8.));
+  if(uVar==1) on*=1.-s;
+  c+=vec3(1.,.4,.08)*(smoothstep(.022,.004,v)*1.6+exp(-v*22.)*.3)*on*(.6+.3*uBeat);
+  return c;
+}
+// C1: a lid across the moon, strands of flesh across the opening, a third eyelid.
+vec3 moonEyeC1(vec3 c,vec2 q){
+  if(uSeam<=0.) return c;
+  vec2 e=rot(-uEyeRot)*q;float xn=e.x/.93;
+  if(abs(xn)>=1.) return c;
+  float shape=pow(1.-xn*xn,.75),L=uOpen*.5*shape;
+  float wob=.07*(vnoise(vec2(e.x*7.,3.))-.5)*clamp(1.-uOpen,0.,1.);
+  float ey=e.y-wob,dy=abs(ey);
+  if(dy<L){
+    vec3 ec=eyeShade(e/.47);
+    float mx=uMem+.07*sin(e.y*9.+uT*3.);
+    if(e.x<mx){float mv=exp(-voro2(e*9.+3.)*30.);ec=mix(ec,ec*vec3(.75,.4,.4)+vec3(.28,.05,.06)+vec3(.9,.15,.08)*mv*.45,.72);}
+    ec+=vec3(1.,.6,.5)*exp(-abs(e.x-mx)*40.)*.7*step(-1.2,uMem)*step(uMem,1.2);
+    ec*=.3+.7*smoothstep(0.,.13,L-dy);
+    c=ec;
+    if(uTc>0.&&uTc<2.2){
+      float yn=ey/max(L,1e-3);
+      for(int i=0;i<8;i++){
+        float hh=hi(i*7+3),xi=-.66+1.32*(float(i)+.2+hh*.6)/8.,snap=1.15+.45*hi(i*13+1);
+        float fr=.5*(1.-smoothstep(snap,snap+.3,uTc));
+        float present=uTc<snap?1.:step(1.-2.*fr,abs(yn));
+        float sag=(.03+.05*step(snap,uTc))*(1.-yn*yn)*(hh-.5)*2.;
+        float wd=.017*(1.-.55*smoothstep(0.,snap,uTc))*(.6+.6*hi(i*5+2));
+        float sm=smoothstep(wd,wd*.35,abs(e.x-xi-sag))*present;
+        c=mix(c,vec3(.45,.04,.03),sm*.8)+vec3(1.,.3,.1)*sm*smoothstep(wd*.9,0.,abs(e.x-xi-sag))*1.6;
+      }
+    }
+  }
+  c+=vec3(1.,.45,.1)*exp(-abs(dy-L)*45.)*step(abs(xn),uSeam)*(1.2+uBeat)*pow(shape,.3);
+  return c;
+}
+float riftY(float x){return .06*(vnoise(vec2(x*5.,2.))-.5)+.024*(vnoise(vec2(x*22.,5.))-.5)+.008*(vnoise(vec2(x*80.,9.))-.5);}
+
+void main(){
+  vec2 ndc=gl_FragCoord.xy/uRes*2.-1.;
+  vec3 d=normalize(uF+uR*(ndc.x*uAsp*uTan)+uU*(ndc.y*uTan));
+  vec3 M=uMoon,mr=normalize(cross(M,vec3(0,1,0))),mu=cross(mr,M);
+  float ang=acos(clamp(dot(d,M),-1.,1.));
+  vec2 qa=normalize(vec2(dot(d,mr),dot(d,mu))+1e-7)*ang;
+  vec2 q=qa/uMoonRad;float r=length(q),a=atan(q.y,q.x);
+  vec2 er=rot(-uEyeRot)*qa;
+
+  // C3's rift, in the eye's frame (radians)
+  float yc=riftY(er.x),dyR=abs(er.y-yc*(1.-.6*uOpen)),xn=er.x/.95;
+  float shapeR=pow(max(1.-xn*xn,0.),.75),Lr=uOpen*.3*shapeR;
+  float inEye=uVar==2&&uOpen>0.&&dyR<Lr?1.:0.;
+
+  // ── the shell of the sky ──
+  float crack=0.,crk3r=0.,crk3b=0.,glow=0.,heat=0.,hole=0.,holeRim=0.,rim=0.,glint=0.,fine=0.;vec2 bend=vec2(0.);float shade=1.;
+  if(ang>uMoonRad*.92&&ang<2.2){
+    ivec2 cell;vec3 nt=net(ang,a,24,cell);
+    vec3 h=vec3(hi2(cell),hi2(cell+ivec2(5,3)),hi2(cell+ivec2(9,1)));
+    float far=clamp(ang/1.6,0.,1.);
+    float age=uRev-ang*(1.+.35*(vnoise(vec2(a*2.5+7.,ang*4.))-.5));
+    if(uVar==2) age=max(age,(uRift-abs(er.x))*1.5-dyR*7.);
+    float vis=smoothstep(0.,.02,age);
+    heat=exp(-max(age,0.)*14.)*vis;
+    float w=mix(.0034,.0014,far)*(1.+.8*uP+(uVar==0?1.5*uBurst:0.));
+    vis*=1.-.55*far;
+    crack=smoothstep(w,w*.3,nt.x)*vis;
+    if(uVar==1){crack=smoothstep(w*.7,w*.2,nt.x)*vis;crk3r=smoothstep(w*.7,w*.2,abs(nt.x-w*.8))*vis;crk3b=smoothstep(w*.7,w*.2,abs(nt.x-w*1.6))*vis;}
+    glow=exp(-nt.x*mix(320.,170.,uP))*vis*(1.-.5*far);
+    if(vis>0.&&h.y<.6){ivec2 c2;vec3 fn=net(ang,a,64,c2);fine=smoothstep(w*.55,w*.15,fn.x)*smoothstep(.05,.4,age)*step(hi2(c2),.55);}
+    float pre=step(h.y,uP*.17-.03)*step(nt.z,uRev*.7)*(uVar==2?step(h.z,.5):1.);
+    float fall=0.;
+    if(uVar==0) fall=clamp((uTc-(.05+nt.z*.5+h.z*.25))/.35,0.,1.)*step(h.y,.5-.35*far)*step(nt.z,1.1);
+    if(uVar==1) fall=clamp((uTc-(.1+nt.z*1.3+h.z*.45))/1.1,0.,1.)*step(h.y,.85)*step(nt.z,1.3);
+    float inset=fall*nt.z*.075;                    // the shard shrinks with its straight edges
+    hole=max(pre,fall>0.?step(nt.x,inset):0.);
+    holeRim=hole*exp(-nt.x/.004);
+    float gone=fall>0.?hole:0.;                    // a shard that fell takes its cracks with it
+    crack*=1.-gone;crk3r*=1.-gone;crk3b*=1.-gone;glow*=1.-.85*gone;fine*=1.-gone;heat*=1.-gone;
+    rim=(1.-hole)*exp(-max(nt.x-inset,0.)*400.)*fall*(1.-fall)*3.*step(.001,fall);
+    float tilt=uVar==1?.05:.015;
+    bend=(h22(cell)-.5)*tilt*vis*(1.+fall*3.);
+    shade=1.+(h.x-.5)*.25*vis*(uVar==1?1.:.4);
+    if(uVar==1) glint=(pow(max(0.,sin(uT*.9+h.x*30.+nt.z*4.)),30.)*.6+fall*(1.-fall)*1.6*pow(.5+.5*sin(fall*14.+h.z*6.),6.))*vis;
+  }
+  vec3 d2=normalize(d+mr*bend.x+mu*bend.y);
+  float ang2=acos(clamp(dot(d2,M),-1.,1.));
+  vec3 col=mix(uHor,uZen,pow(smoothstep(-.02,.75,d2.y),.6));
+  float sd=max(dot(d2,uSun),0.);
+  col+=uSunset*(vec3(1.,.2,.04)*pow(sd,6.)*.9+vec3(1.,.5,.2)*pow(sd,60.)*.8+vec3(3.,.5,.12)*smoothstep(.9975,.9982,sd));
+  col+=vec3(1.,.95,.9)*(starLayer(d2,110.,.1,.003)+starLayer(d2,48.,.05,.0045))*uStars*(1.-uP*.9);
+  vec4 au=aurora(ang2,a);col=col*(1.-au.a)+au.rgb;
+  col*=shade;
+  if(hole>0.){
+    vec3 behind=uVar==0?lightBehind(qa,ang):deepSpace(d,qa,ang,a);
+    col=mix(col,behind*(uVar==0?uAtt:1.),hole);
+    col+=(uVar==0?vec3(3.,1.5,.8):vec3(1.4,.35,.25))*holeRim*uAtt;
+  }
+  col+=vec3(1.5,1.1,1.)*rim+vec3(2.,1.6,1.4)*glint*(1.-hole);
+  float pulse=(.7+.25*uBeat+uFlash)*uAtt;
+  if(uVar==0){
+    vec3 lc=mix(vec3(1.,.18,.08),vec3(3.,2.,1.6),max(heat,.25*uBurst));
+    col+=lc*(crack*1.3+glow*.6+fine*.5)*pulse;
+  }else if(uVar==1){
+    col+=(vec3(1.6,1.2,1.)*crack*1.3+vec3(.9,.15,.05)*crk3r*.7+vec3(.25,.3,.9)*crk3b*.5+vec3(.9,.1,.06)*glow*.6+vec3(1.,.6,.6)*fine*.4)*pulse;
+  }else{
+    col+=(vec3(1.,.12,.06)*glow*.7+vec3(1.,.75,.6)*crack*1.6+vec3(1.,.4,.3)*fine*.5)*pulse;
+  }
+  col+=vec3(2.5,2.,1.8)*heat*crack*1.5*uAtt;
+  col+=vec3(1.,.4,.3)*exp(-abs(ang-uShock)*35.)*uShockK*2.;
+
+  // ── C3: the rift across the sky ──
+  if(uVar==2&&inEye==0.){
+    float lenK=smoothstep(uRift,uRift-.08,abs(er.x));
+    float wR=(.0045*(1.-abs(er.x)/max(uRift,.01))+.0012)*(1.+uSeam*2.);
+    col+=(vec3(1.,.15,.06)*exp(-dyR*45.)*(.5+.5*uBeat)+vec3(3.,2.2,1.8)*smoothstep(wR,wR*.3,dyR)*(1.+uSeam*2.))*lenK*uAtt;
+    col+=vec3(3.,1.6,1.2)*exp(-dyR*14.)*uSeam*smoothstep(1.15,.9,abs(er.x));
+    if(uOpen>0.) col+=vec3(1.,.4,.12)*exp(-abs(dyR-Lr)*55.)*(1.2+uBeat)*pow(shapeR,.3);
+  }
+
+  // ── corona and moon ──
+  if(ang<1.7){
+    float rr=max(r-1.,0.),sw=a+2.2*log(max(r,.2))-uT*.45;
+    float I=(exp(-rr*2.)*(pn(sw,rr*1.2,2.)*.7+.5*pow(.5+.5*sin(sw*3.),3.))*1.8+exp(-rr*7.))*uCorona*uAtt;
+    col+=vec3(1.,.2,.04)*I+vec3(1.,.7,.3)*I*I*.5;
+    if(r<1.03){
+      vec3 mc=moonSurf(q,r,a);
+      if(uVar==0) mc=moonEyeC1(mc,q);
+      if(uVar==1&&uTc>0.) mc=eyeShade(q/.97);
+      col=mix(col,mc,smoothstep(1.,.985,r));
+    }
+  }
+  // ── C3: the eye the size of the sky ──
+  if(inEye>0.){
+    vec3 ec=eyeShade(vec2(er.x,er.y-yc*(1.-.6*uOpen))/.27);
+    col=ec*(.25+.75*smoothstep(0.,.05,Lr-dyR));
+    col+=vec3(1.,.4,.12)*exp(-abs(dyR-Lr)*55.)*(1.2+uBeat)*pow(shapeR,.3);
+  }
+  col=mix(col,uFog,exp(-max(d.y,0.)*14.)*.65);
+  if(d.y<0.) col=uFog;
+  col+=uFlash*vec3(1.,.55,.45)*(.3+.7*exp(-ang*1.5));
+  o=vec4(col,1.);
+}`;
+
+// The stand-in world: blocks with 16-texel procedural textures, moon shadows from a height map.
+const VS_WORLD = `#version 300 es
+in vec3 aPos;in vec3 aNor;in float aMat;uniform mat4 uVP;out vec3 vW;out vec3 vN;out float vMat;
+void main(){vW=aPos;vN=aNor;vMat=aMat;gl_Position=uVP*vec4(aPos,1.);}`;
+const FS_WORLD = `#version 300 es
+precision highp float;
+in vec3 vW;in vec3 vN;in float vMat;out vec4 o;
+uniform sampler2D uHgt;
+uniform vec3 uCam,uL,uLCol,uAmb,uFog,uTint;
+uniform float uFol,uGrade,uFogDen,uFlash,uT,uGrid;
+float h31(vec3 p){p=fract(p*.1031);p+=dot(p,p.yzx+33.33);return fract((p.x+p.y)*p.z);}
+void main(){
+  vec3 N=normalize(vN),p=vW-N*.002,tx=floor(p*16.);
+  float rnd=h31(tx),rnd2=h31(tx.zxy+7.);
+  int m=int(vMat+.5);
+  vec3 grass=mix(vec3(.33,.56,.18),vec3(.46,.08,.11),uFol);
+  vec3 leaf=mix(vec3(.17,.42,.10),vec3(.33,.04,.08),uFol);
+  vec3 dirt=vec3(.47,.33,.22)*(.78+.3*rnd),b=dirt;
+  if(m==0) b=grass*(.78+.4*rnd);
+  else if(m==1){if(fract(p.y)*16.>13.-floor(rnd2*3.)) b=grass*(.7+.4*rnd);}
+  else if(m==2) b=vec3(.5)*(.7+.35*rnd);
+  else if(m==3) b=vec3(.36,.27,.16)*(.65+.45*h31(vec3(tx.x+tx.z*3.,floor(tx.y/5.),1.)));
+  else if(m==4){b=leaf*(.5+.75*rnd);if(rnd2<.22) b*=.45;}
+  else if(m==5) b=mix(vec3(.10,.22,.42),vec3(.16,.02,.04),uFol);
+  else if(m==6) b=vec3(.80,.74,.52)*(.8+.25*rnd);
+  float face=N.y>.5?1.:(N.y<-.5?.5:(abs(N.x)>.5?.62:.8));
+  float ndl=max(dot(N,uL),0.),sh=1.;
+  if(ndl>0.){
+    vec3 sp=p+N*.06;
+    for(int i=1;i<=40;i++){
+      vec3 s=sp+uL*(float(i)*.55);
+      if(s.y>60.) break;
+      if(texture(uHgt,s.xz/uGrid+.5).r*255.>s.y+.02){sh=0.;break;}
+    }
+  }
+  vec3 c=b*(uAmb*face+uLCol*ndl*sh);
+  if(m==5){
+    vec3 V=normalize(vW-uCam);vec2 rp=floor(p.xz*8.);float ft=floor(uT*3.);
+    vec3 Rn=normalize(vec3((h31(vec3(rp,ft))-.5)*.14,1.,(h31(vec3(rp.yx,ft+9.))-.5)*.14));
+    float sd=max(dot(reflect(V,Rn),uL),0.);
+    c=mix(c,uFog*.8,.35)+uLCol*(pow(sd,500.)*5.+pow(sd,40.)*.5);
+  }
+  c=mix(c,dot(c,vec3(.3,.5,.2))*uTint,uGrade);
+  float f=1.-exp(-pow(length(vW-uCam)*uFogDen,1.6));
+  c=mix(c,uFog,f);
+  c+=uFlash*vec3(1.,.5,.4)*.5*(1.-f);
+  o=vec4(c,1.);
+}`;
+const VS_PART = `#version 300 es
+in vec4 aSeed;uniform mat4 uVP;uniform vec3 uCam,uVel;uniform float uT,uK,uSize;out float vA;
+void main(){
+  vec3 b=fract(aSeed.xyz+uVel*uT*(.6+.8*aSeed.w)+vec3(sin(uT*.7+aSeed.w*40.),0.,cos(uT*.5+aSeed.w*30.))*.01)-.5;
+  gl_Position=uVP*vec4(uCam+b*vec3(44.,26.,44.)+vec3(0.,6.,0.),1.);
+  vA=uK*(.45+.55*sin(uT*(2.+aSeed.w*5.)+aSeed.w*60.))*step(aSeed.w,uK+.05);
+  gl_PointSize=uSize*(.5+aSeed.w)/max(gl_Position.w,.5);
+}`;
+const FS_PART = `#version 300 es
+precision highp float;in float vA;out vec4 o;uniform vec3 uCol;void main(){o=vec4(uCol*vA*1.6,1.);}`;
+const FS_BRIGHT = `#version 300 es
+precision highp float;out vec4 o;uniform sampler2D uTex;uniform vec2 uRes;
+void main(){vec3 c=texture(uTex,gl_FragCoord.xy/uRes).rgb;o=vec4(max(c-.72,0.),1.);}`;
+// God rays: a radial blur of the bright pass toward the moon. Terrain is dark there, so trees cut the shafts.
+const FS_RAYS = `#version 300 es
+precision highp float;out vec4 o;uniform sampler2D uTex;uniform vec2 uRes,uC;
+void main(){vec2 uv=gl_FragCoord.xy/uRes,dl=(uC-uv)*(.97/48.),p=uv;vec3 s=vec3(0);float w=1.;
+  for(int i=0;i<48;i++){s+=min(texture(uTex,p).rgb,vec3(4.))*w;w*=.962;p+=dl;}
+  o=vec4(s*(1./20.),1.);}`;
+const FS_BLUR = `#version 300 es
+precision highp float;out vec4 o;uniform sampler2D uTex;uniform vec2 uRes,uDir;
+void main(){vec2 uv=gl_FragCoord.xy/uRes;vec3 c=texture(uTex,uv).rgb*.227;
+  c+=(texture(uTex,uv+uDir*1.385).rgb+texture(uTex,uv-uDir*1.385).rgb)*.316;
+  c+=(texture(uTex,uv+uDir*3.231).rgb+texture(uTex,uv-uDir*3.231).rgb)*.07;o=vec4(c,1.);}`;
+const FS_COMP = `#version 300 es
+precision highp float;out vec4 o;uniform sampler2D uTex,uBloom,uRays;uniform vec2 uRes;uniform float uDark,uCA,uRayK;
+void main(){vec2 uv=gl_FragCoord.xy/uRes,dc=(uv-.5)*uCA;
+  vec3 c=vec3(texture(uTex,uv+dc).r,texture(uTex,uv).g,texture(uTex,uv-dc).b);
+  c+=texture(uBloom,uv).rgb*.9+texture(uRays,uv).rgb*uRayK;
+  c*=uDark;
+  c=1.-exp(-c*1.2);
+  c*=1.-.4*pow(length(uv-.5)*1.3,2.5);
+  o=vec4(c,1.);}`;
+
+// ───────────────────────── GL setup ─────────────────────────
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl2', { antialias: false, alpha: false, preserveDrawingBuffer: true });
+function fail(msg) { const e = document.getElementById('err'); e.style.display = 'grid'; e.textContent = msg; throw new Error(msg); }
+if (!gl) fail('This preview needs WebGL 2. Open it in a recent Chrome, Edge or Firefox.');
+const HDR = !!gl.getExtension('EXT_color_buffer_float');
+function prog(vs, fs, name) {
+  const p = gl.createProgram();
+  for (const [type, src] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail('Shader "' + name + '" failed:\n' + gl.getShaderInfoLog(s));
+    gl.attachShader(p, s);
+  }
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) fail('Link "' + name + '" failed:\n' + gl.getProgramInfoLog(p));
+  const locs = {};
+  return { p, loc: k => (k in locs ? locs[k] : (locs[k] = gl.getUniformLocation(p, k))) };
+}
+const INTS = new Set(['uVar', 'uTex', 'uBloom', 'uHgt', 'uRays']);
+function setU(pr, o) {
+  gl.useProgram(pr.p);
+  for (const k in o) {
+    const l = pr.loc(k), v = o[k]; if (l == null) continue;
+    if (INTS.has(k)) gl.uniform1i(l, v);
+    else if (typeof v === 'number') gl.uniform1f(l, v);
+    else if (v.length === 2) gl.uniform2fv(l, v);
+    else if (v.length === 3) gl.uniform3fv(l, v);
+    else gl.uniformMatrix4fv(l, false, v);
+  }
+}
+const P = {
+  sky: prog(VS_FULL, FS_SKY, 'sky'), world: prog(VS_WORLD, FS_WORLD, 'world'), part: prog(VS_PART, FS_PART, 'particles'),
+  bright: prog(VS_FULL, FS_BRIGHT, 'bright'), rays: prog(VS_FULL, FS_RAYS, 'rays'), blur: prog(VS_FULL, FS_BLUR, 'blur'), comp: prog(VS_FULL, FS_COMP, 'composite'),
+};
+
+// ───────────────────────── the stand-in world ─────────────────────────
+const G = 176, HALF = G / 2, WL = 9;
+const hsh = (x, y) => { const n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return n - Math.floor(n); };
+function n2(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), w = yf * yf * (3 - 2 * yf);
+  return mix(mix(hsh(xi, yi), hsh(xi + 1, yi), u), mix(hsh(xi, yi + 1), hsh(xi + 1, yi + 1), u), w);
+}
+function heightAt(x, z) {
+  let h = 13 + 8 * (n2(x / 38, z / 38) - .5) + 5 * (n2(x / 13 + 5, z / 13 + 9) - .5);
+  h += 7 * Math.exp(-(((x - 62) / 14) ** 2)) * (.6 + .8 * n2(z / 20 + 3, 1.7));
+  h += 5 * Math.exp(-(((x + 60) / 16) ** 2)) * n2(z / 17 + 8, 4.2);
+  h -= 9 * Math.exp(-((((x - 27) / 13) ** 2) + (((z + 2) / 20) ** 2)));
+  const k = Math.exp(-(x * x + z * z) / 60);
+  return Math.max(3, Math.floor(h * (1 - k) + 14.4 * k));
+}
+const hmap = new Int16Array(G * G), smap = new Uint8Array(G * G);
+const HI = (x, z) => (z + HALF) * G + (x + HALF);
+for (let z = -HALF; z < HALF; z++) for (let x = -HALF; x < HALF; x++) { const h = heightAt(x, z); hmap[HI(x, z)] = h; smap[HI(x, z)] = Math.max(h, WL - 1); }
+const verts = [], idx = [];
+function quad(a, b, c, d, n, m) {
+  const i = verts.length / 7;
+  for (const p of [a, b, c, d]) verts.push(p[0], p[1], p[2], n[0], n[1], n[2], m);
+  idx.push(i, i + 1, i + 2, i, i + 2, i + 3);
+}
+function box(x0, y0, z0, x1, y1, z1, m, top = true) {
+  if (top) quad([x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1], [0, 1, 0], m);
+  quad([x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1], [0, -1, 0], m);
+  quad([x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1], [1, 0, 0], m);
+  quad([x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1], [-1, 0, 0], m);
+  quad([x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1], m);
+  quad([x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [0, 0, -1], m);
+}
+for (let z = -HALF; z < HALF; z++) for (let x = -HALF; x < HALF; x++) {
+  const h = hmap[HI(x, z)], wet = h < WL, sand = h <= WL;
+  quad([x, h, z], [x + 1, h, z], [x + 1, h, z + 1], [x, h, z + 1], [0, 1, 0], sand ? 6 : 0);
+  if (wet) { const y = WL - .12; quad([x, y, z], [x + 1, y, z], [x + 1, y, z + 1], [x, y, z + 1], [0, 1, 0], 5); }
+  for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const nx = x + dx, nz = z + dz; if (nx < -HALF || nx >= HALF || nz < -HALF || nz >= HALF) continue;
+    const nh = hmap[HI(nx, nz)]; if (nh >= h) continue;
+    const ax = dx > 0 ? x + 1 : x, az = dz > 0 ? z + 1 : z;
+    const side = (y0, y1, m) => dx ? quad([ax, y0, z], [ax, y1, z], [ax, y1, z + 1], [ax, y0, z + 1], [dx, 0, 0], m)
+                                   : quad([x, y0, az], [x + 1, y0, az], [x + 1, y1, az], [x, y1, az], [0, 0, dz], m);
+    side(h - 1, h, sand ? 6 : 1);
+    if (h - 1 > nh) { side(Math.max(nh, h - 4), h - 1, 7); if (h - 4 > nh) side(nh, h - 4, 2); }
+  }
+}
+let trees = 0;
+for (let z = -HALF + 4; z < HALF - 4; z++) for (let x = -HALF + 4; x < HALF - 4; x++) {
+  const h = hmap[HI(x, z)]; if (h <= WL) continue;
+  const dens = .016 + .02 * n2(x / 25 + 40, z / 25 + 12);
+  if (hsh(x * 1.37 + 11, z * 2.11 + 5) > dens) continue;
+  if (x * x + z * z < 30 || (x > 0 && x < 14 && Math.abs(z) < 2.5 + x * .12) || (x <= 0 && x > -40 && Math.abs(z) < 4 - x * .3)) continue;
+  const th = 4 + Math.floor(hsh(x + 3, z + 9) * 3), top = h + th;
+  box(x, h, z, x + 1, top, z + 1, 3, false);
+  box(x - 2, top - 2, z - 2, x + 3, top, z + 3, 4);
+  box(x - 1, top, z - 1, x + 2, top + 2, z + 2, 4);
+  for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) {
+    const k = HI(x + i, z + j), hh = Math.abs(i) < 2 && Math.abs(j) < 2 ? top + 2 : top;
+    if (smap[k] < hh) smap[k] = hh;
+  }
+  trees++;
+}
+const worldVAO = gl.createVertexArray(); gl.bindVertexArray(worldVAO);
+gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(verts), gl.STATIC_DRAW);
+[['aPos', 3, 0], ['aNor', 3, 12], ['aMat', 1, 24]].forEach(([n, s, off]) => {
+  const l = gl.getAttribLocation(P.world.p, n); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, s, gl.FLOAT, false, 28, off);
+});
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(idx), gl.STATIC_DRAW);
+const worldCount = idx.length;
+const hgtTex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, hgtTex);
+gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, G, G, 0, gl.RED, gl.UNSIGNED_BYTE, smap);
+for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.NEAREST], [gl.TEXTURE_MAG_FILTER, gl.NEAREST], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+const NPART = 500, partVAO = gl.createVertexArray(); gl.bindVertexArray(partVAO);
+{ const d = new Float32Array(NPART * 4); for (let i = 0; i < d.length; i++) d[i] = hsh(i * .731, i * 1.913 + 2);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
+  const l = gl.getAttribLocation(P.part.p, 'aSeed'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 4, gl.FLOAT, false, 0, 0); }
+const fullVAO = gl.createVertexArray();
+const CAM = [.5, hmap[HI(0, 0)] + 1.62, .5];
+
+// render targets
+let W = 0, H = 0, scene, bl = [];
+function target(w, h, depth) {
+  const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
+  if (HDR) gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, w, h, 0, gl.RGBA, gl.HALF_FLOAT, null);
+  else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  for (const [k, v] of [[gl.TEXTURE_MIN_FILTER, gl.LINEAR], [gl.TEXTURE_MAG_FILTER, gl.LINEAR], [gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE], [gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE]]) gl.texParameteri(gl.TEXTURE_2D, k, v);
+  const fb = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  let rb = null;
+  if (depth) { rb = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, rb); gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, w, h);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rb); }
+  return { tex, fb, rb, w, h };
+}
+function resize() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+  const w = Math.max(2, Math.floor(cv.clientWidth * dpr)), h = Math.max(2, Math.floor(cv.clientHeight * dpr));
+  if (w === W && h === H) return;
+  for (const t of [scene, ...bl]) if (t) { gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fb); if (t.rb) gl.deleteRenderbuffer(t.rb); }
+  W = cv.width = w; H = cv.height = h;
+  scene = target(W, H, true);
+  bl = [0, 1, 2].map(() => target(W >> 2 || 1, H >> 2 || 1));
+}
+function mul(a, b) { const o = new Float32Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k]; o[c * 4 + r] = s; } return o; }
+
+// ───────────────────────── player state ─────────────────────────
+const qs = new URLSearchParams(location.search);
+let ver = Math.max(0, ['c1', 'c2', 'c3'].indexOf((qs.get('v') || 'c1').toLowerCase()));
+let time = clamp(qs.has('t') ? parseFloat(qs.get('t')) || 0 : 58, 0, TT), playing = qs.get('play') !== '0';
+if (qs.get('ui') === '0') document.body.classList.add('hide');
+let mx = 0, my = 0, lookX = 0, lookY = 0, gaze = [0, 0], pupil = .3, pupV = 0, lastNow = performance.now(), realT = 0, prevTime = time;
+const FOV = 65 * DEG;
+
+function frame(now) {
+  const dt = Math.min(.1, (now - lastNow) / 1000); lastNow = now; realT += dt;
+  if (playing) { time += dt; if (time >= TT) { time = TT; setPlaying(false); } }
+  render(dt);
+  audioFrame(state(time, ver)); updateUI(); prevTime = time;
+  requestAnimationFrame(frame);
+}
+
+function render(dt) {
+  resize();
+  const V = VERS[ver], S = state(time, ver);
+  lookX += (mx * .75 - lookX) * (1 - Math.exp(-dt * 6)); lookY += (-my * .4 - lookY) * (1 - Math.exp(-dt * 6));
+  const sk = S.shake * DEG, yaw = S.baseYaw + lookX + sk * (Math.sin(realT * 37) + Math.sin(realT * 23.7)) * .5;
+  const pitch = clamp(15 * DEG * (1 - .5 * (S.baseYaw / Math.PI)) + lookY + sk * (Math.sin(realT * 31.3) + Math.cos(realT * 19.1)) * .5, -1.2, 1.4);
+  const F = [Math.cos(pitch) * Math.cos(yaw), Math.sin(pitch), Math.cos(pitch) * Math.sin(yaw)];
+  const R = norm(cross(F, [0, 1, 0])), U = cross(R, F), asp = W / H, tf = Math.tan(FOV / 2), f = 1 / tf, near = .1, far = 400;
+  const view = new Float32Array([R[0], U[0], -F[0], 0, R[1], U[1], -F[1], 0, R[2], U[2], -F[2], 0, -dot(R, CAM), -dot(U, CAM), dot(F, CAM), 1]);
+  const proj = new Float32Array([f / asp, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) / (near - far), -1, 0, 0, 2 * far * near / (near - far), 0]);
+  const VP = mul(proj, view);
+  // the eye: glances around when it opens, then tracks where the player looks; the pupil narrows when stared at
+  const mr = norm(cross(S.moon, [0, 1, 0])), mu = cross(mr, S.moon);
+  const raw = [dot(F, mr), dot(F, mu)], rl = Math.hypot(raw[0], raw[1]);
+  let tg = [raw[0] * 2.5, raw[1] * 2.5]; const tl = Math.hypot(tg[0], tg[1]); if (tl > 1) tg = [tg[0] / tl, tg[1] / tl];
+  const since = S.u - V.since;
+  if (since < .7) tg = [-.85, .2]; else if (since < 1.5) tg = [.8, -.25];
+  const cr = Math.cos(V.rot), sr = Math.sin(V.rot); tg = [tg[0] * cr + tg[1] * sr, -tg[0] * sr + tg[1] * cr];
+  const gk = 1 - Math.exp(-dt * (since < 1.5 ? 14 : 8));
+  gaze[0] += (tg[0] - gaze[0]) * gk; gaze[1] += (tg[1] - gaze[1]) * gk;
+  const stare = rl < .12 && dot(F, S.moon) > 0 && since > 1.5;
+  if (ver === 1) {
+    // C2: the pupil is the void. Fully dilated in the dark, snaps to a slit on a spring at the flash
+    const blink = [87, 96.5].some(tb => Math.abs(time - tb) < .35);
+    if (S.u < 0) { pupil = 1; pupV = 0; }
+    else {
+      const tgt = blink ? 1 : stare ? .07 : .26 + .03 * S.beat;
+      for (let i = 0; i < 4; i++) { const h = dt / 4; pupV += ((tgt - pupil) * 170 - pupV * 15) * h; pupil += pupV * h; }
+    }
+  } else pupil += ((since < .4 ? .34 : stare ? .06 : .2 + .03 * S.beat) - pupil) * (1 - Math.exp(-dt * 5));
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, scene.fb); gl.viewport(0, 0, W, H);
+  gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.depthMask(true); gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.bindVertexArray(fullVAO);
+  setU(P.sky, { uRes: [W, H], uF: F, uR: R, uU: U, uTan: tf, uAsp: asp, uT: time, uP: S.p, uVar: ver, uMoon: S.moon, uSun: S.sun, uHor: S.hor, uZen: S.zen,
+    uFog: S.fog, uSunset: S.sunset, uBeat: S.beat, uOpen: Math.max(S.open, 0), uSeam: S.seam, uPupil: pupil, uGaze: gaze, uFlash: S.flash, uShock: S.shock, uShockK: S.shockK,
+    uMoonRad: S.moonRad, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uTc: S.u, uMem: S.mem, uBurst: S.burst, uRift: S.rift, uAtt: S.att });
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.enable(gl.DEPTH_TEST); gl.bindVertexArray(worldVAO);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, hgtTex);
+  setU(P.world, { uVP: VP, uHgt: 0, uCam: CAM, uL: S.L, uLCol: S.lcol, uAmb: S.amb, uFog: S.fog, uTint: [1.5, .16, .12], uFol: S.fol, uGrade: S.grade,
+    uFogDen: S.fogDen, uFlash: S.flash, uT: time, uGrid: G });
+  gl.drawElements(gl.TRIANGLES, worldCount, gl.UNSIGNED_INT, 0);
+  if (S.part > 0) {
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false); gl.bindVertexArray(partVAO);
+    setU(P.part, { uVP: VP, uCam: CAM, uVel: mul3(S.moon, .06), uT: time, uK: S.part, uSize: H * .05, uCol: [.85, .2, .6] });
+    gl.drawArrays(gl.POINTS, 0, NPART); gl.depthMask(true); gl.disable(gl.BLEND);
+  }
+  // bright pass, god rays toward the moon, bloom, composite
+  gl.disable(gl.DEPTH_TEST); gl.bindVertexArray(fullVAO);
+  const pass = (pr, src, dst, u) => { gl.bindFramebuffer(gl.FRAMEBUFFER, dst ? dst.fb : null); const w = dst ? dst.w : W, h = dst ? dst.h : H; gl.viewport(0, 0, w, h);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex); setU(pr, Object.assign({ uTex: 0, uRes: [w, h] }, u)); gl.drawArrays(gl.TRIANGLES, 0, 3); };
+  pass(P.bright, scene, bl[0]);
+  const m = S.moon, cx = VP[0] * m[0] + VP[4] * m[1] + VP[8] * m[2], cy = VP[1] * m[0] + VP[5] * m[1] + VP[9] * m[2], cw = VP[3] * m[0] + VP[7] * m[1] + VP[11] * m[2];
+  const front = cw > .05, mc = front ? [cx / cw * .5 + .5, cy / cw * .5 + .5] : [.5, .5];
+  pass(P.rays, bl[0], bl[2], { uC: mc });
+  for (let i = 0; i < 3; i++) { const s = 1 + i * .8; pass(P.blur, bl[0], bl[1], { uDir: [s / bl[0].w, 0] }); pass(P.blur, bl[1], bl[0], { uDir: [0, s / bl[0].h] }); }
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bl[0].tex);
+  gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, bl[2].tex);
+  pass(P.comp, scene, null, { uBloom: 1, uRays: 2, uDark: S.dark, uCA: .004 + .03 * S.flash, uRayK: front ? S.rays : 0 });
+}
+
+// ───────────────────────── sound (rough synth stand-in) ─────────────────────────
+let AC = null, master, droneG, sndOn = false, lastBeat = -1;
+function audioInit() {
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  master = AC.createGain(); master.gain.value = 0; master.connect(AC.destination);
+  droneG = AC.createGain(); droneG.gain.value = 0; droneG.connect(master);
+  const lp = AC.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 170; lp.connect(droneG);
+  for (const fq of [36.7, 55.3, 73.9, 110.6]) { const o = AC.createOscillator(); o.type = 'sawtooth'; o.frequency.value = fq; o.connect(lp); o.start(); }
+}
+function thump(str) {
+  const t = AC.currentTime;
+  [0, .17].forEach((d, i) => { const o = AC.createOscillator(), g = AC.createGain(); o.frequency.setValueAtTime(95, t + d); o.frequency.exponentialRampToValueAtTime(38, t + d + .16);
+    g.gain.setValueAtTime(.0001, t + d); g.gain.linearRampToValueAtTime(str * (i ? .55 : 1), t + d + .012); g.gain.exponentialRampToValueAtTime(.0001, t + d + .3);
+    o.connect(g); g.connect(master); o.start(t + d); o.stop(t + d + .35); });
+}
+function crackSound() {
+  const t = AC.currentTime, len = AC.sampleRate * 3, buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) { const x = i / len; d[i] = (Math.random() * 2 - 1) * (Math.exp(-x * 30) + .35 * Math.exp(-x * 5) * (Math.random() < .02 ? 3 : .4)); }
+  const s = AC.createBufferSource(); s.buffer = buf;
+  const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.setValueAtTime(2400, t); bp.frequency.exponentialRampToValueAtTime(180, t + 2.5); bp.Q.value = .6;
+  const g = AC.createGain(); g.gain.value = 1.4; const dl = AC.createDelay(1); dl.delayTime.value = .42; const fb = AC.createGain(); fb.gain.value = .45;
+  s.connect(bp); bp.connect(g); g.connect(master); g.connect(dl); dl.connect(fb); fb.connect(dl); dl.connect(master); s.start(t);
+  const o = AC.createOscillator(), og = AC.createGain(); o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(24, t + 1.8);
+  og.gain.setValueAtTime(1.2, t); og.gain.exponentialRampToValueAtTime(.0001, t + 2.2); o.connect(og); og.connect(master); o.start(t); o.stop(t + 2.3);
+}
+function audioFrame(S) {
+  if (!AC) return;
+  const on = sndOn && playing, t = AC.currentTime;
+  master.gain.setTargetAtTime(on ? .7 * (S.dark < .99 ? .35 : 1) : 0, t, .08);
+  droneG.gain.setTargetAtTime(.03 * (1 - S.sunset * .5) + .3 * S.p * S.p, t, .1);
+  if (!on) { lastBeat = S.beatN; return; }
+  if (S.beatN !== lastBeat && S.beatN > 0) thump(.35 + .5 * S.p);
+  lastBeat = S.beatN;
+  if (prevTime < TC && time >= TC && time - prevTime < .5) crackSound();
+}
+
+// ───────────────────────── UI ─────────────────────────
+const $ = id => document.getElementById(id);
+const fmt = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+PHASES.forEach(([n, s], i) => { const e = document.createElement('span'); e.textContent = n; e.style.width = ((i + 1 < PHASES.length ? PHASES[i + 1][1] : TT) - s) / TT * 100 + '%'; $('segs').appendChild(e); });
+VERS.forEach((V, i) => { const b = document.createElement('button'); b.textContent = V.key + ' · ' + V.name; b.onclick = () => setVer(i); $('vers').appendChild(b); });
+function setVer(i) { ver = i; [...$('vers').children].forEach((b, j) => b.classList.toggle('on', j === i)); $('vk').textContent = VERS[i].key; $('vn').textContent = VERS[i].name; $('vt').textContent = VERS[i].tag; }
+function setPlaying(p) { if (p && time >= TT) time = 0; playing = p; $('play').textContent = p ? '❚❚' : '▶'; }
+function updateUI() {
+  const k = time / TT * 100; $('fill').style.width = k + '%'; $('knob').style.left = k + '%';
+  $('time').textContent = fmt(time) + ' / ' + fmt(TT);
+  let n = PHASES[0][0]; for (const [name, s] of PHASES) if (time >= s) n = name;
+  if ($('ph').textContent !== n) $('ph').textContent = n;
+}
+const replay = () => { time = 64; setPlaying(true); };
+$('play').onclick = () => setPlaying(!playing);
+$('clx').onclick = replay;
+$('nb').onclick = () => { $('notes').classList.toggle('open'); $('nb').classList.toggle('on'); };
+$('snd').onclick = () => { if (!AC) audioInit(); AC.resume(); sndOn = !sndOn; $('snd').textContent = (sndOn ? '🔊' : '🔇') + ' Sound'; $('snd').classList.toggle('on', sndOn); };
+const track = $('track');
+const seek = e => { const r = track.getBoundingClientRect(); time = clamp((e.clientX - r.left) / r.width) * TT; };
+track.addEventListener('pointerdown', e => { track.setPointerCapture(e.pointerId); seek(e); });
+track.addEventListener('pointermove', e => { if (e.buttons & 1) seek(e); });
+cv.addEventListener('pointermove', e => { mx = e.clientX / innerWidth * 2 - 1; my = e.clientY / innerHeight * 2 - 1; });
+cv.addEventListener('pointerleave', () => { mx = my = 0; });
+addEventListener('keydown', e => {
+  if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+  else if (e.key >= '1' && e.key <= '3') setVer(+e.key - 1);
+  else if (e.key.toLowerCase() === 'c') replay();
+  else if (e.key === 'ArrowLeft') time = clamp(time - 5, 0, TT);
+  else if (e.key === 'ArrowRight') time = clamp(time + 5, 0, TT);
+  else if (e.key.toLowerCase() === 'h') document.body.classList.toggle('hide');
+});
+// for checking: window.__shot(t, v) renders one exact frame at time t for candidate v, paused
+window.__shot = (t, v) => { setPlaying(false); setVer(v); time = t; prevTime = t; for (let i = 0; i < 40; i++) render(.05); updateUI(); return gl.getError(); };
+setVer(ver); setPlaying(playing);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
