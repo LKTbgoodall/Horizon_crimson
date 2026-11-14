@@ -454,9 +454,10 @@ vec3 storm(vec2 u,out vec3 fogC){
   fogC=vec3(.05,.055,.075)+vec3(.2,.25,.4)*fl*.3;
   return c;
 }
-// W2 · Pale Realm: the sky of a real place. No ground in sight: far below, thick fog, and out of it rise the ribs
-// of something huge and a colossus wading far off; in its sky a black sun,
+// W2 · Pale Realm: the sky of a real place. No ground in sight: far below, thick fog, and a giant blocky mob
+// walking far off, its feet lost in it; in its sky a black sun,
 // floating black shards, drifting fog banks. Things on the ground use local units at their own distance D.
+float sdBox(vec2 p,vec2 b){vec2 d=abs(p)-b;return length(max(d,0.))+min(max(d.x,d.y),0.);}
 float sdSeg(vec2 p,vec2 a,vec2 b){vec2 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h);}
 vec3 pale(vec2 u,out vec3 fogC){
   const float H0=.24;                                                          // its horizon, in our sky
@@ -476,22 +477,18 @@ vec3 pale(vec2 u,out vec3 fogC){
     c=mix(c,mix(vec3(.03),fogC,.1+.35*hi(k+11)),smoothstep(1.02,.98,sd));
     c+=vec3(1.)*exp(-abs(sd-1.)*30.)*.12;
   }
-  float rise=smoothstep(H0-.06,H0+.16,u.y);                                   // things rise out of the fog below
-  {                                                                            // a colossus wading far off in the fog
-    float D=85.,X=-60.+(uT-60.)*.6;vec2 lp=vec2(u.x*D-X,(u.y-H0)*D+1.);
-    float sw=.38*sin(uT*.55);vec2 hip=vec2(0.,22.);
-    float dd=min(sdSeg(lp,hip,vec2(7.*sin(sw),0.)),sdSeg(lp,hip,vec2(-7.*sin(sw),0.)))-.55;
-    dd=min(dd,sdSeg(lp,hip,vec2(.6,32.))-1.5);
-    dd=min(dd,length(lp-vec2(1.,35.5))-1.5);
-    dd=min(dd,min(sdSeg(lp,vec2(.6,31.),vec2(-2.+4.*sin(sw),12.)),sdSeg(lp,vec2(.6,31.),vec2(3.-4.*sin(sw),12.)))-.35);
-    c=mix(c,mix(vec3(.08,.075,.075),fogC,.38),smoothstep(.25,-.25,dd)*rise);
-  }
-  for(int k=0;k<6;k++){                                                        // ribs of something buried
-    float fk=float(k),D=42.;
-    vec2 lp=vec2(u.x*D-(-18.+fk*6.5),(u.y-H0)*D+1.);
-    vec2 q=lp-vec2(7.,0.);float ra=atan(q.y,q.x),R=13.-fk*.6;
-    float rib=smoothstep(.9,.5,abs(length(q)-R))*step(0.,lp.y)*smoothstep(2.9,2.6,ra)*smoothstep(.2,.45,ra);
-    c=mix(c,mix(vec3(.3,.29,.28),fogC,.42),rib*rise);
+  {                                                                            // one presence: a giant mob walking far off
+    float D=110.,X=30.+(uT-76.)*2.1;                                          // its feet are far below, lost in the fog
+    vec2 lp=vec2(u.x*D-X,(u.y-(H0-.12))*D);
+    float wk=uT*1.3,sw=.3*sin(wk);lp.y-=abs(cos(wk))*.6;                        // stride and bob
+    vec2 hip=vec2(0.,22.),sh=vec2(0.,35.);
+    float dd=min(sdBox(rot(sw)*(lp-hip)-vec2(-1.6,-11.),vec2(1.5,11.)),sdBox(rot(-sw)*(lp-hip)-vec2(1.6,-11.),vec2(1.5,11.)));
+    dd=min(dd,sdBox(lp-vec2(0.,29.),vec2(4.,7.)));                              // blocky: torso, cube head, box limbs
+    dd=min(dd,sdBox(lp-vec2(.3,40.),vec2(3.6,3.6)));
+    dd=min(dd,min(sdBox(rot(-sw*.8)*(lp-sh)-vec2(-5.2,-8.),vec2(1.2,9.)),sdBox(rot(sw*.8)*(lp-sh)-vec2(5.2,-8.),vec2(1.2,9.))));
+    float rise=smoothstep(H0+.02,H0+.22,u.y);
+    c=mix(c,mix(vec3(.1,.095,.1),fogC,.5),smoothstep(.9,-.9,dd)*rise);         // soft edges: far and hazy, hard to make out
+    c+=vec3(.75,.6,1.)*(exp(-length(lp-vec2(-1.2,40.6))*1.4)+exp(-length(lp-vec2(1.8,40.6))*1.4))*.35*rise;   // two faint eyes
   }
   c=mix(c,fogC*1.04,smoothstep(H0+.12,H0-.25,u.y));                           // no ground: thick fog far below
   gLc=vec3(.95,.93,.9);gBack=vec3(.12,.11,.1);gBelly=vec3(.62,.6,.55);gFrill=vec3(.28,.25,.25);gDap=0.;
