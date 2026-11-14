@@ -37,7 +37,7 @@ Vault conventions: `[[Note title]]` wiki links, YAML frontmatter, API status ✅
 ## Git and GitHub
 - The only author is **LKTbgoodall** (repo-local `user.name` / `user.email`).
 - **No `Co-Authored-By`**, and no Claude or "Generated with" attribution line, in commits or PRs.
-- No remote yet. Commit after each step; once there is a remote, push too. Commit messages in English.
+- Remote: https://github.com/LKTbgoodall/Horizon_crimson (public, `origin`). Commit after each step and push. Commit messages in English.
 
 ## Machines and testing
 - **Dev PC**: Horizon launcher (`%LOCALAPPDATA%\Programs\Horizon Launcher\horizon-launcher.exe`). Test in the **`cagebound-dev` instance** (on Nightly `9f42064`), not in `mon-horizon`, whose other mods are built for `fdc87ae`. Claude may read `%APPDATA%\horizon-launcher\native\build.log` and the instance's `logs/latest.log`.
