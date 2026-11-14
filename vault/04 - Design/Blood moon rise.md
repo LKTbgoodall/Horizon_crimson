@@ -99,6 +99,10 @@ Bastien turned the ocean down ("trouvons autre chose"). Rather than guess again,
 - **W2 · Pale Realm**: bone-white fog, a black sun with a thin bright ring, giant ribs rising far off in the fog, drifting ash; a pale dragon.
 - **W3 · Upside-down Overworld**: another overworld in broad daylight hanging over the sky, seen from below: blocky ground (grass, forests, water, sand) 12 blocks up, blocky clouds under it, blue sky; a green dragon flies below.
 
+**Bastien's verdict (2026-11-14)**: no to the upside-down overworld (removed). Yes to Storm. Pale is the most interesting (a truly white world, to push), but you could not see anything: it must show that a real world is there, not a white backdrop. And the long-term goal: **players will be able to go into this other world later**, so it must be a real place.
+- **Pale Realm, now a place**: its own horizon (0.24 rad up in our sky) and ground, pale dunes running to it in perspective in the fog. Black monoliths with broken tops stand at distances from 44 to 110, and the ribs of something huge are half buried at 42. A **colossus** walks slowly far off (distance 85, about 37 units tall): long legs striding, long arms, head in the fog; it crosses behind the moon area during the night. In its sky: a bigger black sun with a thin bright ring and fine rays, floating black shards, drifting fog banks, ash; the dragon turns dark so it stands out on the white.
+- Default world is now W2 (`?w=1` for Storm). Ground objects use local units at their own distance, so they can later become real places in a dimension.
+
 ## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.

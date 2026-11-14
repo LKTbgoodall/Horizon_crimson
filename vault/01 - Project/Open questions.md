@@ -15,3 +15,5 @@ updated: 2026-11-14
 8. **Multiplayer sync**: 0.1.0 shares the night between server and client through the mod's one instance, which only works in single player. A remote client needs to be told (forced nights, the salt). How: to read in the source (custom payloads to a client exist server side; the client-side receive hook is not found yet).
 9. **Own sounds**: done in 0.1.4 (`tools/make-sounds.py`, synthesised, Ogg Vorbis through `soundfile` in a local venv). Open: Bastien's ear on each of them; they were made without listening.
 10. **Saving**: a forced blood moon and the roll's salt are not saved yet (`world_saved`, `host.world_dir()`); the salt is 0 for every world for now.
+
+- **The other world as a destination** (2026-11-14): Bastien wants players to be able to go into the world seen behind the sky (Pale Realm or Storm Realm). To check in Horizon: can a native mod add a dimension (level, generator, sky)? What it means for the look: the preview's landmarks (monoliths, ribs, colossus, black sun) should become real things there.
