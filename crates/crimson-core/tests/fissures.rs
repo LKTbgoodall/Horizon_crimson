@@ -147,7 +147,7 @@ fn shards_break_off_along_the_cracks_mostly_at_the_climax() {
             p.shards.len()
         );
         for s in &p.shards {
-            assert!(s.falls.is_finite() && s.falls > 0.0 && s.size > 0.0 && s.size < 0.1);
+            assert!(s.falls.is_finite() && s.falls > 0.0 && s.size > 0.0 && s.size < 0.15);
             // Convex, counter-clockwise seen from inside the sky, and inside its cap.
             for k in 0..5 {
                 let (a, b, c) = (s.corners[k], s.corners[(k + 1) % 5], s.corners[(k + 2) % 5]);

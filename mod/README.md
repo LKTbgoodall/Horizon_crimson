@@ -16,6 +16,12 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.2.3 (Bastien's look at 0.2.2)
+- **Just a hole**: inside a hole there is only the other world now. No crack line crosses it, and where shards
+  overlap only the outline of the whole opening burns (no edge drawn inside another hole).
+- **Bigger, more holes**: shards about 60 % bigger, closer together along the main fault, two per climax crack,
+  more on the moon's cracks.
+
 ## New in 0.2.2 (Bastien's look at 0.2.1)
 - **Real broken glass**: the cracks are thin sharp lines again, and the big openings now come from **shards
   falling out**: convex pieces with straight edges and corners break off along the cracks, on either side (along

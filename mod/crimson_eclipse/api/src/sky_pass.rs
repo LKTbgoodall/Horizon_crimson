@@ -681,8 +681,9 @@ fn fissures(d: vec3<f32>, s: f32) -> Fis {
 // pentagon; it is tested flat, on the plane touching the sky at its centre. A shard drops out over 0.3 s
 // (the hole grows from its middle), and closes again at dawn.
 fn shard_holes(d: vec3<f32>, s: f32) -> vec2<f32> {
-    var hole = 0.0;
-    var rim = 0.0;
+    // The union of the holes: the nearest edge, signed (negative inside), and how fresh that hole is.
+    var emin = 1.0;
+    var fresh = 0.0;
     let n = u32(u.b.y);
     for (var k = 0u; k < n; k++) {
         let base = k * 6u;
@@ -710,10 +711,13 @@ fn shard_holes(d: vec3<f32>, s: f32) -> vec2<f32> {
         let age = s - falls;
         let inset = (1.0 - ss(0.0, 0.3, age)) * size + (1.0 - u.g.w) * size * 1.2;
         let edge = sd + inset;
-        hole = max(hole, ss(0.0006, -0.0006, edge));
-        rim = max(rim, exp(-abs(edge) / 0.0012) * (1.0 + 2.5 * exp(-age * 3.0)));
+        if (edge < emin) {
+            emin = edge;
+            fresh = exp(-age * 3.0);
+        }
     }
-    return vec2<f32>(hole, rim);
+    // Only the outline of the union burns: no edge shows inside another hole.
+    return vec2<f32>(ss(0.0006, -0.0006, emin), exp(-abs(emin) / 0.0012) * (1.0 + 2.5 * fresh));
 }
 
 fn sd_box(p: vec2<f32>, b: vec2<f32>) -> f32 {
@@ -997,20 +1001,22 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     }
     let hush = select(0.0, ss(58.3, 59.5, s), s < 60.5);
     let att = 1.0 - 0.6 * hush + select(0.0, 0.5 * exp(-tc * 0.8), tc >= 0.0);
+    // Inside a hole there is only the other world: no crack line crosses it.
+    let clean = (1.0 - sh.x) * present;
     let lc = mix(vec3<f32>(1.0, 0.25, 0.1), vec3<f32>(3.0, 2.2, 1.7), fs.heat);
     col += (lc * (fs.core * 1.7 + fs.glow * 0.4 * (1.0 - fs.win)) * (0.75 + 0.25 * u.a.z + u.d.y) * att
-        + vec3<f32>(4.0, 3.0, 2.4) * fs.tip * 2.5) * present;
+        + vec3<f32>(4.0, 3.0, 2.4) * fs.tip * 2.5) * clean;
     col += vec3<f32>(1.0, 0.35, 0.25) * u.g.x * 0.12 * present;
     // The broken edge of a hole burns, brighter just after the shard falls.
     col += vec3<f32>(1.0, 0.42, 0.16) * sh.y * 1.4 * att * present;
     weight = max(weight, clamp(sh.y, 0.0, 1.0) * present);
     // Sealing at dawn: a golden seam runs along each crack as its lips meet.
-    col += vec3<f32>(1.0, 0.75, 0.3) * (fs.core * 2.0 + fs.glow * 0.5) * u.g.w * (1.0 - u.g.w) * 4.0 * present;
+    col += vec3<f32>(1.0, 0.75, 0.3) * (fs.core * 2.0 + fs.glow * 0.5) * u.g.w * (1.0 - u.g.w) * 4.0 * clean;
     // A flash behind the sky leaks through the cracks near it.
     let duv = vec2<f32>(atan2(d.z, d.x) * 0.88, asin(clamp(d.y, -1.0, 1.0)));
     let leak = flash.z * exp(-length((duv - flash.xy) * vec2<f32>(1.0, 1.3)) / 0.35);
-    col += vec3<f32>(0.9, 0.95, 1.0) * leak * (fs.core * 2.5 + fs.glow * 1.5) * present;
-    weight = max(weight, max(fs.core, max(fs.glow * 0.6, fs.tip)) * present);
+    col += vec3<f32>(0.9, 0.95, 1.0) * leak * (fs.core * 2.5 + fs.glow * 1.5) * clean;
+    weight = max(weight, max(fs.core, max(fs.glow * 0.6, fs.tip)) * clean);
     col += vec3<f32>(1.0, 0.4, 0.3) * exp(-abs(ang - u.d.z) * 35.0) * u.d.w * 2.0;
     if (ang < 1.7) {
         let rr = max(r - 1.0, 0.0);

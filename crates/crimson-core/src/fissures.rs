@@ -509,7 +509,7 @@ fn plan_shards(pl: &mut Planner, left: usize, right: usize) -> Vec<Shard> {
                 break;
             }
             let side = if pl.unit() < 0.5 { -1.0 } else { 1.0 };
-            let depth = (0.05 + 0.06 * pl.unit()) * (0.6 + i as f32 / last as f32);
+            let depth = (0.08 + 0.08 * pl.unit()) * (0.6 + i as f32 / last as f32);
             let passed = pl.cracks[fault].time_at(i + n);
             let falls = if pl.unit() < 0.35 && passed + 4.0 < LAST_CRACK {
                 passed + 1.0 + 3.0 * pl.unit()
@@ -519,7 +519,7 @@ fn plan_shards(pl: &mut Planner, left: usize, right: usize) -> Vec<Shard> {
             if let Some(s) = shard_along(pl, fault, i, n, side, depth, falls) {
                 shards.push(s);
             }
-            i += n + (pl.unit() * 3.0) as usize;
+            i += n + (pl.unit() * 1.5) as usize;
         }
     }
     for c in 0..pl.cracks.len() {
@@ -529,26 +529,38 @@ fn plan_shards(pl: &mut Planner, left: usize, right: usize) -> Vec<Shard> {
         let born = pl.cracks[c].stages[0].t0;
         let last = pl.cracks[c].last();
         let climax = born >= EYE_OPENS;
-        if last < 8 || pl.unit() > if climax { 0.8 } else { 0.4 } {
+        if last < 8 || pl.unit() > if climax { 0.95 } else { 0.6 } {
             continue;
         }
-        let i = (last as f32 * (0.3 + 0.3 * pl.unit())) as usize;
-        let n = (3 + (pl.unit() * 2.0) as usize).min(last - i);
-        let side = if pl.unit() < 0.5 { -1.0 } else { 1.0 };
-        let depth = if climax {
-            0.045 + 0.03 * pl.unit()
-        } else {
-            0.03 + 0.02 * pl.unit()
-        };
-        let falls = if climax {
-            EYE_OPENS + 0.3 + 0.8 * pl.unit()
-        } else if born + 5.0 < LAST_CRACK {
-            born + 2.0 + 3.0 * pl.unit()
-        } else {
-            late(pl)
-        };
-        if let Some(s) = shard_along(pl, c, i, n, side, depth, falls) {
-            shards.push(s);
+        // Climax cracks lose two pieces, the others one.
+        let pieces = if climax { 2 } else { 1 };
+        for k in 0..pieces {
+            let from = if pieces == 2 {
+                0.2 + 0.35 * k as f32
+            } else {
+                0.3
+            };
+            let i = (last as f32 * (from + 0.2 * pl.unit())) as usize;
+            let n = (3 + (pl.unit() * 3.0) as usize).min(last.saturating_sub(i));
+            if n < 2 {
+                continue;
+            }
+            let side = if pl.unit() < 0.5 { -1.0 } else { 1.0 };
+            let depth = if climax {
+                0.07 + 0.04 * pl.unit()
+            } else {
+                0.045 + 0.025 * pl.unit()
+            };
+            let falls = if climax {
+                EYE_OPENS + 0.3 + 0.8 * pl.unit()
+            } else if born + 5.0 < LAST_CRACK {
+                born + 2.0 + 3.0 * pl.unit()
+            } else {
+                late(pl)
+            };
+            if let Some(s) = shard_along(pl, c, i, n, side, depth, falls) {
+                shards.push(s);
+            }
         }
     }
     shards.truncate(MAX_SHARDS);
