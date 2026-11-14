@@ -20,13 +20,11 @@ Not a second refactor: UMCEKO already does steps 1-3. Our part is the **mod side
 1. A **content mod ships a dimension**: `data/<ns>/dimension/*.json` and `dimension_type/*.json` inside a `.hmod` count as a data pack (so step 2 creates the level).
 2. A **native mod generates its chunks**: a generator hook (fill a new chunk of a mod level from the mod's own code), so the Pale Realm's dunes, monoliths and Spire come from our pure generator.
 3. Moving a player there is already possible (`native_run_command` + `execute in <id> run tp`), once step 2 accepts the id.
-Help on step 2 or 3 if UMCEKO wants it.
 
-## Draft comment for #11282 (Bastien posts it, or approves it first)
+## Draft comment for #11282 (Bastien posts it himself)
+Bastien: do not offer to help on step 2.
 > Hi! I'm making a native mod (Crimson Eclipse) whose core is travelling to a custom dimension, so this plan is exactly what I need. Thanks for the work on step 1.
 >
-> Two questions so I don't step on your toes:
-> 1. Is anyone on step 2 yet? I'd be happy to help on it if a piece can be split off.
-> 2. Once step 2 creates levels from data pack dimensions, would it fit to let mods use it too: a `.hmod` carrying `data/<ns>/dimension/` and `dimension_type/` treated like a data pack, and a native hook to generate a mod level's chunks from the mod's own code? I'd open that part on arismoko/horizon, since it's mod API.
+> Once step 2 creates levels from data pack dimensions, would it fit to let mods use it too: a `.hmod` carrying `data/<ns>/dimension/` and `dimension_type/` treated like a data pack, and a native hook to generate a mod level's chunks from the mod's own code? I'd open that part on arismoko/horizon, since it's mod API.
 >
 > (Written with the help of a coding agent.)
