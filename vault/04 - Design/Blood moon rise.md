@@ -63,6 +63,14 @@ Bastien on C in game: cool, but not masterclass enough; he asked for something t
 - **C3 · The Sky Opens**: one jagged rift grows across the sky in steps on the heartbeat; at the climax it lights up horizon to horizon and the sky opens like an eyelid (~110° wide). The moon becomes the pupil of an eye the size of the sky, which follows the player.
 - Shared tech: crack network is one-pass F2-F1 Voronoi in log-polar coordinates (radial axis squeezed 0.42, jittered) on integer PCG hashes; god rays are one radial blur of the bright pass toward the moon (extra pass in `world_drawn`, ❓ in game).
 
+### Bastien's pick: C1, with real fissures (2026-11-14)
+He prefers **C1**, but disliked the web around the moon: it moved with the moon and only grew outward, so it did not read as the sky breaking. What he loves in C3 is that a **real crack is created**. So C1's break is now:
+- **Fissures fixed in the sky** (world directions), never in the moon's frame. Each is a jagged polyline (random walk on the sphere, step 0.03 rad, kinks) planned once on the CPU (`planFissures` in the preview; in game: the pure core) and drawn from a segment texture, chunks of 8 with a bounding cap.
+- **Every crack has a visible cause**: born at the moon's edge or off an existing crack, on a heartbeat. Its tip runs fast then slows (bright flare at the tip, a crackle, a small flicker of light and shake), then it stays where it was born while the moon rises on.
+- **A main fault** torn from the moon on both sides, climbing into the sky, pushed further in six stages (C3's rift idea); branches split off it; more cracks leave the moon's edge, faster near the climax.
+- Cracks widen and their glow spreads with age (light seeping through). At the climax 14 cracks shoot out all around the moon at high speed, then branch; a few shards next to the moon blow out onto the light. The moon-centred web only exists in that small blown-out zone after the climax.
+- The eye (strands, third eyelid, lock-on) is unchanged.
+
 ## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.

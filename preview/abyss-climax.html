@@ -94,7 +94,7 @@ const F0 = .75, F1 = 2.3;                                // heartbeat, Hz, at th
 const PHASES = [['Omens', 0], ['Eclipse', T0], ['The eye', TE], ['Night', TN]];
 const VERS = [
   { key:'C1', name:'Shell of Light', tag:'The sky is a shell and something blinding is behind it. Cracks run white-hot from the moon, shards blow out and light pours through in shafts. The eye tears open against strands of flesh, then a third eyelid sweeps across it.',
-    rot:-.1, rays:1.2, shake:1.7, since:3.9 },
+    rot:-.1, rays:.9, shake:1.7, since:3.9 },
   { key:'C2', name:'Glass Abyss', tag:'The sky is glass: shards bend the stars, split light like a prism, then fall away in a wave onto deep space. No lid: the void that ate the moon was a pupil dilated in the dark, and at the flash it snaps into a slit.',
     rot:0, rays:.85, shake:1.3, since:.55 },
   { key:'C3', name:'The Sky Opens', tag:'One rift grows across the whole sky through the eclipse. At the climax it lights up from horizon to horizon and the sky itself opens like an eyelid. The moon becomes the pupil of an eye as big as the sky, and it follows you.',
@@ -111,6 +111,87 @@ const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const phaseOf = p => 60 * (F0 * p + (F1 - F0) * p * p / 2);
 const pOfPhase = n => (-F0 + Math.sqrt(F0 * F0 + 2 * (F1 - F0) * n / 60)) / (F1 - F0);
+
+// ───────────────────────── C1: the fissures, planned once (in game: the pure core) ─────────────────────────
+// Nothing grows on its own: every crack is born at the moon's edge or off an existing crack, on a heartbeat,
+// its tip runs fast then slows, and it stays where it was born in the sky while the moon rises on.
+const add = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+function rng32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function moonAt(t) { const p = clamp((t - T0) / 60), el = (mix(-10, 8, sstep(8, 14, t)) + 19 * sstep(0, 1, p)) * DEG; return { M: [Math.cos(el), Math.sin(el), 0], rad: mix(.12, .29, sstep(0, 1, p)) }; }
+const beatTime = n => T0 + 60 * pOfPhase(n);
+function planFissures(seed) {
+  const R = rng32(seed), ST = .03, paths = [], events = [];
+  const limb = (t, th) => {
+    const { M, rad } = moonAt(t), mr = norm(cross(M, [0, 1, 0])), mu = cross(mr, M);
+    const T = add(mul3(mr, Math.cos(th)), mul3(mu, Math.sin(th))), r = rad * .97;
+    return { P: add(mul3(M, Math.cos(r)), mul3(T, Math.sin(r))), H: add(mul3(M, -Math.sin(r)), mul3(T, Math.cos(r))) };
+  };
+  const walk = (P, H, L, jit, w) => {
+    const pts = [P], hs = [H];
+    for (let s = ST; s <= L + 1e-6; s += ST) {
+      const P2 = norm(add(mul3(P, Math.cos(ST)), mul3(H, Math.sin(ST))));
+      let H2 = add(mul3(P, -Math.sin(ST)), mul3(H, Math.cos(ST)));
+      let dl = (R() - .5) * 2 * jit; if (R() < .14) dl += (R() < .5 ? -1 : 1) * (.35 + .4 * R());   // kinks: a real crack is jagged
+      H2 = norm(add(mul3(H2, Math.cos(dl)), mul3(cross(P2, H2), Math.sin(dl))));
+      P = P2; H = H2; pts.push(P); hs.push(H);
+    }
+    const path = { pts, hs, stages: [], w }; paths.push(path); return path;
+  };
+  // the tip runs fast then slows: time to reach x along a stage of length L at start speed v0
+  const T = (x, L, v0) => { const k = 1.3 * L, tau = k / v0; return -tau * Math.log(1 - x / k); };
+  const ptTime = (path, i) => {
+    const s = i * ST;
+    for (const g of path.stages) if (s <= g.s1 + 1e-6) return g.t0 + T(Math.max(s - g.s0, 0), g.s1 - g.s0, g.v0);
+    return Infinity;
+  };
+  const stage = (path, t0, s1, v0, k) => {
+    const s0 = path.stages.length ? path.stages[path.stages.length - 1].s1 : 0;
+    s1 = Math.min(s1, (path.pts.length - 1) * ST); if (s1 <= s0) return;
+    path.stages.push({ t0, s0, s1, v0 }); events.push([t0, k]);
+  };
+  const fromMoon = (t, L, v0, k, th = R() * 6.2832, jit = .22, w = 1) => { const { P, H } = limb(t, th); stage(walk(P, H, L, jit, w), t, L, v0, k); };
+  const branch = (t, L, v0, k) => {
+    const cands = paths.filter(p => p.stages.length && ptTime(p, 3) < t - .3);
+    if (!cands.length) return;
+    const p = cands[Math.floor(R() * cands.length)];
+    let n = 3; while (n + 1 < p.pts.length && ptTime(p, n + 1) < t - .2) n++;
+    const j = 2 + Math.floor(R() * (n - 2)), P = p.pts[j], H0 = p.hs[j], a = (R() < .5 ? -1 : 1) * (.55 + .55 * R());
+    const H = norm(add(mul3(H0, Math.cos(a)), mul3(cross(P, H0), Math.sin(a))));
+    stage(walk(P, H, L, .25, p.w * .7), t, L, v0, k);
+  };
+  // the main fault: torn by the moon on both sides, then pushed further across the sky in stages
+  const tf = beatTime(18), fl = limb(tf, Math.PI - .45), fr = limb(tf, .4);   // climbing into the sky on both sides
+  const left = walk(fl.P, fl.H, 1.3, .1, 2.2), right = walk(fr.P, fr.H, 1.3, .1, 2.2);
+  [[18, .2], [24, .38], [31, .56], [40, .76], [49, .98], [56, 1.3]].forEach(([n, s], i) => {
+    stage(left, beatTime(n), s, .9, i ? .5 : .8); stage(right, beatTime(n + 1), s, .9, .5);
+  });
+  for (const n of [26, 37, 47, 53]) fromMoon(beatTime(n), .25 + .3 * R(), 1.1, .4);
+  for (const n of [34, 43, 45, 51]) branch(beatTime(n), .15 + .3 * R(), .8, .25);
+  for (let n = 58; beatTime(n) < 72; n += n < 72 ? 2 : 1) {
+    if (R() < .45) fromMoon(beatTime(n), .2 + .35 * R(), 1.2, .35); else branch(beatTime(n), .12 + .3 * R(), .9, .22);
+  }
+  // the climax: the moon bursts the shell, cracks shoot out all around it
+  for (let i = 0; i < 14; i++) fromMoon(TC + .02 * R(), .5 + .8 * R(), 2.6, 0, i / 14 * 6.2832 + (R() - .5) * .35, .2, 1.3);
+  for (let i = 0; i < 10; i++) branch(TC + .35 + .5 * R(), .15 + .35 * R(), 1.4, 0);
+  // segments, in chunks of 8 with a bounding cap
+  const seg = [], chk = [];
+  for (const p of paths) {
+    if (!p.stages.length) continue;
+    const last = Math.round(p.stages[p.stages.length - 1].s1 / ST);
+    for (let c = 0; c < last; c += 8) {
+      const n = Math.min(8, last - c), start = seg.length / 8;
+      let C = [0, 0, 0];
+      for (let i = c; i <= c + n; i++) C = add(C, p.pts[i]);
+      C = norm(C); let maxA = 0;
+      for (let i = c; i <= c + n; i++) maxA = Math.max(maxA, Math.acos(clamp(dot(C, p.pts[i]), -1, 1)));
+      for (let i = c; i < c + n; i++) seg.push(...p.pts[i], ptTime(p, i), ...p.pts[i + 1], ptTime(p, i + 1));
+      chk.push(...C, Math.cos(maxA + .04), start, n, ptTime(p, c), p.w);
+    }
+  }
+  return { seg: new Float32Array(seg), chk: new Float32Array(chk), events: events.filter(e => e[1] > 0) };
+}
+const FIS = planFissures(20261114);
+const evFlash = t => { let s = 0; for (const [te, k] of FIS.events) if (t >= te && t - te < 1) s += k * Math.exp(-(t - te) * 7); return s; };
 
 // Everything the picture needs, as a pure function of (time, candidate): scrubbing is exact.
 function state(t, v) {
@@ -148,6 +229,7 @@ function state(t, v) {
   let shake = t >= T0 && t < TE ? .04 + .2 * p * p : 0;
   if (u >= 0) shake += V.shake * Math.exp(-u * 1.4);
   if (v === 2) shake += .5 * sstep(74.9, 75.5, t) * (1 - sstep(77.5, 78.6, t));
+  if (v === 0) shake += .5 * evFlash(t);
 
   const k1 = sstep(3, 14, t), kb = sstep(0, .7, p);
   const hor = mix3(mix3(mix3([1, .5, .22], [1, .15, .04], sstep(0, 7, t)), [.30, .06, .07], k1), [.5, .035, .03], kb);
@@ -166,12 +248,13 @@ function state(t, v) {
   } else {
     const e = Math.max(mEl, 9 * DEG); L = [Math.cos(e), Math.sin(e), 0];
     const night = u >= 0 ? .75 + .4 * eyeK + (v === 0 ? .35 * burst : 0) : 1 - .3 * hush;
-    lcol = mul3(mix3([.42, .5, .7], [2.1, .24, .15], sstep(.1, .8, p)), sstep(13, 17, t) * night * (1 + .1 * beat));
+    lcol = mul3(mix3([.42, .5, .7], [2.1, .24, .15], sstep(.1, .8, p)), sstep(13, 17, t) * night * (1 + .1 * beat + (v === 0 ? .6 * evFlash(t) : 0)));
   }
   const corona = (sstep(.03, .6, p) * (.45 + .55 * p) * (1 + .09 * beat) + .25 * eyeK) * (1 - .85 * hush);
-  const rev = v === 2 ? .9 * Math.pow(p, 1.3) : 1.6 * Math.pow(p, 1.3) + .6 * sstep(TC, 76, t);
+  const rev = v === 0 ? .42 * sstep(TC, TC + .45, t) : v === 2 ? .9 * Math.pow(p, 1.3) : 1.6 * Math.pow(p, 1.3) + .6 * sstep(TC, 76, t);
+  const ev = v === 0 ? evFlash(t) : 0;
   return {
-    p, beat, beatN: Math.floor(ph), open, seam, flash, mem, burst, rift, shock, shockK, shake, hor, zen, amb, sun, moon, L, lcol, corona, rev,
+    p, ev, beat, beatN: Math.floor(ph), open, seam, flash, mem, burst, rift, shock, shockK, shake, hor, zen, amb, sun, moon, L, lcol, corona, rev,
     att: 1 - .6 * hush + (u >= 0 ? .5 * Math.exp(-u * .8) : 0), dark: 1 - .3 * hush, u,
     moonRad: mix(.12, v === 2 ? .22 : .29, sstep(0, 1, p)), fog: mul3(hor, mix(.85, .5, sstep(0, .8, p))), fogDen: mix(.010, .016, sstep(0, .9, p)),
     sunset: 1 - sstep(8, 14, t), stars: sstep(9, 15, t), blood: sstep(.8, 1, p), grade: .7 * sstep(.1, .9, p), fol: sstep(.15, .75, p),
@@ -335,6 +418,40 @@ vec3 moonEyeC1(vec3 c,vec2 q){
   c+=vec3(1.,.45,.1)*exp(-abs(dy-L)*45.)*step(abs(xn),uSeam)*(1.2+uBeat)*pow(shape,.3);
   return c;
 }
+// C1: real fissures fixed in the sky. Each is a jagged polyline of segments (A, tA) -> (B, tB) on the unit
+// sphere, written by the CPU (in game: the pure core) into a data texture; the tip runs from A to B between
+// tA and tB. Segments come in chunks of 8 with a bounding cap, so a pixel only tests the chunks near it.
+uniform highp sampler2D uSeg,uChk;
+uniform int uNChk;
+uniform float uEv;
+vec4 fissures(vec3 d){
+  float core=0.,glow=0.,heat=0.,tip=0.;
+  for(int c=0;c<1024;c++){
+    if(c>=uNChk) break;
+    vec4 k1=texelFetch(uChk,ivec2(c*2+1,0),0);
+    if(uT<k1.z) continue;
+    vec4 k0=texelFetch(uChk,ivec2(c*2,0),0);
+    if(dot(d,k0.xyz)<k0.w) continue;
+    int s0=int(k1.x),n=int(k1.y);
+    for(int i=0;i<8;i++){
+      if(i>=n) break;
+      vec4 A=texelFetch(uSeg,ivec2((s0+i)*2,0),0);
+      if(uT<A.w) break;
+      vec4 B=texelFetch(uSeg,ivec2((s0+i)*2+1,0),0);
+      float f=clamp((uT-A.w)/max(B.w-A.w,1e-4),0.,1.);
+      vec3 b=mix(A.xyz,B.xyz,f),ab=b-A.xyz;
+      float h=clamp(dot(d-A.xyz,ab)/max(dot(ab,ab),1e-10),0.,1.);
+      float dist=length(d-A.xyz-ab*h);
+      float age=uT-mix(A.w,B.w,h*f);
+      float w=k1.w*(.0017+.0018*smoothstep(0.,8.,age)+.0006*uBurst);
+      core=max(core,smoothstep(w,w*.3,dist));
+      glow=max(glow,exp(-dist/(.003+.007*smoothstep(0.,6.,age)))*min(k1.w,1.5));
+      heat=max(heat,smoothstep(w*2.2,0.,dist)*exp(-age*.9));
+      if(f<1.) tip=max(tip,exp(-length(d-b)*300.));
+    }
+  }
+  return vec4(core,glow,heat,tip);
+}
 float riftY(float x){return .06*(vnoise(vec2(x*5.,2.))-.5)+.024*(vnoise(vec2(x*22.,5.))-.5)+.008*(vnoise(vec2(x*80.,9.))-.5);}
 
 void main(){
@@ -369,7 +486,7 @@ void main(){
     if(vis>0.&&h.y<.6){ivec2 c2;vec3 fn=net(ang,a,64,c2);fine=smoothstep(w*.55,w*.15,fn.x)*smoothstep(.05,.4,age)*step(hi2(c2),.55);}
     float pre=step(h.y,uP*.17-.03)*step(nt.z,uRev*.7)*(uVar==2?step(h.z,.5):1.);
     float fall=0.;
-    if(uVar==0) fall=clamp((uTc-(.05+nt.z*.5+h.z*.25))/.35,0.,1.)*step(h.y,.5-.35*far)*step(nt.z,1.1);
+    if(uVar==0) fall=clamp((uTc-(.05+nt.z*.5+h.z*.25))/.35,0.,1.)*step(h.y,.28)*step(nt.z,.5);
     if(uVar==1) fall=clamp((uTc-(.1+nt.z*1.3+h.z*.45))/1.1,0.,1.)*step(h.y,.85)*step(nt.z,1.3);
     float inset=fall*nt.z*.075;                    // the shard shrinks with its straight edges
     hole=max(pre,fall>0.?step(nt.x,inset):0.);
@@ -406,6 +523,12 @@ void main(){
     col+=(vec3(1.,.12,.06)*glow*.7+vec3(1.,.75,.6)*crack*1.6+vec3(1.,.4,.3)*fine*.5)*pulse;
   }
   col+=vec3(2.5,2.,1.8)*heat*crack*1.5*uAtt;
+  if(uVar==0){
+    vec4 fs=fissures(d)*(1.-hole);
+    vec3 lc=mix(vec3(1.,.2,.08),vec3(3.,2.2,1.7),fs.z);
+    col+=lc*(fs.x*1.8+fs.y*.9)*(.75+.25*uBeat+uFlash)*uAtt+vec3(4.,3.,2.4)*fs.w*2.5;
+    col+=vec3(1.,.35,.25)*uEv*.12;
+  }
   col+=vec3(1.,.4,.3)*exp(-abs(ang-uShock)*35.)*uShockK*2.;
 
   // ── C3: the rift across the sky ──
@@ -541,7 +664,7 @@ function prog(vs, fs, name) {
   const locs = {};
   return { p, loc: k => (k in locs ? locs[k] : (locs[k] = gl.getUniformLocation(p, k))) };
 }
-const INTS = new Set(['uVar', 'uTex', 'uBloom', 'uHgt', 'uRays']);
+const INTS = new Set(['uVar', 'uTex', 'uBloom', 'uHgt', 'uRays', 'uSeg', 'uChk', 'uNChk']);
 function setU(pr, o) {
   gl.useProgram(pr.p);
   for (const k in o) {
@@ -636,6 +759,15 @@ const NPART = 500, partVAO = gl.createVertexArray(); gl.bindVertexArray(partVAO)
   gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
   const l = gl.getAttribLocation(P.part.p, 'aSeed'); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, 4, gl.FLOAT, false, 0, 0); }
 const fullVAO = gl.createVertexArray();
+// C1's fissures as two float textures on units 3 and 4 (nothing else uses those units)
+function dataTex(unit, arr) {
+  const t = gl.createTexture(); gl.activeTexture(gl.TEXTURE0 + unit); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, arr.length / 4, 1, 0, gl.RGBA, gl.FLOAT, arr);
+  for (const k of [gl.TEXTURE_MIN_FILTER, gl.TEXTURE_MAG_FILTER]) gl.texParameteri(gl.TEXTURE_2D, k, gl.NEAREST);
+  gl.activeTexture(gl.TEXTURE0); return t;
+}
+dataTex(3, FIS.seg); dataTex(4, FIS.chk);
+const NCHK = FIS.chk.length / 8;
 const CAM = [.5, hmap[HI(0, 0)] + 1.62, .5];
 
 // render targets
@@ -715,7 +847,7 @@ function render(dt) {
   gl.bindVertexArray(fullVAO);
   setU(P.sky, { uRes: [W, H], uF: F, uR: R, uU: U, uTan: tf, uAsp: asp, uT: time, uP: S.p, uVar: ver, uMoon: S.moon, uSun: S.sun, uHor: S.hor, uZen: S.zen,
     uFog: S.fog, uSunset: S.sunset, uBeat: S.beat, uOpen: Math.max(S.open, 0), uSeam: S.seam, uPupil: pupil, uGaze: gaze, uFlash: S.flash, uShock: S.shock, uShockK: S.shockK,
-    uMoonRad: S.moonRad, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uTc: S.u, uMem: S.mem, uBurst: S.burst, uRift: S.rift, uAtt: S.att });
+    uMoonRad: S.moonRad, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uTc: S.u, uMem: S.mem, uBurst: S.burst, uRift: S.rift, uAtt: S.att, uSeg: 3, uChk: 4, uNChk: NCHK, uEv: S.ev });
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.enable(gl.DEPTH_TEST); gl.bindVertexArray(worldVAO);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, hgtTex);
@@ -766,6 +898,12 @@ function crackSound() {
   const o = AC.createOscillator(), og = AC.createGain(); o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(24, t + 1.8);
   og.gain.setValueAtTime(1.2, t); og.gain.exponentialRampToValueAtTime(.0001, t + 2.2); o.connect(og); og.connect(master); o.start(t); o.stop(t + 2.3);
 }
+function crackle(k) {
+  const t = AC.currentTime, len = Math.floor(AC.sampleRate * .5), buf = AC.createBuffer(1, len, AC.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) { const x = i / len; d[i] = (Math.random() * 2 - 1) * Math.exp(-x * 9) * (Math.random() < .08 ? 1 : .25); }
+  const s = AC.createBufferSource(); s.buffer = buf; const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1400;
+  const g = AC.createGain(); g.gain.value = .5 + k; s.connect(hp); hp.connect(g); g.connect(master); s.start(t);
+}
 function audioFrame(S) {
   if (!AC) return;
   const on = sndOn && playing, t = AC.currentTime;
@@ -775,6 +913,7 @@ function audioFrame(S) {
   if (S.beatN !== lastBeat && S.beatN > 0) thump(.35 + .5 * S.p);
   lastBeat = S.beatN;
   if (prevTime < TC && time >= TC && time - prevTime < .5) crackSound();
+  if (ver === 0 && time - prevTime < .5) for (const [te, k] of FIS.events) if (prevTime < te && time >= te) crackle(k);
 }
 
 // ───────────────────────── UI ─────────────────────────
