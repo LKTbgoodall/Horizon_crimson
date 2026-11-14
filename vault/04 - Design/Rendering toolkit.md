@@ -11,7 +11,7 @@ How the looks of [[Events]] can be made on Horizon `9f42064` (read in the source
 
 | Tool | What for | Status |
 |---|---|---|
-| `Hooks::render` → `RenderHooks::world_drawn` | our own wgpu passes after the world: glow / bloom, shock waves, sky cracks, beams, trails | ✅ in the typed trait; draft in Cagebound's `fx.rs`, never compiled |
+| `Hooks::render` → `RenderHooks::world_drawn` | our own wgpu passes after the world: glow / bloom, shock waves, sky cracks, beams, trails | ✅ in the typed trait; `sky_pass.rs` type-checks against the pin (2026-11-14), never run; bloom draft in Cagebound's `fx.rs` |
 | `RenderHooks::render_needs` | keep the world's depth for our passes (depth 0 = sky) | ✅ |
 | `RenderHooks::world_warp` | WGSL that bends terrain and entity vertices: quakes, rift swirls. Its optional `world_fragment` paints every terrain pixel (a way to redden the world) | ✅ read, never tried |
 | Sky (moon, stars) | no hook at the pin: paint over the vanilla sky in `world_drawn` where depth is 0 | ❌ hook · ✅ overdraw read, never tried |

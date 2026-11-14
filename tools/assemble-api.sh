@@ -7,7 +7,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 dest="$1"
 core="$root/crates/crimson-core/src"
 glue="$root/mod/crimson_eclipse/api/src"
-handwritten="client.rs glue.rs server.rs"
+handwritten="client.rs glue.rs server.rs sky_pass.rs"
 mkdir -p "$dest"
 for f in "$core"/*.rs; do
   name="$(basename "$f")"

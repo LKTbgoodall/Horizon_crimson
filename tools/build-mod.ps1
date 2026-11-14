@@ -41,7 +41,7 @@ $ModId = "crimson_eclipse"
 $Root = Split-Path -Parent $PSScriptRoot
 $Bundle = Join-Path $Root "mod\$ModId"
 $Core = Join-Path $Root "crates\crimson-core\src"
-$Handwritten = @("client.rs", "glue.rs", "server.rs")
+$Handwritten = @("client.rs", "glue.rs", "server.rs", "sky_pass.rs")
 $Content = Join-Path $Root "mod\content"
 # The version is the bundle manifest's, so the two never disagree.
 $Version = (Select-String -Path (Join-Path $Bundle "horizon-mixin.toml") -Pattern '^version = "([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value

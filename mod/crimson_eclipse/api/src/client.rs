@@ -1,6 +1,6 @@
 //! Client side: what the player sees. The numbers are `crate::rise`'s; this
 //! file only hands them to Horizon. The sky itself (moon, cracks, the eye) is
-//! a render pass still to come.
+//! `sky_pass.rs`; this file also tells it the time, as the render thread has no host.
 
 use crate::moon::time_of_day;
 use crate::night::{eclipse_seconds, presence};
@@ -16,7 +16,9 @@ fn now(shared: &Shared, host: &dyn Host, partial: f32) -> Option<(f32, Frame, f3
     if !shared.shows(day_time) {
         return None;
     }
-    let seconds = eclipse_seconds(day_time, partial.clamp(0.0, 1.0));
+    let partial = partial.clamp(0.0, 1.0);
+    shared.set_client_clock(day_time, partial);
+    let seconds = eclipse_seconds(day_time, partial);
     Some((seconds, frame(seconds), presence(time_of_day(day_time))))
 }
 
