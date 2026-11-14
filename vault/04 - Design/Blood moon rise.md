@@ -144,6 +144,8 @@ New preview `preview/sky-break.html` (only the break; 26 s loop, cracks from 0:0
 
 Checked with headless Chrome at 1280x720 (B1 at 0:09, 0:11, 0:15, 0:19, 0:20; B2 at 0:15.5, 0:19; B3 at 0:14.5, 0:14.7, 0:19): compiles, renders. **Not checked**: motion in real time, frame rate (many hashes per pixel). Waiting for Bastien's pick. The port will replace `fissures.rs`' polylines and pentagons and the WGSL `fissures` / `shard_break`; the moon's travel during the night (the preview keeps it still) and the dawn sealing are to redo on the new network.
 
+**Bastien picked B1 (first version)** → ported as 0.3.0, [[ADR-017 The sky is a thick shell]]. In the mod the timeline is the eclipse's: the front makes 16 jumps on heartbeats from 0:18 to 0:57 (the preview's 11 s become 39 s), early slabs fall 2 to 9 s after the front passed, the rest from 0:60.65, nearest first. The impact is where the moon is at 0:40. Dawn: slabs come back one by one with a gold seam.
+
 ## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.

@@ -1,7 +1,7 @@
 //! Server side: ticks the night with the overworld clock and runs the test
 //! command. The rules are `crate::night`'s; this file only talks to Horizon.
 
-use crate::fissures::{plan, seed_for_day, Plan};
+use crate::shell::{plan, seed_for_day, Plan};
 use crate::moon::{day_of, time_of_day};
 use crate::night::{Night, Phase};
 use horizon_client::mod_api::{
@@ -29,8 +29,8 @@ pub struct Shared {
     clock: Mutex<Option<(i64, f32, Instant)>>,
     /// The hour of the last client tick that asked for sounds, or [`NO_DAY`].
     sound_tick: AtomicI64,
-    /// Tonight's fissures and the day they were planned for.
-    fissures: Mutex<Option<(i64, Arc<Plan>)>>,
+    /// Tonight's break and the day it was planned for.
+    shell: Mutex<Option<(i64, Arc<Plan>)>>,
 }
 
 impl Default for Shared {
@@ -40,7 +40,7 @@ impl Default for Shared {
             showing: AtomicI64::new(NO_DAY),
             clock: Mutex::new(None),
             sound_tick: AtomicI64::new(NO_DAY),
-            fissures: Mutex::new(None),
+            shell: Mutex::new(None),
         }
     }
 }
@@ -73,10 +73,10 @@ impl Shared {
         (last != NO_DAY).then_some(last)
     }
 
-    /// The fissures of the blood moon of `day_time`'s day, planned once.
-    pub fn fissures(&self, day_time: i64) -> Arc<Plan> {
+    /// The break of the sky for the blood moon of `day_time`'s day, planned once.
+    pub fn shell(&self, day_time: i64) -> Arc<Plan> {
         let day = day_of(day_time);
-        let mut guard = self.fissures.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut guard = self.shell.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some((d, p)) = guard.as_ref() {
             if *d == day {
                 return Arc::clone(p);

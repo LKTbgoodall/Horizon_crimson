@@ -16,6 +16,32 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.3.0 (the break redone: the sky is a thick shell)
+Bastien on 0.2.5: the break did not look natural. He picked **B1 · Impact glass** in `preview/sky-break.html`
+(as first written). The fissure lines and the pentagon shards are gone (`fissures.rs` is replaced by `shell.rs`).
+- **One fracture network**: small facets grouped into slabs, radial around the impact (where the moon is two
+  thirds into the eclipse), small near it, huge far away. Cracks, loose slabs and holes all come from it.
+- **Cracks run as a front** from the impact, in 16 jumps on heartbeats from 0:18 into the eclipse, faster and
+  faster, further in some directions; hot for an instant, then a dark line with a red glint. Hairlines between
+  facets follow 3 s later. Each jump is heard and jolts the camera.
+- **A cracked slab sits askew**: the sky painted on it shifts and its tint changes.
+- **Slabs come loose and fall**: 1.3 s before, pale light leaks round the slab; then it falls on our side,
+  tumbling (its back is pale), its broken edge lit from behind, burning away. A few fall during the eclipse (two
+  sounds each), most just after the eye opens. The hole is exactly the slab's outline.
+- **The shell is thick**: under the upper edge of a hole its broken wall shows.
+- **The Spire**: the slab in front of it always falls just after the climax.
+- **Dawn**: the slabs come back one by one over 20 s, each seam glowing gold for a moment, then the cracks fade.
+- One storage buffer instead of three (`shell::Plan::floats`, 2360 floats).
+
+What to look at in game (`/crimson start`, then wait for the eclipse):
+1. From 0:18 of the eclipse: cracks leaving the moon in jumps, with a sound each; slabs visibly askew.
+2. A few slabs falling before the climax (light round them first), with the broken wall on the hole's upper edge.
+3. The climax: the white light pressing through all the cracks in the hush, then many slabs falling.
+4. The night: big holes onto the Pale Realm, the Spire on the left.
+5. The frame rate (the facet search runs on every sky pixel, four times on hole pixels) and `latest.log`.
+6. Dawn (`/time set 22700`): slabs coming back with a gold seam.
+Not seen in game yet: nothing of this has run on the GPU; only the WGSL is validated and the glue type-checked.
+
 ## New in 0.2.5
 - **Shards really break** (Bastien: they just appeared from nowhere). In three beats: 1.2 s before, a crack runs
   all around the piece, its tip racing along the outline, light leaking through (with a crack sound); then the

@@ -18,6 +18,7 @@ Back: [[00 - Home]]
   - [x] Bastien picks a climax candidate: **C1**, with real fissures fixed in the sky instead of the moon-centred web (2026-11-14)
   - [x] C1 reshaped with Bastien: real fissures opening onto the Pale Realm, far serpents, a black shadow walker, the Spire (2026-11-14, [[ADR-016 C1 rise and the Pale Realm]])
   - [x] Port to the mod, first step (0.2.0, 2026-11-14): fissure planner in `crimson-core` (`fissures.rs`, 7 tests) + two storage buffers, opening lenses, the Pale Realm (sky, black sun, shards, Spire, shadow, far serpents) in `sky_pass.rs`. Checked (fmt, clippy, tests, shader, glue), not seen in game
+  - [x] The break redone after 0.2.5 ("not natural"): `preview/sky-break.html`, Bastien picked **B1 · Impact glass** (first version); ported as 0.3.0 (`crimson-core::shell`, 11 tests; `sky_pass.rs`), [[ADR-017 The sky is a thick shell]]. Checked (fmt, clippy, tests, shader, glue), not seen in game (2026-11-14)
   - [ ] Port the rest: C1's eye (strands, third eyelid, lock-on), the god-ray pass, crack sounds and shake
   - [ ] Check whether a native mod can add a dimension (travel into the Pale Realm)
   - [x] Bastien picked **C · The Abyss** (2026-11-14)

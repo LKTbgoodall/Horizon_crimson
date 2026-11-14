@@ -1,23 +1,22 @@
 //! The sky pass (`RenderHooks::world_drawn`): one full-screen draw right after
 //! the world. Where the world's depth says "sky" it paints the blood moon's
 //! sky (the swelling moon and its spiral void, the corona, the spiral aurora,
-//! the eye) and, since ADR-016, C1's break: real fissures fixed in the sky
-//! that open onto the Pale Realm (its black sun, shards, the Spire, a black
-//! shadow walking, far serpents). On the land it grades the picture red.
-//! Darkness and the flash cover both.
+//! the eye) and the break: the sky is a thick shell, cut by one fracture
+//! network into slabs that crack, come loose and fall, leaving holes onto the
+//! Pale Realm (its black sun, shards, the Spire). On the land it grades the
+//! picture red. Darkness and the flash cover both.
 //!
-//! The numbers are `crate::rise`'s, `crate::sky`'s and `crate::fissures`'s;
+//! The numbers are `crate::rise`'s, `crate::sky`'s and `crate::shell`'s;
 //! this file uploads them and draws. The shader is `preview/blood-moon-rise.html`'s
-//! version C plus `preview/abyss-climax.html`'s C1 (W2, S1), in WGSL.
+//! version C, `preview/abyss-climax.html`'s Pale Realm (W2, S1) and
+//! `preview/sky-break.html`'s B1, in WGSL.
 
 use crate::eye::Eye;
-use crate::fissures::{
-    seal, seed_for_day, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, MAX_SHARDS, SEGMENT_FLOATS, SHARD_FLOATS,
-};
 use crate::moon::{day_of, time_of_day};
 use crate::night::{eclipse_seconds, presence};
 use crate::rise::frame;
 use crate::server::{Shared, TARGET};
+use crate::shell::{seal, seed_for_day, FLOATS};
 use crate::sky::{colors, lid, look, moon_direction, since_open, MOON_RADIUS};
 use horizon_client::mod_api::{wgpu, RenderHooks, RenderNeedsEvent, WorldDrawnEvent};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -63,10 +62,8 @@ struct Gpu {
     blank: wgpu::TextureView,
     /// The frame's copy, its size and its view.
     copy: Option<(wgpu::Texture, [u32; 2], wgpu::TextureView)>,
-    /// The fissures' segments and chunks (`crate::fissures`), and the seed of the plan they hold.
-    segments: wgpu::Buffer,
-    chunks: wgpu::Buffer,
-    shards: wgpu::Buffer,
+    /// Tonight's break (`crate::shell::Plan::floats`), and the seed of the plan it holds.
+    shell: wgpu::Buffer,
     uploaded: Option<u64>,
 }
 
@@ -92,9 +89,9 @@ impl RenderHooks for Sky {
         let presence = presence(tod);
         let colors = colors(&frame, presence);
         let moon = moon_direction(tod as f32 + partial);
-        // Tonight's fissures, planned once per night (shared with the sounds and the shake).
+        // Tonight's break, planned once per night (shared with the sounds and the shake).
         let seed = seed_for_day(day_of(day_time));
-        let fissures = Some(self.shared.fissures(day_time));
+        let shell = self.shared.shell(day_time);
 
         // The camera: where it looks, for the eye.
         let inverse = w.view_proj.inverse().to_cols_array();
@@ -131,20 +128,12 @@ impl RenderHooks for Sky {
         if can_copy {
             gpu.ensure_copy(w.device, w.color, w.size, w.color_format);
         }
-        let chunk_count = fissures.as_ref().map_or(0, |p| p.chunks.len());
-        let shard_count = fissures.as_ref().map_or(0, |p| p.shards.len());
-        if let Some(p) = &fissures {
-            if gpu.uploaded != Some(seed) {
-                let bytes = |f: Vec<f32>| -> Vec<u8> { f.iter().flat_map(|x| x.to_le_bytes()).collect() };
-                w.queue.write_buffer(&gpu.segments, 0, &bytes(p.segment_floats()));
-                w.queue.write_buffer(&gpu.chunks, 0, &bytes(p.chunk_floats()));
-                if !p.shards.is_empty() {
-                    w.queue.write_buffer(&gpu.shards, 0, &bytes(p.shard_floats()));
-                }
-                gpu.uploaded = Some(seed);
-            }
+        if gpu.uploaded != Some(seed) {
+            let bytes: Vec<u8> = shell.floats().iter().flat_map(|x| x.to_le_bytes()).collect();
+            w.queue.write_buffer(&gpu.shell, 0, &bytes);
+            gpu.uploaded = Some(seed);
         }
-        let crack_flash = fissures.as_ref().map_or(0.0, |p| p.flash(seconds));
+        let crack_flash = shell.flash(seconds);
 
         let mut u = Vec::with_capacity(UNIFORM_FLOATS);
         u.extend_from_slice(&inverse);
@@ -157,7 +146,7 @@ impl RenderHooks for Sky {
         ]);
         // The preview's clock started 14 seconds before the eclipse.
         u.extend_from_slice(&[seconds + 14.0, frame.progress, frame.beat, w.camera.y as f32]);
-        u.extend_from_slice(&[frame.void_radius, shard_count as f32, 0.0, frame.corona]);
+        u.extend_from_slice(&[frame.void_radius, 0.0, 0.0, frame.corona]);
         u.extend_from_slice(&[frame.blood, frame.stars_pull, frame.grade * presence, colors.weight]);
         u.extend_from_slice(&[
             1.0 - (1.0 - frame.dark) * presence,
@@ -180,9 +169,9 @@ impl RenderHooks for Sky {
         u.extend_from_slice(&[colors.horizon[0], colors.horizon[1], colors.horizon[2], 0.0]);
         u.extend_from_slice(&[colors.zenith[0], colors.zenith[1], colors.zenith[2], 0.0]);
         u.extend_from_slice(&[frame.fog_rgb[0], frame.fog_rgb[1], frame.fog_rgb[2], 0.0]);
-        // At dawn the lips close, then the lines fade.
+        // At dawn the slabs come back one by one, then the cracks fade.
         let (open, lines) = seal(seconds);
-        u.extend_from_slice(&[crack_flash, chunk_count as f32, presence * lines, open]);
+        u.extend_from_slice(&[crack_flash, 0.0, presence * lines, open]);
         debug_assert_eq!(u.len(), UNIFORM_FLOATS);
         let bytes: Vec<u8> = u.iter().flat_map(|f| f.to_le_bytes()).collect();
         w.queue.write_buffer(&gpu.uniform, 0, &bytes);
@@ -226,15 +215,7 @@ impl RenderHooks for Sky {
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
-                    resource: gpu.segments.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: gpu.chunks.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
-                    resource: gpu.shards.as_entire_binding(),
+                    resource: gpu.shell.as_entire_binding(),
                 },
             ],
         });
@@ -330,8 +311,6 @@ impl Gpu {
                     count: None,
                 },
                 storage_entry(3),
-                storage_entry(4),
-                storage_entry(5),
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -372,17 +351,12 @@ impl Gpu {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let storage = |label: &str, floats: usize| {
-            device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some(label),
-                size: (floats * 4) as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-                mapped_at_creation: false,
-            })
-        };
-        let segments = storage("Crimson Eclipse fissure segments", MAX_SEGMENTS * SEGMENT_FLOATS);
-        let chunks = storage("Crimson Eclipse fissure chunks", MAX_CHUNKS * CHUNK_FLOATS);
-        let shards = storage("Crimson Eclipse fallen shards", MAX_SHARDS * SHARD_FLOATS);
+        let shell = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Crimson Eclipse shell"),
+            size: (FLOATS * 4) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
         let blank = device
             .create_texture(&wgpu::TextureDescriptor {
                 label: Some("Crimson Eclipse blank"),
@@ -407,9 +381,7 @@ impl Gpu {
             uniform,
             blank,
             copy: None,
-            segments,
-            chunks,
-            shards,
+            shell,
             uploaded: None,
         }
     }
@@ -450,7 +422,7 @@ struct U {
     moon: vec4<f32>,    // xyz: direction of the moon, w: its radius in radians
     size: vec4<f32>,    // the frame's width and height, the depth's width and height
     a: vec4<f32>,       // time in seconds, eclipse progress, heartbeat pulse, the camera's height
-    b: vec4<f32>,       // void radius, the shards' count, (unused), corona
+    b: vec4<f32>,       // void radius, (unused), (unused), corona
     c: vec4<f32>,       // blood, stars pull, world grade, sky weight
     d: vec4<f32>,       // dark, flash, shock radius, shock strength
     e: vec4<f32>,       // lid seam, lid opening, pupil width, 1 with a frame copy
@@ -458,17 +430,15 @@ struct U {
     hor: vec4<f32>,
     zen: vec4<f32>,
     fog: vec4<f32>,     // the colour the land's fog goes to
-    g: vec4<f32>,       // the flicker of new cracks, the fissures' chunk count, how much of them shows, how open they are
+    g: vec4<f32>,       // the flicker of what just broke, (unused), how much of the cracks shows, how much of the holes is open
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var depth_tex: texture_depth_2d;
 @group(0) @binding(2) var scene_tex: texture_2d<f32>;
-// The fissures (crate::fissures): per segment three vec4 (a, ta), (b, tb), (along at a, along at b, born, opening);
-// per chunk two vec4 (cap centre, cos of its reach), (first segment, count, start time, width).
-@group(0) @binding(3) var<storage, read> fis_seg: array<vec4<f32>>;
-@group(0) @binding(4) var<storage, read> fis_chk: array<vec4<f32>>;
-// Shards (crate::fissures::Shard): six vec4 each, five corners (w: when it falls, then its size) and a cap.
-@group(0) @binding(5) var<storage, read> fis_shd: array<vec4<f32>>;
+// The shell (crate::shell::Plan::floats): [0] the impact and the facets' salt, [1..5) when each jump of the crack
+// front starts, [5..14) the front's factor per direction around the impact, then four vec4 per slab:
+// (centre in fracture space, when it falls, dawn order), (direction, size), (flight dice), (askew x y, tint, -).
+@group(0) @binding(3) var<storage, read> shell_buf: array<vec4<f32>>;
 
 struct V {
     @builtin(position) pos: vec4<f32>,
@@ -614,165 +584,6 @@ fn stars(d: vec3<f32>, ang: f32, a: f32) -> f32 {
         }
     }
     return mix(near, far, ss(0.5, 1.0, ang));
-}
-
-// The fissures at `d`, `s` seconds into the eclipse. The tip of each crack runs along its segments; then its
-// lips part into a lens (widest mid-crack), a little through the eclipse, wide at the climax. The whole crack is
-// one shape (the union of its segments), so its rim is clean. Only the chunks whose cap holds `d` are tested.
-struct Fis { core: f32, glow: f32, heat: f32, tip: f32, win: f32, lip: f32 };
-// Broken, not melted: the lips' width jumps from one random value to the next in straight lines (no
-// smoothing), so the edges are facets with corners, like broken glass.
-fn jag(x: f32, sd: f32) -> f32 {
-    let k = x * 22.0;
-    let i = floor(k);
-    let row = i32(sd * 13.0);
-    return 0.45 + 1.1 * mix(hi(vec2<i32>(i32(i), row)), hi(vec2<i32>(i32(i) + 1, row)), k - i);
-}
-fn fissures(d: vec3<f32>, s: f32) -> Fis {
-    let tc = s - 60.5;
-    var tip = 0.0;
-    var emin = 1.0;
-    var hmin = 0.0;
-    var wmin = 1.0;
-    let n = u32(u.g.y);
-    for (var c = 0u; c < n; c++) {
-        let k1 = fis_chk[c * 2u + 1u];
-        if (s < k1.z) { continue; }
-        let k0 = fis_chk[c * 2u];
-        if (dot(d, k0.xyz) < k0.w) { continue; }
-        let first = u32(k1.x);
-        let count = u32(k1.y);
-        for (var i = 0u; i < count; i++) {
-            let si = (first + i) * 3u;
-            let pa = fis_seg[si];
-            if (s < pa.w) { break; }
-            let pb = fis_seg[si + 1u];
-            let pc = fis_seg[si + 2u];
-            let f = clamp((s - pa.w) / max(pb.w - pa.w, 0.0001), 0.0, 1.0);
-            let b = mix(pa.xyz, pb.xyz, f);
-            let ab = b - pa.xyz;
-            let h = clamp(dot(d - pa.xyz, ab) / max(dot(ab, ab), 1e-10), 0.0, 1.0);
-            let dist = length(d - pa.xyz - ab * h);
-            let age = s - mix(pa.w, pb.w, h * f);
-            let sf = mix(pc.x, pc.y, h * f);
-            let op = pc.w * (0.22 * ss(pc.z, pc.z + 18.0, s) + 0.78 * ss(0.0, 1.4, tc))
-                * pow(max(sin(3.14159 * sf), 0.0), 0.7) * jag(sf, pc.z) * ss(0.0, 0.4, age) * u.g.w;
-            let e = dist - op;
-            if (e < emin) {
-                emin = e;
-                hmin = exp(-age * 0.9);
-                wmin = k1.w;
-            }
-            if (f < 1.0) { tip = max(tip, exp(-length(d - b) * 300.0)); }
-        }
-    }
-    let w = wmin * 0.0013;
-    var o: Fis;
-    o.core = ss(w, w * 0.3, abs(emin));
-    o.glow = exp(-max(emin, 0.0) / 0.0022) * min(wmin, 1.3);
-    o.heat = ss(w * 2.2, 0.0, abs(emin)) * hmin;
-    o.tip = tip;
-    o.win = ss(0.0008, -0.0008, emin);
-    o.lip = ss(0.006, 0.0, -emin) * step(emin, 0.0);
-    return o;
-}
-
-// A shard breaks out in three beats. First it cracks all around, the tip running along its outline and light
-// leaking through (1.2 s before it falls). Then the piece of sky itself falls away: down, turning, shrinking
-// toward the world behind, darkening, its edge lit from behind, while burning debris scatters. The hole is what
-// it leaves; only the outline of the union of holes burns, and it closes again at dawn. Each shard is a convex
-// pentagon, tested flat on the plane touching the sky at its centre.
-struct Brk { hole: f32, rim: f32, piece: f32, fall: f32, crack: f32, debris: f32, prim: f32 };
-fn shard_break(d: vec3<f32>, s: f32) -> Brk {
-    var o: Brk;
-    var emin = 1.0;
-    var fresh = 0.0;
-    let n = u32(u.b.y);
-    for (var k = 0u; k < n; k++) {
-        let base = k * 6u;
-        let cap = fis_shd[base + 5u];
-        if (dot(d, cap.xyz) < cap.w) { continue; }
-        let falls = fis_shd[base].w;
-        let age = s - falls;
-        if (age < -1.2) { continue; }
-        let size = fis_shd[base + 1u].w;
-        let c = cap.xyz;
-        var up = vec3<f32>(0.0, 1.0, 0.0);
-        if (abs(c.y) > 0.99) { up = vec3<f32>(0.0, 0.0, 1.0); }
-        let e1 = normalize(cross(up, c));
-        let e2 = cross(c, e1);
-        let pd3 = d / dot(d, c);
-        let p = vec2<f32>(dot(pd3, e1), dot(pd3, e2));
-        var v: array<vec2<f32>, 5>;
-        var ln: array<f32, 5>;
-        var g = vec2<f32>(0.0);
-        for (var i = 0u; i < 5u; i++) {
-            let va = fis_shd[base + i].xyz;
-            v[i] = vec2<f32>(dot(va, e1), dot(va, e2)) / dot(va, c);
-            g += v[i] * 0.2;
-        }
-        var per = 0.0;
-        for (var i = 0u; i < 5u; i++) {
-            ln[i] = length(v[(i + 1u) % 5u] - v[i]);
-            per += ln[i];
-        }
-        var sd = -1e9;
-        var pd = 1e9;
-        var pp = 0.0;
-        var acc = 0.0;
-        for (var i = 0u; i < 5u; i++) {
-            let a = v[i];
-            let e = v[(i + 1u) % 5u] - a;
-            sd = max(sd, dot(p - a, normalize(vec2<f32>(e.y, -e.x))));
-            let h = clamp(dot(p - a, e) / dot(e, e), 0.0, 1.0);
-            let dd = length(p - a - e * h);
-            if (dd < pd) {
-                pd = dd;
-                pp = (acc + h * ln[i]) / per;
-            }
-            acc += ln[i];
-        }
-        if (age < 0.0) {
-            // It cracks all around, its tip running, light leaking through.
-            let on = step(pp, clamp((age + 1.2) / 0.8, 0.0, 1.0));
-            o.crack = max(o.crack, (ss(0.0016, 0.0005, pd) * (1.0 + 1.5 * ss(-0.4, 0.0, age)) + exp(-pd / 0.004) * 0.6 * ss(-0.5, 0.0, age)) * on);
-            continue;
-        }
-        let edge = sd + (1.0 - u.g.w) * size * 1.2;
-        if (edge < emin) {
-            emin = edge;
-            fresh = exp(-age * 3.0);
-        }
-        if (age < 1.4) {
-            // The piece falls away, and debris scatters.
-            let kf = ss(0.0, 1.4, age);
-            let sc = 1.0 - 0.75 * kf;
-            let gone = 1.0 - ss(1.0, 1.4, age);
-            let q = rot((hk(i32(k) + 300) - 0.5) * 2.4 * age) * (p - g + vec2<f32>(0.0, 0.06 * age * age)) / sc + g;
-            var sq = -1e9;
-            for (var i = 0u; i < 5u; i++) {
-                let a = v[i];
-                let e = v[(i + 1u) % 5u] - a;
-                sq = max(sq, dot(q - a, normalize(vec2<f32>(e.y, -e.x))));
-            }
-            let m = ss(0.0008, -0.0008, sq * sc) * gone;
-            if (m > o.piece) {
-                o.piece = m;
-                o.fall = kf;
-            }
-            o.prim = max(o.prim, exp(-abs(sq * sc) / 0.0012) * gone);
-            for (var j = 0u; j < 7u; j++) {
-                let hj = i32(k * 7u + j);
-                let st = mix(v[j % 5u], v[(j + 1u) % 5u], 0.3 + 0.4 * hk(hj));
-                let pos = st + normalize(st - g) * (0.03 + 0.03 * hk(hj + 50)) * age - vec2<f32>(0.0, 0.07 * age * age);
-                let sz = 0.0045 * (1.0 - kf);
-                o.debris = max(o.debris, ss(sz, sz * 0.3, length(p - pos)) * (1.0 - ss(0.9, 1.4, age)));
-            }
-        }
-    }
-    o.hole = ss(0.0006, -0.0006, emin);
-    o.rim = exp(-abs(emin) / 0.0012) * (1.0 + 2.5 * fresh);
-    return o;
 }
 
 fn sd_box(p: vec2<f32>, b: vec2<f32>) -> f32 {
@@ -952,6 +763,224 @@ fn other_side(d: vec3<f32>, flash: vec3<f32>) -> vec3<f32> {
     return c;
 }
 
+// ---- The shell (crate::shell; B1 "Impact glass" of preview/sky-break.html) ----
+// The sky is a thick shell cut by one fracture network: facets (a one-pass Voronoi on whole cells, log-polar
+// around the impact) grouped into slabs (the nearest slab centre of the plan's table). The plan says when the
+// crack front reaches a point and when a slab falls; everything drawn follows from the facet and the slab of the
+// pixel, so cracks, loose slabs and holes are one system.
+const SH_A = 5.7295780;
+const SH_FACET = vec2<f32>(0.625, 1.0);
+const SH_SLAB = vec2<f32>(3.2, 3.0);
+const SH_STEPS = 1u;
+const SH_SPOKES = 5u;
+const SH_SLABS = 14u;
+var<private> sh_c: vec3<f32>;
+var<private> sh_e1: vec3<f32>;
+var<private> sh_e2: vec3<f32>;
+var<private> sh_salt: i32;
+fn sh_setup() {
+    let h = shell_buf[0];
+    sh_c = h.xyz;
+    sh_e1 = normalize(cross(vec3<f32>(0.0, 1.0, 0.0), sh_c));
+    sh_e2 = cross(sh_c, sh_e1);
+    sh_salt = i32(h.w);
+}
+// A direction as a point around the impact (radians), then in fracture space.
+fn sh_p(d: vec3<f32>) -> vec2<f32> {
+    let ang = acos(clamp(dot(d, sh_c), -1.0, 1.0));
+    let q = vec2<f32>(dot(d, sh_e1), dot(d, sh_e2));
+    return q / max(length(q), 0.000001) * ang;
+}
+fn sh_w(p: vec2<f32>) -> vec2<f32> {
+    return vec2<f32>(log(max(length(p), 0.02)) * SH_A, atan2(p.y, p.x) * SH_A);
+}
+fn sh_wrap(y: i32, n: i32) -> i32 { return ((y % n) + n) % n; }
+// When the crack front reaches p: it jumps on heartbeats, further in some directions.
+fn sh_crack(p: vec2<f32>) -> f32 {
+    let x = fract(atan2(p.y, p.x) / 6.2831853 + 1.0) * 36.0;
+    let i = min(u32(x), 35u);
+    let j = (i + 1u) % 36u;
+    let spoke = mix(shell_buf[SH_SPOKES + i / 4u][i % 4u], shell_buf[SH_SPOKES + j / 4u][j % 4u], x - f32(i));
+    let re = length(p) * spoke / 0.15;
+    let k = floor(re);
+    if (k >= 16.0) { return 60.5; }
+    let ki = u32(k);
+    return min(shell_buf[SH_STEPS + ki / 4u][ki % 4u] + 0.14 * (re - k), 60.5);
+}
+// The index of the slab of ring cx and row cy, or -1 outside the table.
+fn sh_slab(cx: i32, cy: i32) -> i32 {
+    let ring = cx + 8;
+    if (ring < 0 || ring >= 12) { return -1; }
+    return ring * 12 + sh_wrap(cy, 12);
+}
+// When slab idx falls (never, for one that stays or that dawn has put back).
+fn sh_falls(idx: i32) -> f32 {
+    if (idx < 0) { return 1e9; }
+    let e = shell_buf[SH_SLABS + u32(idx) * 4u];
+    if (e.w >= u.g.w) { return 1e9; }
+    return e.z;
+}
+// A slab dawn has just put back: its seam glows gold for a moment.
+fn sh_gold(idx: i32) -> f32 {
+    if (idx < 0) { return 0.0; }
+    let e = shell_buf[SH_SLABS + u32(idx) * 4u];
+    if (e.z > 1e8 || e.w < u.g.w) { return 0.0; }
+    return 1.0 - ss(0.0, 0.1, e.w - u.g.w);
+}
+// The slab a facet belongs to: the nearest slab centre to the facet's own centre.
+fn sh_group(ctr: vec2<f32>) -> i32 {
+    let n = vec2<i32>(floor(ctr / SH_SLAB));
+    var best = 1e9;
+    var r = -1;
+    for (var j = -1; j <= 1; j++) {
+        for (var i = -1; i <= 1; i++) {
+            let idx = sh_slab(n.x + i, n.y + j);
+            if (idx < 0) { continue; }
+            var pt = shell_buf[SH_SLABS + u32(idx) * 4u].xy;
+            pt.y += 36.0 * round((ctr.y - pt.y) / 36.0);
+            let dd = dot(pt - ctr, pt - ctr);
+            if (dd < best) {
+                best = dd;
+                r = idx;
+            }
+        }
+    }
+    return r;
+}
+// The shell at d: its facet, its slab, the slab across the nearest facet edge, how far that edge is (radians).
+struct Shell { id: vec2<i32>, grp: i32, grp2: i32, ed: f32, w: vec2<f32>, nrm: vec2<f32> };
+fn shell_at(d: vec3<f32>) -> Shell {
+    var o: Shell;
+    let p = sh_p(d);
+    let w = sh_w(p);
+    let n = vec2<i32>(floor(w * SH_FACET));
+    var d1 = 1e9;
+    var d2 = 1e9;
+    var ctr = vec2<f32>(0.0);
+    var ctr2 = vec2<f32>(1.0, 0.0);
+    var id = vec2<i32>(0);
+    for (var j = -2; j <= 2; j++) {
+        for (var i = -2; i <= 2; i++) {
+            let c = n + vec2<i32>(i, j);
+            let cw = vec2<i32>(c.x, sh_wrap(c.y, 36));
+            let pt = (vec2<f32>(c) + 0.5 + (hi2(vec2<i32>(cw.x + sh_salt, cw.y)) - 0.5) * 0.85) / SH_FACET;
+            let dd = dot(pt - w, pt - w);
+            if (dd < d1) {
+                d2 = d1;
+                ctr2 = ctr;
+                d1 = dd;
+                id = cw;
+                ctr = pt;
+            } else if (dd < d2) {
+                d2 = dd;
+                ctr2 = pt;
+            }
+        }
+    }
+    o.id = id;
+    o.w = w;
+    o.nrm = normalize(ctr2 - ctr);
+    o.ed = max(dot(0.5 * (ctr + ctr2) - w, o.nrm), 0.0) * max(length(p), 0.02) / SH_A;
+    o.grp = sh_group(ctr);
+    o.grp2 = sh_group(ctr2);
+    return o;
+}
+
+// Our own sky along d, before anything breaks: the gradient, the stars, the aurora.
+fn base_sky(d: vec3<f32>) -> vec3<f32> {
+    let moon = u.moon.xyz;
+    let mr = normalize(cross(moon, vec3<f32>(0.0, 1.0, 0.0)));
+    let mu = cross(mr, moon);
+    let ang = acos(clamp(dot(d, moon), -1.0, 1.0));
+    let qa = vec2<f32>(dot(d, mr), dot(d, mu)) + 0.000001;
+    let a = atan2(qa.y, qa.x);
+    var col = mix(u.hor.rgb, u.zen.rgb, pow(ss(-0.02, 0.75, d.y), 0.6));
+    col += vec3<f32>(1.0, 0.95, 0.9) * stars(d, ang, a);
+    let au = aurora(ang, a);
+    return col * (1.0 - au.a) + au.rgb;
+}
+// A piece of the shell. Once cracked it sits a little askew: the sky painted on it is shifted, its tint changes,
+// some slabs catch the moon. A crack between two slabs is a dark line with a red glint on one side, hot for an
+// instant when the front passes; inside a slab, hairlines between facets come a little later.
+fn shard_col(d: vec3<f32>, sh: Shell, crk: f32, crk_min: f32, heat: f32) -> vec3<f32> {
+    var roll = vec4<f32>(0.5, 0.5, 0.5, 0.0);
+    if (sh.grp >= 0) { roll = shell_buf[SH_SLABS + u32(sh.grp) * 4u + 3u]; }
+    var c = base_sky(normalize(d + (sh_e1 * (roll.x - 0.5) + sh_e2 * (roll.y - 0.5)) * 0.035 * crk));
+    c *= 1.0 + ((roll.z - 0.5) * 0.55 + (hi(sh.id + vec2<i32>(8, 1)) - 0.5) * 0.16 * crk_min) * crk;
+    c += vec3<f32>(0.22, 0.03, 0.02) * ss(0.6, 1.0, fract(roll.z * 7.31 + roll.x)) * crk;
+    let wd = 0.0016;
+    if (sh.grp != sh.grp2) {
+        let line = ss(wd, wd * 0.4, sh.ed);
+        c = mix(c, c * 0.06, line * crk);
+        c += vec3<f32>(0.9, 0.25, 0.15) * ss(wd * 3.2, wd, sh.ed) * (1.0 - line) * (0.12 + max(0.0, dot(sh.nrm, vec2<f32>(0.6, 0.8)))) * 0.55 * crk;
+        c += vec3<f32>(3.0, 1.5, 0.7) * ss(wd * 2.5, 0.0, sh.ed) * heat;
+    } else {
+        c = mix(c, c * 0.3, ss(wd * 0.6, wd * 0.2, sh.ed) * crk_min);
+        c += vec3<f32>(0.35, 0.07, 0.04) * ss(wd * 0.7, 0.0, sh.ed) * crk_min * 0.5;
+        c += vec3<f32>(2.0, 0.9, 0.4) * ss(wd * 1.2, 0.0, sh.ed) * heat * crk_min * 0.5;
+    }
+    return c;
+}
+// Loose slabs falling on our side. The pixel is carried back to where the slab sat and tested there, so a
+// falling slab is the very piece that left the hole. It tumbles (its back is pale, the other world's side),
+// its broken edge is lit from behind, and it burns away as it falls.
+fn pieces(d: vec3<f32>, wpix: vec2<f32>, s: f32) -> vec4<f32> {
+    let n = vec2<i32>(floor(wpix / SH_SLAB));
+    var res = vec4<f32>(0.0);
+    for (var j = -2; j <= 2; j++) {
+        for (var i = -2; i <= 2; i++) {
+            let idx = sh_slab(n.x + i, n.y + j);
+            if (idx < 0) { continue; }
+            let base = SH_SLABS + u32(idx) * 4u;
+            let e0 = shell_buf[base];
+            let age = s - e0.z;
+            if (age <= 0.0 || age >= 1.5 || e0.w >= u.g.w) { continue; }
+            let k = age / 1.5;
+            let e1 = shell_buf[base + 1u];
+            let c = e1.xyz;
+            let dc = dot(d, c);
+            if (dc < 0.2) { continue; }
+            var up = vec3<f32>(0.0, 1.0, 0.0);
+            if (abs(c.y) > 0.999) { up = vec3<f32>(0.0, 0.0, 1.0); }
+            let t1 = normalize(cross(up, c));
+            let t2 = cross(c, t1);
+            let x = vec2<f32>(dot(d, t1), dot(d, t2)) / dc;
+            let r4 = shell_buf[base + 2u];
+            let delta = e1.w * vec2<f32>((r4.x - 0.5) * 0.8 * age, -(0.3 * age + 1.1 * age * age));
+            let scl = 1.0 + 0.25 * k;
+            let tum = (1.5 + 2.5 * r4.y) * age;
+            var y = rot(-(r4.z - 0.5) * 1.6 * age) * ((x - delta) / scl);
+            let ax = 6.2831853 * r4.w;
+            let ct = cos(tum);
+            y = rot(-ax) * y;
+            y.x = y.x / max(abs(ct), 0.07);
+            if (ct < 0.0) { y.x = -y.x; }
+            y = rot(ax) * y;
+            let dr = normalize(c + t1 * y.x + t2 * y.y);
+            let sr = shell_at(dr);
+            if (sr.grp != idx) { continue; }
+            var e = 1.0;
+            if (sr.grp2 != idx) { e = sr.ed * scl; }
+            let nuv = vec2<f32>(atan2(dr.z, dr.x), asin(clamp(dr.y, -1.0, 1.0))) * 8.0;
+            let er = vnoise(nuv * 2.5 + e0.w * 10.0);
+            let th = 1.15 - 1.3 * ss(0.45, 1.0, k);
+            if (er > th) { continue; }
+            var col: vec3<f32>;
+            if (ct > 0.0) {
+                col = shard_col(dr, sr, 1.0, 1.0, 0.0) * (0.5 + 0.5 * ct);
+                col += vec3<f32>(1.0, 0.35, 0.22) * pow(max(0.0, sin(tum * 1.3 + r4.x * 6.2831853)), 24.0) * 0.5;
+            } else {
+                col = PALE_FOG * (0.35 + 0.5 * abs(ct)) * (0.75 + 0.4 * fbm(nuv * 3.0));
+                col = mix(col, vec3<f32>(0.25, 0.03, 0.03), ss(0.55, 0.7, fbm(nuv * 6.0 + 4.0)) * 0.6);
+            }
+            col = mix(col, PALE_FOG * 1.15, exp(-e / 0.0035) * 0.85);
+            col += vec3<f32>(3.0, 1.1, 0.3) * ss(th - 0.1, th, er);
+            res = vec4<f32>(col, 1.0);
+        }
+    }
+    return res;
+}
+
 // The eye inside the lid: a reptile iris holding a nebula, a void for a pupil.
 fn eye(e: vec2<f32>, lid: f32, dy: f32) -> vec3<f32> {
     let ri = 0.47;
@@ -1038,54 +1067,89 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     let a = atan2(q.y, q.x);
     var weight = u.c.w;
 
-    var col = mix(u.hor.rgb, u.zen.rgb, pow(ss(-0.02, 0.75, d.y), 0.6));
-    col += vec3<f32>(1.0, 0.95, 0.9) * stars(d, ang, a);
-    let au = aurora(ang, a);
-    col = col * (1.0 - au.a) + au.rgb;
-    // The fissures, and the Pale Realm through them.
+    // The shell: cracked, loose, fallen; the Pale Realm through the holes.
     let s = t - 14.0;
     let tc = s - 60.5;
-    let present = u.g.z;
-    let fs = fissures(d, s);
-    let br = shard_break(d, s);
-    // The hole shows only where the falling piece no longer covers it.
-    let hole_open = br.hole * (1.0 - br.piece);
-    let win = max(fs.win, hole_open) * present;
-    let flash = fog_flash();
-    if (win > 0.0) {
-        col = mix(col, other_side(d, flash) * (1.0 - 0.55 * fs.lip * (1.0 - br.hole)), win);
-        weight = max(weight, win);
+    let lines = u.g.z;
+    var col: vec3<f32>;
+    var open_px = 0.0;
+    var pc = vec4<f32>(0.0);
+    sh_setup();
+    if (lines > 0.0 && s > shell_buf[SH_STEPS].x - 0.1 && d.y > -0.12) {
+        let p = sh_p(d);
+        let sh = shell_at(d);
+        let age_a = s - sh_falls(sh.grp);
+        let age_b = s - sh_falls(sh.grp2);
+        let tk = sh_crack(p);
+        let crk = ss(0.0, 0.05, s - tk) * lines;
+        let crk_min = max(ss(0.0, 0.3, s - tk - 3.0), step(60.5, s)) * lines;
+        var heat = 0.0;
+        if (s > tk) { heat = exp(-(s - tk) * 4.0) * lines; }
+        let major = sh.grp != sh.grp2;
+        // The light of the other side presses through every crack in the hush, and bursts at the climax.
+        var press = exp(-max(tc, 0.0) * 1.3);
+        if (tc < 0.0) { press = ss(-2.5, 0.0, tc) * (0.55 + 0.45 * sin(t * 14.0)); }
+        let flash = fog_flash();
+        if (age_a <= 0.0) {
+            col = shard_col(d, sh, crk, crk_min, heat);
+            if (major) {
+                // A slab comes loose: light leaks round it, wider and wider.
+                var pre = ss(-1.3, 0.0, age_a);
+                if (age_b <= 0.0) { pre = max(pre, ss(-1.3, 0.0, age_b)); }
+                let lw = 0.0016 * (1.0 + 3.5 * pre);
+                col += PALE_FOG * (1.4 * ss(lw, lw * 0.3, sh.ed) * pre + 0.45 * exp(-sh.ed / 0.006) * pre * pre);
+                col += PALE_FOG * press * crk * (ss(0.0035, 0.0, sh.ed) + 0.3 * exp(-sh.ed / 0.008));
+                // A flash behind the sky leaks through the cracks near it.
+                let duv = vec2<f32>(atan2(d.z, d.x) * 0.88, asin(clamp(d.y, -1.0, 1.0)));
+                let leak = flash.z * exp(-length((duv - flash.xy) * vec2<f32>(1.0, 1.3)) / 0.35);
+                col += vec3<f32>(0.9, 0.95, 1.0) * leak * crk * ss(0.003, 0.0, sh.ed) * 1.5;
+                // The lip of a hole, and the dust of the break.
+                if (age_b > 0.0) {
+                    col = mix(col, PALE_FOG * 1.1, ss(0.004, 0.0005, sh.ed));
+                    col += PALE_FOG * exp(-age_b * 4.0) * exp(-sh.ed / 0.012) * 0.8;
+                }
+                // At dawn a slab is put back: its seam glows gold, then is only a crack again.
+                let gold = max(sh_gold(sh.grp), sh_gold(sh.grp2));
+                col += vec3<f32>(1.0, 0.75, 0.3) * gold * (ss(0.004, 0.0, sh.ed) + 0.4 * exp(-sh.ed / 0.01)) * 1.5;
+            }
+        } else {
+            // The shell is thick: under the upper edge of a hole its broken wall shows, dark on our side, pale
+            // on the far side.
+            var k = 0;
+            for (var i = 1; i <= 3; i++) {
+                let s2 = shell_at(normalize(d + vec3<f32>(0.0, 0.024 * f32(i) / 3.0, 0.0)));
+                if (s <= sh_falls(s2.grp)) {
+                    k = i;
+                    break;
+                }
+            }
+            if (k > 0) {
+                let kk = (f32(k) - 1.0) / 2.0;
+                col = mix(vec3<f32>(0.16, 0.012, 0.02), vec3<f32>(0.5, 0.1, 0.09), kk);
+                col = mix(col, PALE_FOG * 0.9, kk * kk * 0.75);
+                col *= 0.7 + 0.6 * vnoise(vec2<f32>(atan2(d.z, d.x) * 170.0, d.y * 30.0));
+            } else {
+                col = other_side(d, flash) + PALE_FOG * exp(-age_a * 4.0) * 0.25;
+                open_px = 1.0;
+            }
+        }
+        pc = pieces(d, sh.w, s);
+        weight = max(weight, max(open_px, pc.a));
+    } else {
+        col = base_sky(d);
     }
-    let hush = select(0.0, ss(58.3, 59.5, s), s < 60.5);
-    let att = 1.0 - 0.6 * hush + select(0.0, 0.5 * exp(-tc * 0.8), tc >= 0.0);
-    // Inside a hole there is only the other world: no crack line crosses it.
-    let clean = (1.0 - hole_open) * present;
-    let lc = mix(vec3<f32>(1.0, 0.25, 0.1), vec3<f32>(3.0, 2.2, 1.7), fs.heat);
-    col += (lc * (fs.core * 1.7 + fs.glow * 0.4 * (1.0 - fs.win)) * (0.75 + 0.25 * u.a.z + u.d.y) * att
-        + vec3<f32>(4.0, 3.0, 2.4) * fs.tip * 2.5) * clean;
-    col += vec3<f32>(1.0, 0.35, 0.25) * u.g.x * 0.12 * present;
-    // The broken edge of a hole burns, brighter just after the shard falls.
-    // The falling piece darkens as it goes; the broken edges burn; the crack running round a shard, the debris.
-    col *= 1.0 - 0.55 * br.fall * br.piece * present;
-    col += vec3<f32>(1.0, 0.42, 0.16) * (br.rim * (1.0 - br.piece) * 1.4 + br.prim * 1.2) * att * present;
-    col += vec3<f32>(1.0, 0.6, 0.3) * (br.crack * 1.8 + br.debris * 1.6) * att * present;
-    weight = max(weight, clamp(max(br.rim, max(br.crack, br.piece)), 0.0, 1.0) * present);
-    // Sealing at dawn: a golden seam runs along each crack as its lips meet.
-    col += vec3<f32>(1.0, 0.75, 0.3) * (fs.core * 2.0 + fs.glow * 0.5) * u.g.w * (1.0 - u.g.w) * 4.0 * clean;
-    // A flash behind the sky leaks through the cracks near it.
-    let duv = vec2<f32>(atan2(d.z, d.x) * 0.88, asin(clamp(d.y, -1.0, 1.0)));
-    let leak = flash.z * exp(-length((duv - flash.xy) * vec2<f32>(1.0, 1.3)) / 0.35);
-    col += vec3<f32>(0.9, 0.95, 1.0) * leak * (fs.core * 2.5 + fs.glow * 1.5) * clean;
-    weight = max(weight, max(fs.core, max(fs.glow * 0.6, fs.tip)) * clean);
+    col += vec3<f32>(1.0, 0.35, 0.25) * u.g.x * 0.12 * lines * (1.0 - open_px);
     col += vec3<f32>(1.0, 0.4, 0.3) * exp(-abs(ang - u.d.z) * 35.0) * u.d.w * 2.0;
     if (ang < 1.7) {
         let rr = max(r - 1.0, 0.0);
         let sw = a + 2.2 * log(max(r, 0.2)) - t * 0.45;
         // The corona is on our side of the shell: it does not cover the openings.
-        let glow = (exp(-rr * 2.0) * (pn(sw, rr * 1.2, 2.0) * 0.7 + 0.5 * pow(0.5 + 0.5 * sin(sw * 3.0), 3.0)) * 1.8 + exp(-rr * 7.0)) * u.b.w * (1.0 - 0.9 * win);
+        let glow = (exp(-rr * 2.0) * (pn(sw, rr * 1.2, 2.0) * 0.7 + 0.5 * pow(0.5 + 0.5 * sin(sw * 3.0), 3.0)) * 1.8 + exp(-rr * 7.0)) * u.b.w * (1.0 - 0.9 * open_px);
         col += vec3<f32>(1.0, 0.2, 0.04) * glow + vec3<f32>(1.0, 0.7, 0.3) * glow * glow * 0.5;
         weight = max(weight, clamp(glow, 0.0, 1.0));
     }
+    // A falling slab is on our side: in front of the corona.
+    col = mix(col, pc.rgb, pc.a);
     // Without bloom the bright parts would clip to white: compress them.
     col = vec3<f32>(1.0) - exp(-col * 1.2);
     // The sky sinks into the land's fog near the horizon and below it.
