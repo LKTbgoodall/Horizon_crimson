@@ -38,3 +38,13 @@ Bastien's goal: the player can go to the other world (the Pale Realm, seen throu
 | P6 | **The Tear** | a crimson gauntlet, hold and drag | the air rips like fabric and glass along the drag, burning edges, the Pale Realm behind it with its own light and wind; the player steps through |
 
 Technical question: can Horizon host a real custom dimension, and teleport into it? → [[Open questions]].
+
+### Bastien's verdict on P1-P6 (2026-11-14)
+All "mid, no real animation", except the ground fault (P2), which needs a huge animation with real blocks. Four fault candidates in `preview/the-fault.html` (real instanced blocks, every motion in the vertex shader, scrubbable timeline), all ending with the same dive into the fault, a turn-over and the Pale Realm:
+
+| # | Name | The opening |
+|---|---|---|
+| F1 | **The Strike** | a red bolt from the moon, a shock wave ripples the land, the fault races out both ways, the ground crumbles block by block with glowing edges, the lips keep breaking off |
+| F2 | **The Upheaval** | the ground swells along a line with spreading glowing cracks, then erupts; hundreds of blocks stay hanging over the chasm, turning slowly |
+| F3 | **The Tectonic Tear** | three jolts pull the two plates apart, the edges bend down, lava pours from the walls, crimson crystals grow out of the rock |
+| F4 | **The Maelstrom** | the top of the fault is torn into a spinning helix of blocks sucked down along the chasm into the light |

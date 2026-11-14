@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>The Fault</title>
+<!--
+  Preview of the crossing to the Pale Realm: a giant fault opens in the ground (vault/04 - Design/Events.md
+  § Crossing to the Pale Realm). Four candidates for the opening, same ending: the dive into the fault,
+  a turn-over, and the Pale Realm.
+  Real blocks: ~36k instanced cubes with 16x16 pixel faces; every block's motion is computed in the vertex
+  shader from the timeline, so the page scrubs. HDR + bloom. Self-contained, no dependency.
+  URL parameters: ?v=f1|f2|f3|f4  &t=<seconds>  &play=0  &ui=0
+-->
+<style>
+  :root { --red:#ff3b2f; --dim:#b9a7a5; --bg:rgba(12,4,5,.72); --line:rgba(255,90,70,.22); }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:#000; color:#f3e9e7; overflow:hidden;
+    font:14px/1.45 system-ui,"Segoe UI",Roboto,sans-serif; }
+  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:grab; }
+  .ui { transition:opacity .35s; }
+  body.hide .ui { opacity:0; pointer-events:none; }
+  #cap { position:fixed; left:18px; top:14px; max-width:min(600px,72vw); text-shadow:0 1px 6px #000,0 0 2px #000; pointer-events:none; }
+  #cap .v { font-size:22px; font-weight:700; letter-spacing:.02em; }
+  #cap .v b { color:var(--red); margin-right:.35em; }
+  #cap .tag { color:var(--dim); margin-top:2px; }
+  #cap .ph { margin-top:8px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#ffb4a8; }
+  #bar { position:fixed; left:0; right:0; bottom:0; padding:10px 16px 12px; background:linear-gradient(transparent,rgba(0,0,0,.82) 45%);
+    display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; }
+  button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:7px; padding:6px 11px; cursor:pointer; white-space:nowrap; }
+  button:hover { border-color:var(--red); }
+  button.on { background:#7d120d; border-color:var(--red); }
+  #play { width:42px; font-size:15px; }
+  #time { font-variant-numeric:tabular-nums; color:var(--dim); min-width:92px; }
+  #track { position:relative; flex:1 1 320px; height:34px; cursor:pointer; touch-action:none; }
+  #segs { position:absolute; left:0; right:0; top:0; height:14px; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
+  #segs span { position:absolute; top:0; overflow:hidden; white-space:nowrap; border-left:1px solid var(--line); padding-left:4px; }
+  #rail { position:absolute; left:0; right:0; top:19px; height:8px; border-radius:4px; background:rgba(255,255,255,.13); overflow:hidden; }
+  #fill { height:100%; width:0; background:linear-gradient(90deg,#5a0b08,var(--red)); }
+  #err { position:fixed; inset:0; display:none; place-items:center; padding:30px; text-align:center; color:#ffb4a8; }
+  #hint { color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<div id="cap" class="ui"><div class="v"><b id="vid">F1</b><span id="vname"></span></div><div class="tag" id="vtag"></div><div class="ph" id="vph"></div></div>
+<div id="bar" class="ui">
+  <button id="play">❚❚</button>
+  <span id="vbtns"></span>
+  <span id="time">0.0 s</span>
+  <div id="track"><div id="segs"></div><div id="rail"><div id="fill"></div></div></div>
+  <span id="hint">drag: look around · 1-4: variant · space: pause · H: hide UI</span>
+</div>
+<div id="err"></div>
+<script>
+'use strict';
+// ---------------------------------------------------------------- timeline and variants
+const TRIG = 2.5, TEND = 19.5, T_CRANE = 11.5, T_DIVE = 14, T_REALM = 16.6;
+const VARS = [
+  { id:'f1', name:'The Strike', tag:'A red bolt falls from the moon. The shock wave lifts the land, the fault races out both ways and the ground crumbles block by block into a glowing abyss. The lips keep breaking off long after.',
+    ph:[[0,'Night'],[2.5,'Bolt'],[2.9,'Shock wave'],[3.6,'The tear'],[6,'Crumbling'],[T_CRANE,'Over the fault'],[T_DIVE,'The jump'],[T_REALM,'Pale Realm']] },
+  { id:'f2', name:'The Upheaval', tag:'The ground swells along a line, glowing cracks spread, then it erupts: thousands of blocks are thrown into the air and stay hanging over the chasm, turning slowly, with glowing edges.',
+    ph:[[0,'Night'],[1.1,'Swelling'],[2.5,'Eruption'],[5,'Suspended'],[T_CRANE,'Over the fault'],[T_DIVE,'The jump'],[T_REALM,'Pale Realm']] },
+  { id:'f3', name:'The Tectonic Tear', tag:'Three jolts. Each one pulls the two plates further apart, the edges bend down into the gap, lava pours from the walls and crimson crystals grow out of the rock.',
+    ph:[[0,'Night'],[2.5,'Jolt 1'],[4.1,'Jolt 2'],[5.9,'Jolt 3'],[7.5,'Lava and crystals'],[T_CRANE,'Over the fault'],[T_DIVE,'The jump'],[T_REALM,'Pale Realm']] },
+  { id:'f4', name:'The Maelstrom', tag:'The fault opens into a vortex: the ground is torn up into a spinning helix of blocks, sucked down along the chasm into the light.',
+    ph:[[0,'Night'],[2.5,'The tear'],[3.5,'Vortex'],[7,'Maelstrom'],[T_CRANE,'Over the fault'],[T_DIVE,'The jump'],[T_REALM,'Pale Realm']] },
+];
+const Q = new URLSearchParams(location.search);
+let V = Math.max(0, VARS.findIndex(v => v.id === Q.get('v')));
+let time = Q.has('t') ? parseFloat(Q.get('t')) : 0;
+let playing = Q.get('play') !== '0';
+if (Q.get('ui') === '0') document.body.classList.add('hide');
+
+// ---------------------------------------------------------------- shared geometry of the fault (same formulas in GLSL)
+const fract = x => x - Math.floor(x);
+const cz = z => 2.4*Math.sin(z*.19+.3) + 1.1*Math.sin(z*.47+1.7) + .5*Math.sin(z*1.13+4.) + .6*(Math.abs(fract(z*.17)-.5)*4.-1.);
+const wz = z => 2.4 + .9*Math.sin(z*.27+2.1) + .4*Math.sin(z*.71);
+const tOpen = z => Math.abs(z) / 11;
+const spreadS = tl => 1.0*ss(0,.35,tl) + 1.0*ss(1.6,1.95,tl) + 1.4*ss(3.4,3.8,tl);
+function ss(a, b, x) { x = Math.min(1, Math.max(0, (x-a)/(b-a))); return x*x*(3-2*x); }
+function hash3(x, y, z) { let h = (Math.imul(x,374761393) + Math.imul(y,668265263) + Math.imul(z,1442695041)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function heightAt(x, z) {
+  const e = Math.min(1, Math.max(0, (31 - Math.max(Math.abs(x+.5), Math.abs(z+.5))) / 6));
+  const v = 1.4 + 1.2*Math.sin(x*.13+z*.07) + .8*Math.sin(z*.17-x*.05+2) + .4*Math.sin(x*.41+z*.33);
+  return Math.max(0, Math.min(3, Math.round(v*e)));
+}
+
+// ---------------------------------------------------------------- GL setup
+const cv = document.getElementById('cv');
+const gl = cv.getContext('webgl2', { antialias:false, alpha:false, preserveDrawingBuffer:true });
+function fail(msg) { const e = document.getElementById('err'); e.style.display = 'grid'; e.textContent = msg; throw new Error(msg); }
+if (!gl) fail('WebGL2 is not available in this browser.');
+const HDR = !!gl.getExtension('EXT_color_buffer_float');
+function shader(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail(gl.getShaderInfoLog(s) + '\n' + src.split('\n').map((l,i)=>(i+1)+': '+l).join('\n').slice(0,3000)); return s; }
+function program(vs, fs) { const p = gl.createProgram(); gl.attachShader(p, shader(gl.VERTEX_SHADER, vs)); gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs));
+  gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) fail(gl.getProgramInfoLog(p));
+  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
+  for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name); }
+  return { p, u }; }
+
+const COMMON = `
+float h2(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+float czf(float z){ return 2.4*sin(z*.19+.3)+1.1*sin(z*.47+1.7)+.5*sin(z*1.13+4.)+.6*(abs(fract(z*.17)-.5)*4.-1.); }
+`;
+
+// ---- blocks
+const BLOCK_VS = `#version 300 es
+precision highp float; precision highp int;
+layout(location=0) in vec3 aLocal; layout(location=1) in vec3 aN;
+layout(location=2) in vec3 aPos; layout(location=3) in vec3 aSize;
+layout(location=4) in vec4 aI0; layout(location=5) in vec4 aI1;
+uniform mat4 uVP; uniform float uT, uTrig; uniform int uV;
+out vec3 vW; out vec3 vN; out vec3 vNL; out vec3 vBase; out float vHeat;
+flat out float vTop; flat out float vType;
+mat3 rotA(vec3 a, float g){ a=normalize(a); float s=sin(g), c=cos(g), o=1.-c;
+  return mat3(o*a.x*a.x+c, o*a.x*a.y+a.z*s, o*a.z*a.x-a.y*s,
+              o*a.x*a.y-a.z*s, o*a.y*a.y+c, o*a.y*a.z+a.x*s,
+              o*a.z*a.x+a.y*s, o*a.y*a.z-a.x*s, o*a.z*a.z+c); }
+float spreadS(float tl){ return 1.0*smoothstep(0.,.35,tl)+1.0*smoothstep(1.6,1.95,tl)+1.4*smoothstep(3.4,3.8,tl); }
+// a block that lets go: small pop, gravity, tumbling, glowing edges
+void fall(float f, float rnd, float rnd2, float side, float pop, inout vec3 off, inout mat3 R, inout float heat, inout float sc){
+  if(f<=0.) return;
+  off.y += (pop+rnd2*4.)*f - 14.*f*f;
+  off.x += (rnd-.5)*2.2*f - side*.4*f;
+  off.z += (rnd2-.5)*1.6*f;
+  R = rotA(vec3(rnd-.5, rnd2-.5, .35), f*(2.+rnd*7.)) * R;
+  heat = max(heat, smoothstep(0.,.5,f));
+  if(f>2.3) sc=0.;
+}
+void main(){
+  float type=aI0.x, rnd=aI0.y, side=aI0.z, dE=aI0.w;
+  float tO=aI1.x, czv=aI1.y, depth=aI1.z, rnd2=aI1.w;
+  vec3 c = aPos + aSize*.5;
+  vec3 off=vec3(0.); mat3 R=mat3(1.); float sc=1., heat=0.;
+  float tl = uT - uTrig - tO;
+  bool inside = dE < 0.;
+  bool crystal = type>4.5 && type<5.5;
+  if(type>6.5){ /* ring and floor: static */ }
+  else if(uV==0){ // ---------------- F1 THE STRIKE
+    if(crystal) sc=0.;
+    float r=length(c.xz), wt=uT-uTrig-.15-r/16.;
+    off.y += 1.25*exp(-wt*wt*28.)*exp(-r/24.);                        // shock wave ripple (whole columns)
+    if(inside) fall(tl-.05-rnd*.45-depth*.035, rnd, rnd2, side, 2.5, off, R, heat, sc);
+    else if(dE<1.6 && depth<5.){
+      float e=smoothstep(0.,.6,tl)*(1.-dE/1.6);
+      off.y -= .35*e; R = rotA(vec3(0,0,1), -side*.14*e);
+      if(rnd<.32 && dE<1.) fall(tl-1.2-rnd2*7., rnd, rnd2, side, 1., off, R, heat, sc);
+    }
+  } else if(uV==1){ // ---------------- F2 THE UPHEAVAL
+    if(crystal) sc=0.;
+    float near = 1.-smoothstep(0.,4.,dE);
+    float sw = smoothstep(-1.4,0.,tl)*(1.-smoothstep(0.,.12,tl));
+    off.y += sw*1.5*near*(1.-depth*.02) + near*sw*.09*sin(uT*55.+c.z*3.);
+    heat = sw*near*.5*step(depth,.5);
+    if(inside){
+      if(depth<5. && rnd<.6){
+        float f = tl - rnd*.3 - depth*.05;
+        if(f>0.){
+          float H = 6. + rnd2*18. + (5.-depth)*1.5;
+          float e = 1.-exp(-f*2.3);
+          off.y += H*e + sin(uT*1.1+rnd*6.28)*.55*e;
+          off.x += (rnd-.5)*13.*e + side*1.5*e;
+          off.z += (rnd2-.5)*3.5*e;
+          R = rotA(vec3(rnd-.5, 1., rnd2-.5), f*(.25+rnd*.9) + e*rnd2*5.);
+          heat = (1.-smoothstep(0.,1.8,f))*.9 + .12;
+        }
+      } else fall(tl-.6-rnd*1.6-max(depth-5.,0.)*.06, rnd, rnd2, side, 1., off, R, heat, sc);
+    } else if(dE<1.5 && depth<5.){
+      float e=smoothstep(0.,.3,tl)*(1.-dE/1.5);
+      off.x += side*.45*e; off.y += .35*e; R = rotA(vec3(0,0,1), side*.22*e);
+    }
+  } else if(uV==2){ // ---------------- F3 THE TECTONIC TEAR
+    float s = spreadS(tl);
+    float fo = 1.-smoothstep(15.,24.,abs(c.x));
+    if(!inside || crystal){
+      float de=max(dE,0.);
+      off.x += side*s*.9*fo;
+      off.y -= exp(-de/4.5)*s*.55;
+      R = rotA(vec3(0,0,1), side*-.04*s*exp(-de/8.));
+      float jolt = exp(-max(tl,0.)*6.)+exp(-max(tl-1.6,0.)*6.)*step(1.6,tl)+exp(-max(tl-3.4,0.)*6.)*step(3.4,tl);
+      off.y += sin(uT*70.+c.z)*.05*jolt*step(0.,tl);
+      if(crystal){ float g=smoothstep(0.,1.4,tl-4.2-rnd*4.); sc=g; heat=1.; R = R*rotA(vec3(0,0,1), side*(.5+rnd*.6)); }
+      else if(rnd<.26 && dE<1.2 && depth<4.){
+        float jt = rnd2<.33 ? 0. : (rnd2<.66 ? 1.6 : 3.4);
+        fall(tl-jt-.05-rnd*.4, rnd, rnd2, side, .5, off, R, heat, sc);
+      }
+    } else {
+      float f = tl-.1-rnd*.5-depth*.03;
+      off.x += sin(uT*40.+rnd*20.)*.04*step(-.2,tl);
+      fall(f, rnd, rnd2, side, 0., off, R, heat, sc);
+    }
+  } else { // ---------------- F4 THE MAELSTROM
+    if(crystal) sc=0.;
+    bool sucked = (inside && depth<9.) || (dE<1.3 && depth<5. && rnd<.4);
+    float del = inside ? rnd*.6+depth*.04 : 1.2+rnd2*6.;
+    float f = tl - del;
+    if(sucked && f>0.){
+      vec2 ax = vec2(czv, -2.);
+      vec2 rel = c.xy - ax;
+      float r0 = length(rel), a0 = atan(rel.y, rel.x);
+      float lift = smoothstep(0.,.7,f);
+      float ang = a0 + side*(1.5*f + .22*f*f);
+      float rr = mix(r0, min(r0,6.), smoothstep(0.,1.2,f))*mix(1., .35, smoothstep(0.,9.,f)) + 1.4*lift;
+      vec2 np = ax + vec2(cos(ang)*rr*.55, sin(ang)*rr);
+      np.y -= .12*f*f;
+      off.xy += np - c.xy;
+      off.z += sin(f*1.3+rnd*6.)*.7;
+      R = rotA(vec3(0,0,1), ang-a0) * rotA(vec3(rnd,rnd2,.5), f*rnd*3.);
+      heat = .12 + .6*(1.-smoothstep(0.,2.,f));
+      sc = 1.-smoothstep(8.,11.,f);
+    } else if(inside && depth>=9.) fall(tl-.4-rnd*1.2-(depth-9.)*.05, rnd, rnd2, side, 0., off, R, heat, sc);
+    else if(!inside && dE<1.6 && depth<5.){
+      float e=smoothstep(0.,.6,tl)*(1.-dE/1.6);
+      off.y -= .3*e; R = rotA(vec3(0,0,1), -side*.12*e);
+    }
+  }
+  vec3 w = c + off + R*(aLocal*aSize*sc);
+  vW=w; vN=R*aN; vNL=aN; vBase=aPos+(aLocal+.5)*aSize; vTop=aPos.y+aSize.y; vType=type; vHeat=heat;
+  gl_Position = uVP*vec4(w,1.);
+  if(sc<.002) gl_Position=vec4(2.,2.,2.,1.);
+}`;
+const BLOCK_FS = `#version 300 es
+precision highp float; precision highp int;
+in vec3 vW; in vec3 vN; in vec3 vNL; in vec3 vBase; in float vHeat;
+flat in float vTop; flat in float vType;
+uniform float uT, uTrig; uniform int uV; uniform vec3 uCam;
+out vec4 o;
+${COMMON}
+float vor(vec2 p){ vec2 i=floor(p), f=fract(p); float d1=8., d2=8.;
+  for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++){ vec2 g=vec2(x,y); vec2 q=g+vec2(h2(i+g),h2(i+g+17.3))-f; float d=dot(q,q);
+    if(d<d1){d2=d1;d1=d;} else if(d<d2) d2=d; }
+  return sqrt(d2)-sqrt(d1); }
+void main(){
+  vec3 nl=vNL; vec2 uv;
+  if(abs(nl.y)>.5) uv=vBase.xz; else if(abs(nl.x)>.5) uv=vec2(vBase.z,vBase.y); else uv=vBase.xy;
+  vec2 px=floor(uv*16.);
+  float n=h2(px+nl.xz*91.7);
+  int t=int(vType+.5);
+  vec3 alb, emi=vec3(0.);
+  float rowTop=floor((vTop-vBase.y)*16.);
+  vec3 dirt=vec3(.30,.19,.12)*(.78+.42*n);
+  if(t==0||t==7){
+    vec3 grass=vec3(.09,.21,.05)*(.72+.5*n);
+    if(nl.y>.5) alb=grass; else if(nl.y<-.5) alb=dirt;
+    else alb = rowTop < 3.+floor(h2(vec2(px.x,7.))*2.6) ? grass : dirt;
+  } else if(t==1) alb=dirt;
+  else if(t==2||t==4){
+    alb=vec3(.40,.39,.40)*(.76+.38*n); if(h2(floor(px/3.)+5.)>.8) alb*=.78;
+    if(t==4 && h2(floor(px/2.)+3.)>.7){ alb=vec3(.5,.06,.07); emi=vec3(2.4,.2,.16)*(.6+.4*n); }
+  } else if(t==3){ alb=vec3(.19,.19,.22)*(.74+.36*n); if(mod(px.y,4.)<1.) alb*=.8; }
+  else if(t==5){ alb=vec3(.4,.03,.05); emi=vec3(3.4,.3,.34)*(.5+.7*h2(floor(px/4.)+1.)); }
+  else if(t==6){ float fl=sin(px.x*.7+uT*1.5)+sin(px.y*.9-uT*1.1); alb=vec3(.9,.3,.05); emi=vec3(4.,1.15,.15)*(.75+.2*fl+.2*n); }
+  else alb=vec3(.04,.025,.025);
+  vec3 N=normalize(vN);
+  vec3 L=normalize(vec3(.35,.6,.72));
+  float shade = abs(nl.y)>.5 ? (nl.y>0.?1.:.5) : (abs(nl.x)>.5?.78:.64);
+  vec3 col = alb*shade*(vec3(.075,.035,.04) + vec3(.48,.15,.13)*max(dot(N,L),0.));
+  // light rising from the abyss, along the fault
+  float tz = uT-uTrig-abs(vW.z)/11.;
+  float op = smoothstep(0.,2.5,tz);
+  vec3 Lp = vec3(czf(vW.z), -10., vW.z), tl = Lp-vW; float dl=length(tl);
+  vec3 upc = mix(vec3(1.,.22,.15), vec3(1.,.72,.62), smoothstep(-2.,-18.,vW.y));
+  col += alb*upc*op*max(dot(N,tl/dl),0.)*90./(10.+dl*dl);
+  // hot edges on blocks that move
+  vec2 fu=fract(uv); float ed=min(min(fu.x,1.-fu.x),min(fu.y,1.-fu.y));
+  emi += vec3(2.2,.3,.16)*vHeat*(smoothstep(.07,.0,ed)+.05);
+  // surface cracks: the seam races ahead, branches spread from it
+  if(nl.y>.5 && t==0){
+    vec2 q=(floor(vBase.xz*16.)+.5)/16.;
+    float dm=abs(q.x-czf(q.y));
+    float tq=uT-uTrig-abs(q.y)/11.;
+    float cool=.35+.65*exp(-max(tq-2.,0.)*.3);
+    float seam=step(dm,.13)*smoothstep(-.6,-.15,tq);
+    float e=vor(q*.42+3.1);
+    float reach=(uV==2?9.:7.)*smoothstep(-.3,2.8,tq);
+    float br=smoothstep(.08,.025,e)*step(dm,reach)*step(-.3,tq)*(1.-dm/(reach+.001));
+    emi += vec3(3.,.32,.2)*max(seam,br)*cool;
+  }
+  col += emi;
+  float dist=length(vW-uCam);
+  vec3 fogc=vec3(.10,.022,.028);
+  col = mix(col, fogc, 1.-exp(-dist*.0065));
+  float deep=smoothstep(-7.,-24.,vW.y);
+  col = mix(col, upc*op*.9+fogc*(1.-op), deep*.7);
+  o=vec4(col,1.);
+}`;
+
+// ---- sky / abyss / Pale Realm, drawn first, full screen
+const FS_VS = `#version 300 es
+out vec2 vUv; void main(){ vec2 p=vec2((gl_VertexID<<1)&2, gl_VertexID&2); vUv=p; gl_Position=vec4(p*2.-1.,0.,1.); }`;
+const BG_FS = `#version 300 es
+precision highp float; precision highp int;
+in vec2 vUv; uniform mat4 uInvVP; uniform vec3 uCam; uniform float uT, uGlow, uRealm; uniform int uV;
+out vec4 o;
+${COMMON}
+vec3 realm(vec3 d){
+  float y=d.y, az=atan(d.x,d.z);
+  vec3 sky=mix(vec3(.88,.84,.80), vec3(.52,.53,.60), smoothstep(0.,.8,y));
+  vec3 S=normalize(vec3(.42,.30,1.)); float sd=acos(clamp(dot(d,S),-1.,1.));
+  sky += vec3(.6,.36,.33)*exp(-max(sd-.06,0.)*16.);
+  sky = mix(sky, vec3(.015), smoothstep(.062,.058,sd));
+  float hz=.03+.025*sin(az*3.+1.)+.015*sin(az*7.3)+.008*sin(az*17.);
+  vec3 col=sky;
+  if(y<hz){ float k=smoothstep(hz,-.6,y); col=mix(vec3(.80,.75,.68), vec3(.50,.46,.42), k);
+    col*= .92+.08*sin(az*40.+y*300.); col=mix(col, sky, exp(-max(hz-y,0.)*30.)*.5); }
+  for(int i=0;i<7;i++){ float a=-1.25+float(i)*.42+.12*sin(float(i)*5.1); float h=.035+.05*h2(vec2(float(i),3.));
+    if(abs(az-a)<.006+.004*h2(vec2(float(i),9.)) && y<hz+h && y>hz-.02) col=vec3(.03); }
+  float sw=.016*(1.-clamp((y-hz)/.42,0.,1.));
+  if(abs(az-.32)<sw && y<hz+.42 && y>hz-.012) col=vec3(.02);
+  return col;
+}
+void main(){
+  vec4 p=uInvVP*vec4(vUv*2.-1.,1.,1.); vec3 d=normalize(p.xyz/p.w-uCam);
+  if(uRealm>.5){ o=vec4(realm(d),1.); return; }
+  float y=d.y;
+  vec3 col=mix(vec3(.15,.03,.035), vec3(.025,.005,.01), smoothstep(0.,.7,y));
+  vec3 M=normalize(vec3(.35,.6,.72)); float md=acos(clamp(dot(d,M),-1.,1.));
+  col += vec3(.8,.1,.08)*exp(-md*6.)*.55;
+  col = mix(col, vec3(2.3,.38,.24)*(.85+.15*h2(floor(d.xy*400.))), smoothstep(.074,.068,md));
+  vec3 sd=floor(d*260.); float st=h2(sd.xy+sd.z*7.3); col += vec3(1.,.8,.75)*step(.9975,st)*smoothstep(0.,.15,y)*(1.-smoothstep(.0,.2,1.-md));
+  if(y<0.){
+    vec3 fog=vec3(.10,.022,.028);
+    float a=smoothstep(-.05,-.6,y)*uGlow;
+    vec3 ab=mix(vec3(.9,.14,.09), vec3(1.7,1.15,1.0), smoothstep(-.5,-.97,y));
+    float sw = uV==3 ? .5+.5*sin(atan(d.x,-y)*9.-uT*2.6+length(d.xz)*14.) : .5+.5*sin(d.x*30./max(-y,.1)+uT*.7);
+    ab *= .82+.3*sw;
+    col = mix(fog, ab, a);
+  }
+  o=vec4(col,1.);
+}`;
+
+// ---- particles
+const P_VS = `#version 300 es
+precision highp float; precision highp int;
+layout(location=0) in vec2 aC; layout(location=1) in vec4 aA; layout(location=2) in vec4 aB;
+layout(location=3) in vec4 aCl; layout(location=4) in vec4 aD;
+uniform mat4 uVP; uniform vec3 uCam, uR, uU; uniform float uT;
+out vec2 vC; out vec3 vCol; out float vA; flat out int vTy;
+void main(){
+  float f=uT-aA.w, life=aB.w; int ty=int(aD.x+.5); vTy=ty; vC=aC;
+  if(f<0.||f>life){ gl_Position=vec4(2.,2.,2.,1.); return; }
+  vec3 p0=aA.xyz, v=aB.xyz; float g=aD.y, k=aD.z, sd=aD.w; vec3 p;
+  if(ty==6){ float a=v.y+v.z*f; float r=v.x*(1.-.55*f/life); p=p0+vec3(cos(a)*r*.55, sin(a)*r-.15*f*f, sin(f*1.7+sd*6.)*.5); }
+  else { vec3 dv=(k>0.&&ty!=3)? v*(1.-exp(-k*f))/k : v*f; p=p0+dv+vec3(0.,.5*g*f*f,0.);
+    if(ty==1||ty==8){ p.x+=sin(f*2.3+sd*30.)*.35; p.z+=cos(f*1.9+sd*17.)*.35; } }
+  float a=smoothstep(0.,min(.15,life*.2),f)*(1.-smoothstep(life*.6,life,f));
+  if(ty==3) a=smoothstep(0.,1.5,f)*(.75+.25*sin(uT*2.+sd*20.));
+  if(ty==4) a=(.6+.4*sin(uT*90.+sd*50.))*(1.-f/life);
+  if(ty==5) a=exp(-f*5.);
+  if(ty==1) a*=.6+.4*sin(uT*12.+sd*40.);
+  float s=aCl.w; if(ty==0) s*=.6+.9*f/life; if(ty==5) s*=.5+f*2.;
+  vec3 wp;
+  if(ty==3){ vec3 rt=normalize(cross(vec3(0,1,0),uCam-p)); wp=p+rt*aC.x*s*.5+vec3(0,1,0)*(aC.y*.5+.5)*k; }
+  else wp=p+(uR*aC.x+uU*aC.y)*s*.5;
+  vCol=aCl.rgb; vA=a;
+  gl_Position=uVP*vec4(wp,1.);
+}`;
+const P_FS = `#version 300 es
+precision highp float; precision highp int;
+in vec2 vC; in vec3 vCol; in float vA; flat in int vTy; out vec4 o;
+void main(){
+  float r=length(vC), m;
+  if(vTy==2) m=1.;
+  else if(vTy==3) m=(1.-vC.x*vC.x)*smoothstep(1.,.1,vC.y)*smoothstep(-1.,-.7,vC.y);
+  else { m=max(0.,1.-r*r); if(vTy==0) m*=m; else if(vTy!=5) m=m*m*m; }
+  float a=m*vA;
+  if(vTy==0||vTy==2){ float aa=a*(vTy==0?.6:1.); o=vec4(vCol*aa,aa); }
+  else o=vec4(vCol*a,0.);
+}`;
+
+// ---- post: bright pass, blur, composite
+const BRIGHT_FS = `#version 300 es
+precision highp float; precision highp int; in vec2 vUv; uniform sampler2D uS; uniform vec2 uPx; out vec4 o;
+void main(){ vec3 c=vec3(0.); for(int i=0;i<4;i++){ vec2 q=vec2(float(i&1),float(i>>1))*2.-1.; c+=texture(uS,vUv+q*uPx).rgb; }
+  c*=.25; o=vec4(max(c-1.25,0.),1.); }`;
+const BLUR_FS = `#version 300 es
+precision highp float; precision highp int; in vec2 vUv; uniform sampler2D uS; uniform vec2 uDir; out vec4 o;
+void main(){ float w[5]=float[](.227,.194,.121,.054,.016); vec3 c=texture(uS,vUv).rgb*w[0];
+  for(int i=1;i<5;i++){ c+=texture(uS,vUv+uDir*float(i)).rgb*w[i]; c+=texture(uS,vUv-uDir*float(i)).rgb*w[i]; } o=vec4(c,1.); }`;
+const COMP_FS = `#version 300 es
+precision highp float; precision highp int; in vec2 vUv; uniform sampler2D uS, uB; uniform float uFlash, uWhite, uT; out vec4 o;
+vec3 aces(vec3 x){ return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.); }
+void main(){
+  vec3 c=texture(uS,vUv).rgb + texture(uB,vUv).rgb*.7;
+  c += uFlash*vec3(1.6,.42,.38);
+  c = aces(c*1.15);
+  c = pow(c, vec3(1./2.2));
+  float vg=length(vUv-.5)*1.35; c*=mix(1.,.45,smoothstep(.4,1.,vg));
+  c = mix(c, vec3(1.,.97,.95), uWhite);
+  c += (fract(sin(dot(vUv*1000.+uT,vec2(12.9898,78.233)))*43758.5)-.5)*.02;
+  o=vec4(c,1.);
+}`;
+
+const P_BLOCK = program(BLOCK_VS, BLOCK_FS), P_BG = program(FS_VS, BG_FS), P_PART = program(P_VS, P_FS);
+const P_BRIGHT = program(FS_VS, BRIGHT_FS), P_BLUR = program(FS_VS, BLUR_FS), P_COMP = program(FS_VS, COMP_FS);
+
+// ---------------------------------------------------------------- the world: blocks
+function buildBlocks() {
+  const A = []; const R = rng(1234);
+  const push = (...v) => { for (const x of v) A.push(x); };
+  for (let x = -32; x < 32; x++) for (let z = -32; z < 32; z++) {
+    const H = heightAt(x, z), band = Math.abs(x+.5) < 15, yb = band ? -22 : -3;
+    const zc = z+.5, c = cz(zc), w = wz(zc), tO = tOpen(zc), dx = x+.5-c, side = dx < 0 ? -1 : 1;
+    for (let y = H; y >= yb; y--) {
+      const depth = H - y;
+      const jit = .65*Math.sin(y*.9+zc*.7)*Math.sin(y*.37-zc*1.3) + (hash3(x,y,z)-.5)*.5;
+      const dE = Math.abs(dx) - (w + jit);
+      if (!(dE < 3.5 || depth < 4)) continue;
+      const r = hash3(x,y,z+99), r2 = hash3(x+7,y,z);
+      let type = depth === 0 ? 0 : depth <= 3 + (r2 < .3 ? 1 : 0) ? 1 : depth < 11 + Math.round(Math.sin(x*.3+zc*.2)*1.5) ? 2 : 3;
+      if ((type === 2 || type === 3) && r < .045 && depth > 5) type = 4;
+      if (type === 3 && r > .985 && dE > 0) type = 6;
+      push(x,y,z, 1,1,1, type,r,side,dE, tO,c,depth,r2);
+      if (band && dE >= 0 && dE < 1 && depth >= 3 && depth <= 17 && R() < .09) {
+        const s = .45+R()*.3, l = 1+R()*1.4;
+        push(x+.5-side*.8-s/2, y+.5-l/2, z+.5-s/2, s,l,s, 5,R(),side,.5, tO,c,depth,R());
+      }
+    }
+  }
+  const ring = (x,y,z,sx,sy,sz,t) => push(x,y,z, sx,sy,sz, t,.5,0,99, 0,0,0,.5);
+  ring(-200,-3,-200, 400,4,168, 7); ring(-200,-3,32, 400,4,168, 7);
+  ring(-200,-3,-32, 168,4,64, 7);   ring(32,-3,-32, 168,4,64, 7);
+  ring(-32,-4,-32, 17,1,64, 8);     ring(15,-4,-32, 17,1,64, 8);
+  return new Float32Array(A);
+}
+const CUBE = (() => { const v = [];
+  const F = [[[1,0,0],[0,1,0],[0,0,1]],[[-1,0,0],[0,1,0],[0,0,-1]],[[0,1,0],[0,0,1],[1,0,0]],[[0,-1,0],[0,0,-1],[1,0,0]],[[0,0,1],[0,1,0],[-1,0,0]],[[0,0,-1],[0,1,0],[1,0,0]]];
+  for (const [n,u,w] of F) { const P = (a,b) => [n[0]*.5+u[0]*a+w[0]*b, n[1]*.5+u[1]*a+w[1]*b, n[2]*.5+u[2]*a+w[2]*b];
+    const q = [P(-.5,-.5),P(.5,-.5),P(.5,.5),P(-.5,-.5),P(.5,.5),P(-.5,.5)];
+    for (const p of q) v.push(...p, ...n); }
+  return new Float32Array(v); })();
+const blocks = buildBlocks(), NB = blocks.length / 14;
+const vaoB = gl.createVertexArray(); gl.bindVertexArray(vaoB);
+{ const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, CUBE, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,3,gl.FLOAT,false,24,0);
+  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1,3,gl.FLOAT,false,24,12);
+  const ib = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, ib); gl.bufferData(gl.ARRAY_BUFFER, blocks, gl.STATIC_DRAW);
+  [[2,3,0],[3,3,12],[4,4,24],[5,4,40]].forEach(([l,n,o]) => { gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l,n,gl.FLOAT,false,56,o); gl.vertexAttribDivisor(l,1); }); }
+
+// ---------------------------------------------------------------- particles (rebuilt per variant)
+function buildParticles(v) {
+  const P = []; const R = rng(77 + v*13);
+  const add = (x,y,z, vx,vy,vz, spawn,life, r,g,b,size, type,grav,drag) => P.push(x,y,z,spawn, vx,vy,vz,life, r,g,b,size, type,grav,drag,R());
+  const top = (x,z) => heightAt(Math.floor(x), Math.floor(z)) + 1;
+  // common: dust off both lips, chunks, embers, light shafts
+  for (let z = -32; z < 32; z += .5) {
+    const c = cz(z), w = wz(z), t = TRIG + tOpen(z);
+    for (let k = 0; k < 2; k++) { const s = k ? 1 : -1;
+      add(c+s*w, top(c+s*w,z)+.2, z+R()*.5, s*(1+R()*2), 1.2+R()*2.4, R()-.5, t+R()*.35, 2.5+R()*2, .045,.03,.028, 1.6+R()*1.9, 0, .25, 1.5); }
+    for (let k = 0; k < 3; k++) add(c+(R()-.5)*w*2, top(c,z), z+R()*.5, (R()-.5)*4, 4+R()*6, (R()-.5)*2, t+R()*.4, 1.6, .28,.18,.12, .16+R()*.16, 2, -28, 0);
+  }
+  for (let i = 0; i < 2600; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+.5; const t = t0 + R()*(T_REALM-t0);
+    add(cz(z)+(R()-.5)*3.5, -4-R()*14, z, (R()-.5)*.6, 3+R()*4, (R()-.5)*.6, t, 3+R()*3, 4,.9,.4, .12+R()*.13, 1, .4, 0); }
+  for (let z = -31; z < 32; z += 2.2) add(cz(z), -6, z, 0,0,0, TRIG+tOpen(z)+.3, T_REALM-TRIG-tOpen(z)-.3, .13,.035,.025, 2+R()*1.6, 3, 0, 12+R()*8);
+  if (v === 0) { // the bolt from the moon, the flash, the shock wave
+    const end = [0, top(0,0), 0], st = [16, 75, 34];
+    let prev = st;
+    for (let s = 1; s <= 22; s++) { const k = s/22;
+      const p = [st[0]+(end[0]-st[0])*k+(s<22?(R()-.5)*5:0), st[1]+(end[1]-st[1])*k, st[2]+(end[2]-st[2])*k+(s<22?(R()-.5)*5:0)];
+      const L = Math.hypot(p[0]-prev[0], p[1]-prev[1], p[2]-prev[2]), n = Math.ceil(L/.25);
+      for (let j = 0; j < n; j++) { const q = j/n; const x = prev[0]+(p[0]-prev[0])*q, y = prev[1]+(p[1]-prev[1])*q, zz = prev[2]+(p[2]-prev[2])*q;
+        add(x,y,zz, 0,0,0, TRIG-.05, .45, 3.5,.6,.5, .6, 4, 0, 0);
+        add(x,y,zz, 0,0,0, TRIG-.05, .45, .45,.06,.05, 2.4, 4, 0, 0);
+        if (R() < .03) { let bx = x, by = y, bz = zz; for (let b = 0; b < 30; b++) { bx += (R()-.5)*.6; by -= .25; bz += (R()-.5)*.6; add(bx,by,bz,0,0,0,TRIG-.03,.3,2.5,.45,.35,.4,4,0,0); } } }
+      prev = p; }
+    add(0, top(0,0)+1, 0, 0,0,0, TRIG, 1.2, 1.1,.22,.16, 8, 5, 0, 0);
+    for (let i = 0; i < 180; i++) { const a = i/180*Math.PI*2; add(Math.cos(a)*1.5, top(0,0)+.4, Math.sin(a)*1.5, Math.cos(a)*19, .6, Math.sin(a)*19, TRIG+.05, 2, .05,.03,.03, 2.6+R()*1.5, 0, 0, .9); }
+    for (let i = 0; i < 350; i++) { const a = R()*Math.PI*2, sp = 4+R()*12; add(0, top(0,0)+.3, 0, Math.cos(a)*sp, 8+R()*16, Math.sin(a)*sp, TRIG+R()*.1, 1.5+R(), 6,1.4,.5, .14, 1, -22, 0); }
+  }
+  if (v === 1) { // eruption, anti-gravity motes around the hanging blocks
+    for (let z = -32; z < 32; z += .5) { const c = cz(z), t = TRIG+tOpen(z);
+      for (let k = 0; k < 5; k++) add(c+(R()-.5)*3, top(c,z), z, (R()-.5)*7, 14+R()*14, (R()-.5)*3, t+R()*.3, 2.2, .3,.19,.12, .18+R()*.2, 2, -20, 0);
+      for (let k = 0; k < 3; k++) add(c+(R()-.5)*3, top(c,z), z, (R()-.5)*3, 12+R()*16, (R()-.5)*2, t+R()*.3, 1.6, 6,1.4,.5, .16, 1, -10, 0);
+      add(c, top(c,z)+.5, z, 0,0,0, t, .6, 4,.9,.6, 7, 5, 0, 0); }
+    for (let i = 0; i < 1800; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+1; const t = t0 + R()*(T_REALM-t0);
+      add(cz(z)+(R()-.5)*10, 4+R()*22, z, 0, .4+R()*.6, 0, t, 3+R()*3, 1.4,.9,.85, .1+R()*.1, 8, 0, 0); }
+    for (let i = 0; i < 900; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+1.5; const t = t0 + R()*(T_REALM-t0);
+      add(cz(z)+(R()-.5)*8, 8+R()*18, z, 0, -.5, 0, t, 2.5, 5,1,.4, .1, 1, -3, 0); }
+  }
+  if (v === 2) { // dust at each jolt, lava falls from the walls
+    for (const jt of [0, 1.6, 3.4]) for (let z = -32; z < 32; z += .7) { const c = cz(z), w = wz(z), t = TRIG+tOpen(z)+jt, sp = spreadS(jt+.4)*.9;
+      for (const s of [-1, 1]) add(c+s*(w+sp), top(c+s*w,z)+.1, z, s*(1+R()), 1+R()*2, R()-.5, t+R()*.15, 2.5+R()*1.5, .045,.03,.028, 2+R()*2, 0, .2, 1.4); }
+    for (let i = 0; i < 14; i++) { const z = -26 + i*4 + R()*2, s = i % 2 ? 1 : -1, y = -3 - R()*6, c = cz(z), w = wz(z);
+      const t0 = TRIG+tOpen(z)+2.2;
+      for (let t = t0; t < T_REALM; t += .022) { const sp = spreadS(t-TRIG-tOpen(z))*.9;
+        add(c+s*(w+sp-.1), y, z+(R()-.5)*.6, -s*(1+R()*.7), 0, (R()-.5)*.2, t, 1.8, 6,1.6,.3, .3+R()*.15, 7, -16, 0); } }
+    for (let i = 0; i < 700; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+4.5; const t = t0 + R()*(T_REALM-t0);
+      add(cz(z)+(R()-.5)*9, -3-R()*14, z, 0, .3, 0, t, 2.5, 4,.5,.5, .09, 8, 0, 0); }
+  }
+  if (v === 3) { // the vortex
+    for (let i = 0; i < 3600; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+.2; const t = t0 + R()*(T_REALM-t0);
+      const pale = R() < .4; add(cz(z), -2, z, 1.5+R()*6, R()*6.28, (z*0+1)*(1.6+R()*2.2)*(R()<.5?1:1), t, 3+R()*4,
+        pale?2.2:3.5, pale?1.8:.7, pale?1.7:.5, .14+R()*.14, 6, 0, 0); }
+    for (let z = -32; z < 32; z += .5) { const c = cz(z), t = TRIG+tOpen(z);
+      for (let k = 0; k < 3; k++) add(c+(R()-.5)*3, top(c,z), z, (R()-.5)*3, 6+R()*6, (R()-.5)*2, t+R()*.3, 1.4, 5,1.2,.6, .15, 1, -14, 0); }
+  }
+  return new Float32Array(P);
+}
+const vaoP = gl.createVertexArray(); gl.bindVertexArray(vaoP);
+const partBuf = gl.createBuffer(); let NP = 0;
+{ const q = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, q); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0,2,gl.FLOAT,false,8,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, partBuf);
+  for (let l = 1; l <= 4; l++) { gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l,4,gl.FLOAT,false,64,(l-1)*16); gl.vertexAttribDivisor(l,1); } }
+function loadParticles() { const d = buildParticles(V); NP = d.length/16; gl.bindBuffer(gl.ARRAY_BUFFER, partBuf); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW); }
+const vaoE = gl.createVertexArray();
+
+// ---------------------------------------------------------------- render targets
+let W = 0, H = 0, fbS, texS, depS, fbA, texA, fbB, texB, BW, BH;
+function tex(w, h) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
+  gl.texImage2D(gl.TEXTURE_2D, 0, HDR ? gl.RGBA16F : gl.RGBA8, w, h, 0, gl.RGBA, HDR ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; }
+function fbo(t, depth) { const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+  if (depth) gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth); return f; }
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 1.5);
+  const w = Math.round(innerWidth*dpr), h = Math.round(innerHeight*dpr);
+  if (w === W && h === H) return; W = w; H = h; cv.width = w; cv.height = h;
+  texS = tex(W, H); depS = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, depS);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, W, H); fbS = fbo(texS, depS);
+  BW = Math.max(1, W >> 2); BH = Math.max(1, H >> 2); texA = tex(BW, BH); fbA = fbo(texA); texB = tex(BW, BH); fbB = fbo(texB);
+}
+
+// ---------------------------------------------------------------- camera
+const sub = (a,b) => [a[0]-b[0],a[1]-b[1],a[2]-b[2]], cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+const norm = a => { const l = Math.hypot(...a) || 1; return [a[0]/l,a[1]/l,a[2]/l]; }, mixv = (a,b,k) => a.map((x,i) => x+(b[i]-x)*k);
+function perspective(fy, asp, n, f) { const t = 1/Math.tan(fy/2), m = new Float32Array(16);
+  m[0] = t/asp; m[5] = t; m[10] = (f+n)/(n-f); m[11] = -1; m[14] = 2*f*n/(n-f); return m; }
+function lookAt(e, c, up) { const z = norm(sub(e,c)), x = norm(cross(up,z)), y = cross(z,x);
+  return new Float32Array([x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0, -(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]), -(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]), -(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]), 1]); }
+function mul(a, b) { const o = new Float32Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k*4+j]*b[i*4+k]; o[i*4+j] = s; } return o; }
+function invert(m) { const inv = new Float32Array(16), a = m;
+  inv[0]=a[5]*a[10]*a[15]-a[5]*a[11]*a[14]-a[9]*a[6]*a[15]+a[9]*a[7]*a[14]+a[13]*a[6]*a[11]-a[13]*a[7]*a[10];
+  inv[4]=-a[4]*a[10]*a[15]+a[4]*a[11]*a[14]+a[8]*a[6]*a[15]-a[8]*a[7]*a[14]-a[12]*a[6]*a[11]+a[12]*a[7]*a[10];
+  inv[8]=a[4]*a[9]*a[15]-a[4]*a[11]*a[13]-a[8]*a[5]*a[15]+a[8]*a[7]*a[13]+a[12]*a[5]*a[11]-a[12]*a[7]*a[9];
+  inv[12]=-a[4]*a[9]*a[14]+a[4]*a[10]*a[13]+a[8]*a[5]*a[14]-a[8]*a[6]*a[13]-a[12]*a[5]*a[10]+a[12]*a[6]*a[9];
+  inv[1]=-a[1]*a[10]*a[15]+a[1]*a[11]*a[14]+a[9]*a[2]*a[15]-a[9]*a[3]*a[14]-a[13]*a[2]*a[11]+a[13]*a[3]*a[10];
+  inv[5]=a[0]*a[10]*a[15]-a[0]*a[11]*a[14]-a[8]*a[2]*a[15]+a[8]*a[3]*a[14]+a[12]*a[2]*a[11]-a[12]*a[3]*a[10];
+  inv[9]=-a[0]*a[9]*a[15]+a[0]*a[11]*a[13]+a[8]*a[1]*a[15]-a[8]*a[3]*a[13]-a[12]*a[1]*a[11]+a[12]*a[3]*a[9];
+  inv[13]=a[0]*a[9]*a[14]-a[0]*a[10]*a[13]-a[8]*a[1]*a[14]+a[8]*a[2]*a[13]+a[12]*a[1]*a[10]-a[12]*a[2]*a[9];
+  inv[2]=a[1]*a[6]*a[15]-a[1]*a[7]*a[14]-a[5]*a[2]*a[15]+a[5]*a[3]*a[14]+a[13]*a[2]*a[7]-a[13]*a[3]*a[6];
+  inv[6]=-a[0]*a[6]*a[15]+a[0]*a[7]*a[14]+a[4]*a[2]*a[15]-a[4]*a[3]*a[14]-a[12]*a[2]*a[7]+a[12]*a[3]*a[6];
+  inv[10]=a[0]*a[5]*a[15]-a[0]*a[7]*a[13]-a[4]*a[1]*a[15]+a[4]*a[3]*a[13]+a[12]*a[1]*a[7]-a[12]*a[3]*a[5];
+  inv[14]=-a[0]*a[5]*a[14]+a[0]*a[6]*a[13]+a[4]*a[1]*a[14]-a[4]*a[2]*a[13]-a[12]*a[1]*a[6]+a[12]*a[2]*a[5];
+  inv[3]=-a[1]*a[6]*a[11]+a[1]*a[7]*a[10]+a[5]*a[2]*a[11]-a[5]*a[3]*a[10]-a[9]*a[2]*a[7]+a[9]*a[3]*a[6];
+  inv[7]=a[0]*a[6]*a[11]-a[0]*a[7]*a[10]-a[4]*a[2]*a[11]+a[4]*a[3]*a[10]+a[8]*a[2]*a[7]-a[8]*a[3]*a[6];
+  inv[11]=-a[0]*a[5]*a[11]+a[0]*a[7]*a[9]+a[4]*a[1]*a[11]-a[4]*a[3]*a[9]-a[8]*a[1]*a[7]+a[8]*a[3]*a[5];
+  inv[15]=a[0]*a[5]*a[10]-a[0]*a[6]*a[9]-a[4]*a[1]*a[10]+a[4]*a[2]*a[9]+a[8]*a[1]*a[6]-a[8]*a[2]*a[5];
+  const det = a[0]*inv[0]+a[1]*inv[4]+a[2]*inv[8]+a[3]*inv[12]; for (let i = 0; i < 16; i++) inv[i] /= det; return inv; }
+let userYaw = 0, userPitch = 0;
+function shakeAmp(t) {
+  const imp = (t0, a, d) => t > t0 ? a*Math.exp(-(t-t0)*d) : 0;
+  let s = (t > TRIG && t < TRIG+3.3) ? .12 : 0;
+  if (V === 0) s += imp(TRIG, 1.3, 3) + imp(TRIG+.15, .5, 2);
+  if (V === 1) s += (t > TRIG-1.4 && t < TRIG) ? .25*ss(TRIG-1.4, TRIG, t) : 0, s += imp(TRIG, .9, 2.5);
+  if (V === 2) s += imp(TRIG, .9, 3) + imp(TRIG+1.6, .9, 3) + imp(TRIG+3.4, 1.2, 2.5);
+  if (V === 3) s += (t > TRIG && t < T_CRANE) ? .22 : 0;
+  return t < T_DIVE ? s : 0;
+}
+function camera(t) {
+  if (t >= T_REALM) { const a = .12 + (t-T_REALM)*.03; return { pos:[0,1.7,0], tgt:[Math.sin(a)*10, 1.9+(t-T_REALM)*.05, Math.cos(a)*10], roll:0 }; }
+  const yaw = -2.0 + t*.05 + userYaw, rad = 25 - t*.35;
+  const lift = V === 1 ? ss(TRIG, TRIG+5, t) : 0;
+  let pos = [Math.sin(yaw)*rad, 14 + 5*lift + userPitch*12, Math.cos(yaw)*rad];
+  let tgt = [0, 5*lift - (V !== 1 ? 3*ss(TRIG+1, TRIG+5, t) : 0), 2];
+  const k = ss(T_CRANE, T_DIVE, t);
+  pos = mixv(pos, [cz(-17), 17, -17], k); tgt = mixv(tgt, [cz(2), -7, 2], k);
+  let roll = 0;
+  if (t > T_DIVE) { const e = Math.pow(Math.min(1, (t-T_DIVE)/(T_REALM-T_DIVE)), 2.1); const z = -17 + e*20;
+    pos = [cz(z), 17 - e*46, z]; tgt = mixv([cz(2), -7, 2], [cz(z+3), pos[1]-8, z+3], ss(T_DIVE, T_DIVE+.8, t));
+    roll = Math.PI*ss(T_DIVE+.9, T_REALM-.1, t); }
+  const a = shakeAmp(t);
+  if (a > 0) { const n = (f, o) => Math.sin(t*f+o)*.6 + Math.sin(t*f*1.73+o*2.1)*.4;
+    pos = [pos[0]+n(23,1)*a*.4, pos[1]+n(29,2)*a*.4, pos[2]+n(31,3)*a*.4]; tgt = [tgt[0]+n(19,4)*a*.25, tgt[1]+n(27,5)*a*.25, tgt[2]]; }
+  return { pos, tgt, roll };
+}
+
+// ---------------------------------------------------------------- frame
+function draw(t) {
+  resize();
+  const realm = t >= T_REALM;
+  const { pos, tgt, roll } = camera(t);
+  const f = norm(sub(tgt, pos)), r = norm(cross(f, [0,1,0])), u = cross(r, f);
+  const up = [u[0]*Math.cos(roll)+r[0]*Math.sin(roll), u[1]*Math.cos(roll)+r[1]*Math.sin(roll), u[2]*Math.cos(roll)+r[2]*Math.sin(roll)];
+  const view = lookAt(pos, tgt, up), proj = perspective(64*Math.PI/180, W/H, .05, 700);
+  const vp = mul(proj, view), ivp = invert(vp);
+  const glow = ss(TRIG, TRIG+3, t);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbS); gl.viewport(0, 0, W, H);
+  gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  // background
+  gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.depthMask(false);
+  gl.useProgram(P_BG.p); gl.bindVertexArray(vaoE);
+  gl.uniformMatrix4fv(P_BG.u.uInvVP, false, ivp); gl.uniform3fv(P_BG.u.uCam, pos);
+  gl.uniform1f(P_BG.u.uT, t); gl.uniform1f(P_BG.u.uGlow, glow); gl.uniform1f(P_BG.u.uRealm, realm ? 1 : 0); gl.uniform1i(P_BG.u.uV, V);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  if (!realm) {
+    gl.enable(gl.DEPTH_TEST); gl.depthMask(true); gl.depthFunc(gl.LEQUAL);
+    gl.useProgram(P_BLOCK.p); gl.bindVertexArray(vaoB);
+    gl.uniformMatrix4fv(P_BLOCK.u.uVP, false, vp); gl.uniform1f(P_BLOCK.u.uT, t); gl.uniform1f(P_BLOCK.u.uTrig, TRIG);
+    gl.uniform1i(P_BLOCK.u.uV, V); gl.uniform3fv(P_BLOCK.u.uCam, pos);
+    gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, NB);
+    gl.depthMask(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(P_PART.p); gl.bindVertexArray(vaoP);
+    gl.uniformMatrix4fv(P_PART.u.uVP, false, vp); gl.uniform3fv(P_PART.u.uCam, pos);
+    gl.uniform3f(P_PART.u.uR, view[0], view[4], view[8]); gl.uniform3f(P_PART.u.uU, view[1], view[5], view[9]); gl.uniform1f(P_PART.u.uT, t);
+    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, NP);
+    gl.disable(gl.BLEND);
+  }
+  gl.disable(gl.DEPTH_TEST); gl.bindVertexArray(vaoE);
+  // bloom
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbA); gl.viewport(0, 0, BW, BH);
+  gl.useProgram(P_BRIGHT.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texS);
+  gl.uniform1i(P_BRIGHT.u.uS, 0); gl.uniform2f(P_BRIGHT.u.uPx, 1/W, 1/H); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.useProgram(P_BLUR.p); gl.uniform1i(P_BLUR.u.uS, 0);
+  for (const s of [1.2, 2.6]) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbB); gl.bindTexture(gl.TEXTURE_2D, texA); gl.uniform2f(P_BLUR.u.uDir, s/BW, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbA); gl.bindTexture(gl.TEXTURE_2D, texB); gl.uniform2f(P_BLUR.u.uDir, 0, s/BH); gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+  // composite
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
+  gl.useProgram(P_COMP.p);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texS); gl.uniform1i(P_COMP.u.uS, 0);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texA); gl.uniform1i(P_COMP.u.uB, 1);
+  let flash = 0;
+  if (V === 0 && t > TRIG-.05) flash = .55*Math.exp(-(t-TRIG+.05)*6) * (.75+.25*Math.sin(t*70));
+  if (V === 1 && t > TRIG) flash = .35*Math.exp(-(t-TRIG)*4);
+  if (V === 2) for (const j of [0, 1.6, 3.4]) if (t > TRIG+j) flash += .18*Math.exp(-(t-TRIG-j)*6);
+  const white = t < T_REALM ? ss(T_REALM-.5, T_REALM, t) : 1 - ss(T_REALM, T_REALM+1.2, t);
+  gl.uniform1f(P_COMP.u.uFlash, realm ? 0 : flash); gl.uniform1f(P_COMP.u.uWhite, white); gl.uniform1f(P_COMP.u.uT, t);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.activeTexture(gl.TEXTURE0);
+}
+
+// ---------------------------------------------------------------- UI
+const $ = id => document.getElementById(id);
+const vb = $('vbtns');
+VARS.forEach((v, i) => { const b = document.createElement('button'); b.textContent = v.id.toUpperCase() + ' · ' + v.name; b.onclick = () => setVar(i); vb.appendChild(b); vb.appendChild(document.createTextNode(' ')); });
+function setVar(i) {
+  V = i; loadParticles();
+  [...vb.querySelectorAll('button')].forEach((b, j) => b.classList.toggle('on', j === i));
+  $('vid').textContent = VARS[i].id.toUpperCase(); $('vname').textContent = VARS[i].name; $('vtag').textContent = VARS[i].tag;
+  const segs = $('segs'); segs.innerHTML = '';
+  VARS[i].ph.forEach(([t0, n], k) => { const t1 = k+1 < VARS[i].ph.length ? VARS[i].ph[k+1][0] : TEND;
+    const s = document.createElement('span'); s.textContent = n; s.style.left = (t0/TEND*100)+'%'; s.style.width = ((t1-t0)/TEND*100)+'%'; segs.appendChild(s); });
+}
+function setPlaying(p) { playing = p; $('play').textContent = p ? '❚❚' : '▶'; }
+$('play').onclick = () => setPlaying(!playing);
+const track = $('track');
+function seek(e) { const r = track.getBoundingClientRect(); time = Math.min(TEND, Math.max(0, (e.clientX-r.left)/r.width*TEND)); }
+track.addEventListener('pointerdown', e => { track.setPointerCapture(e.pointerId); seek(e); });
+track.addEventListener('pointermove', e => { if (e.buttons & 1) seek(e); });
+let drag = null;
+cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY, userYaw, userPitch]; cv.setPointerCapture(e.pointerId); cv.style.cursor = 'grabbing'; });
+cv.addEventListener('pointermove', e => { if (!drag) return; userYaw = drag[2] - (e.clientX-drag[0])*.005; userPitch = Math.max(-.6, Math.min(1.2, drag[3] + (e.clientY-drag[1])*.004)); });
+cv.addEventListener('pointerup', () => { drag = null; cv.style.cursor = 'grab'; });
+cv.addEventListener('dblclick', () => { userYaw = userPitch = 0; });
+addEventListener('keydown', e => {
+  if (e.key >= '1' && e.key <= '4') setVar(+e.key - 1);
+  else if (e.key === ' ') { setPlaying(!playing); e.preventDefault(); }
+  else if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('hide');
+  else if (e.key === 'ArrowRight') time = Math.min(TEND, time + 1);
+  else if (e.key === 'ArrowLeft') time = Math.max(0, time - 1);
+});
+setVar(V); setPlaying(playing);
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  if (playing) { time += dt; if (time > TEND) time = 0; }
+  draw(time);
+  $('time').textContent = time.toFixed(1) + ' s';
+  $('fill').style.width = (time/TEND*100) + '%';
+  const ph = VARS[V].ph; let n = ph[0][1]; for (const [t0, name] of ph) if (time >= t0) n = name; $('vph').textContent = n;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
