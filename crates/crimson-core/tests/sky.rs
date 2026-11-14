@@ -1,7 +1,8 @@
 use crimson_core::night::{presence, CLIMAX_START, DAWN_START, ECLIPSE_START, OMENS_START};
 use crimson_core::rise::{frame, EYE_OPENS};
 use crimson_core::sky::{
-    colors, day_turn, lid, look, moon_angle_degrees, moon_direction, since_open, MOON_RADIUS,
+    clouds, colors, day_turn, lid, look, moon_angle_degrees, moon_direction, since_open,
+    MOON_RADIUS,
 };
 
 fn close(a: f32, b: f32) -> bool {
@@ -157,4 +158,29 @@ fn the_players_look_is_read_from_the_moon() {
     // A moon straight overhead still gives finite numbers.
     let overhead = look([0.0, 1.0, 0.0], [0.0, 1.0, 0.0]);
     assert!(overhead.offset.iter().all(|v| v.is_finite()));
+}
+
+#[test]
+fn the_clouds_dissolve_in_the_omens_and_return_at_dawn() {
+    assert_eq!(clouds(presence(OMENS_START)), 1.0);
+    assert_eq!(
+        clouds(presence(ECLIPSE_START - 200)),
+        0.0,
+        "gone before the eclipse"
+    );
+    assert_eq!(clouds(presence(18_000)), 0.0);
+    assert_eq!(
+        clouds(presence(DAWN_START + 1_000)),
+        1.0,
+        "back when dawn ends"
+    );
+    let mut last = 1.0;
+    for tod in OMENS_START..ECLIPSE_START {
+        let now = clouds(presence(tod));
+        assert!(
+            now <= last && last - now < 0.005,
+            "they fade smoothly, at {tod}"
+        );
+        last = now;
+    }
 }

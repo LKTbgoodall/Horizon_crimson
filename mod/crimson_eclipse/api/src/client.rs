@@ -5,10 +5,11 @@
 use crate::moon::time_of_day;
 use crate::night::{eclipse_seconds, presence};
 use crate::rise::{frame, shake_angles, Frame};
+use crate::sky::clouds;
 use crate::server::Shared;
 use crate::sound::{cues, Cue};
 use horizon_client::fog::FogType;
-use horizon_client::mod_api::{CameraShakeEvent, ComputeFogColorEvent, Host};
+use horizon_client::mod_api::{CameraShakeEvent, ComputeFogColorEvent, Host, RenderFogEvent};
 
 /// The rise's picture now and how present the blood moon is (0 to 1), or
 /// None when no blood moon shows.
@@ -85,6 +86,21 @@ pub fn compute_fog_color(shared: &Shared, host: &dyn Host, event: &mut ComputeFo
     let weight = (frame.fog_weight * presence.max(frame.omens) * frame.dark.max(0.3)).clamp(0.0, 1.0);
     for (channel, target) in event.rgb.iter_mut().zip(frame.fog_rgb) {
         *channel = (*channel + (target * frame.dark - *channel) * weight).clamp(0.0, 1.0);
+    }
+}
+
+/// The vanilla clouds dissolve: the game fades them out toward the cloud fog's
+/// end, so that distance is pulled to nothing while the blood moon is up.
+pub fn render_fog(shared: &Shared, host: &dyn Host, event: &mut RenderFogEvent<'_>) {
+    if !matches!(event.fog_type, FogType::Atmospheric) {
+        return;
+    }
+    let Some((_, _, presence)) = now(shared, host, event.partial) else {
+        return;
+    };
+    let left = clouds(presence);
+    if left < 1.0 && event.fog.cloud_end.is_finite() {
+        event.fog.cloud_end = (event.fog.cloud_end * left).max(0.01);
     }
 }
 

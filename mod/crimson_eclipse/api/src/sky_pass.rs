@@ -129,7 +129,7 @@ impl RenderHooks for Sky {
             w.depth_size[1] as f32,
         ]);
         // The preview's clock started 14 seconds before the eclipse.
-        u.extend_from_slice(&[seconds + 14.0, frame.progress, frame.beat, 0.0]);
+        u.extend_from_slice(&[seconds + 14.0, frame.progress, frame.beat, w.camera.y as f32]);
         u.extend_from_slice(&[frame.void_radius, frame.crack_reach, frame.torn, frame.corona]);
         u.extend_from_slice(&[frame.blood, frame.stars_pull, frame.grade * presence, colors.weight]);
         u.extend_from_slice(&[
@@ -375,7 +375,7 @@ struct U {
     inv: mat4x4<f32>,   // clip space to camera-relative world
     moon: vec4<f32>,    // xyz: direction of the moon, w: its radius in radians
     size: vec4<f32>,    // the frame's width and height, the depth's width and height
-    a: vec4<f32>,       // time in seconds, eclipse progress, heartbeat pulse
+    a: vec4<f32>,       // time in seconds, eclipse progress, heartbeat pulse, the camera's height
     b: vec4<f32>,       // void radius, crack reach, torn share, corona
     c: vec4<f32>,       // blood, stars pull, world grade, sky weight
     d: vec4<f32>,       // dark, flash, shock radius, shock strength
@@ -661,9 +661,18 @@ fn to_target(c: vec3<f32>) -> vec3<f32> {
     return c;
 }
 
+// Sky is where nothing was drawn (depth 0). The vanilla clouds leave their
+// depth even once faded out, so a far pixel inside the cloud layer (192.33 to
+// 196.33 blocks up) is sky too.
 fn is_sky(v: V) -> bool {
     let at = min(vec2<i32>(v.uv * u.size.zw), vec2<i32>(u.size.zw) - vec2<i32>(1, 1));
-    return textureLoad(depth_tex, max(at, vec2<i32>(0, 0)), 0) <= 0.0;
+    let depth = textureLoad(depth_tex, max(at, vec2<i32>(0, 0)), 0);
+    if (depth <= 0.0) { return true; }
+    let ndc = vec2<f32>(v.uv.x * 2.0 - 1.0, 1.0 - v.uv.y * 2.0);
+    let p = u.inv * vec4<f32>(ndc, depth, 1.0);
+    let rel = p.xyz / p.w;
+    let y = u.a.w + rel.y;
+    return y > 192.0 && y < 196.7 && dot(rel, rel) > 256.0;
 }
 
 fn flash_light(v: V) -> vec3<f32> {

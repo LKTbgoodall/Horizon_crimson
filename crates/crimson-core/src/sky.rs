@@ -84,6 +84,13 @@ pub fn colors(frame: &Frame, presence: f32) -> Colors {
     }
 }
 
+/// How much of the vanilla clouds is left, 1 to 0, for the blood moon
+/// `presence` (0 to 1) of the hour: they dissolve through the omens, are gone
+/// before the eclipse starts, and come back with dawn.
+pub fn clouds(presence: f32) -> f32 {
+    1.0 - smoothstep(0.0, 0.8, presence)
+}
+
 /// How open the lid is, `seconds` after the eclipse began: the rise opens it,
 /// blinks close it for an instant, and dawn closes it for good.
 pub fn lid(frame: &Frame, seconds: f32, presence: f32) -> f32 {

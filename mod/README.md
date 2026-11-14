@@ -16,6 +16,11 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.1.2
+- **No more clouds during the blood moon**: they dissolve through the omens and come back at dawn
+  (the cloud fog's end is pulled to nothing with `render_fog`; the sky pass also paints over the cloud
+  layer, 192 to 197 blocks up, in case their depth stays). Not seen in game yet.
+
 ## New in 0.1.1 (after the first look in game)
 - **Sound**: heartbeat, a drone that builds, a distant omen, the world muffled in the blackout, the crack
   with echoes and a growl as the eye opens. These are the game's own sound events, pitched down:
@@ -59,7 +64,7 @@ Send screenshots (omens, mid eclipse, the eye) and the `latest.log` lines with `
 - **White shapes** over the moon or the eye: gone?
 - **The horizon**: is the join between the sky and the land soft now?
 - **Sound**: too loud, too quiet, the right mood? Does the heartbeat follow the red pulse?
-- **Clouds**: they pass dark in front of the sky (seen in 0.1.0). Keep them, or hide them during the eclipse?
+- **Clouds**: do they fade out during the omens and stay gone? Any cloud-shaped hole or dark shape left in the sky?
 
 ### Known for this first version
 - No bloom yet, no burgundy grass, no particles. Sounds are vanilla stand-ins.

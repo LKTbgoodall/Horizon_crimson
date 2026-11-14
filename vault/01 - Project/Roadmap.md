@@ -20,7 +20,8 @@ Back: [[00 - Home]]
 - [x] First glue 0.1.0, type-checked against the pin: night tick, `/crimson start|stop|status`, red fog, camera shake (2026-11-14)
 - [x] 0.1.0 built and seen in game (Bastien, 2026-11-14): the sky pass draws; four problems reported
 - [x] 0.1.1: real moon path, amber moon, white shapes fixed, soft horizon, sound with vanilla events (2026-11-14)
-- [ ] 0.1.1 seen in game (Bastien)
+- [x] 0.1.2: vanilla clouds dissolve during the blood moon (2026-11-14)
+- [ ] 0.1.1 and 0.1.2 seen in game (Bastien)
 - [ ] Our own sound files (needs an Ogg encoder: none on the dev PC)
 - [x] Sky pass written (`RenderHooks::world_drawn`, staging C, frame copy + land grade), type-checked, shader validated (2026-11-14); **not seen in game**
 - [ ] Bloom on top of it (from Cagebound's `fx.rs`)
