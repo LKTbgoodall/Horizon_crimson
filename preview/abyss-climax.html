@@ -212,6 +212,15 @@ function planFissures(seed) {
         climax ? TC + .3 + .8 * R() : born + 5 < 72 ? born + 2 + 3 * R() : late());
     }
   }
+  { // a window onto the Spire (crate::fissures::window_at)
+    const az = -.62 / .88, el = .5, rad = .085, C0 = [Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az)];
+    const e1 = norm(cross([0, 1, 0], C0)), e2 = cross(C0, e1), cs = [];
+    for (let k = 0; k < 5; k++) { const a = (k + .35 * (R() - .5)) / 5 * 6.2832, rr = rad * (.75 + .4 * R()); cs.push(norm(add(C0, add(mul3(e1, Math.cos(a) * rr), mul3(e2, Math.sin(a) * rr))))); }
+    const C = norm(cs.reduce((acc, P) => add(acc, P), [0, 0, 0]));
+    let reach = 0; for (const P of cs) reach = Math.max(reach, Math.acos(clamp(dot(C, P), -1, 1)));
+    cs.forEach((P, k) => shd.push(...P, k === 0 ? TC + 1 + .5 * R() : k === 1 ? rad * .6 : 0));
+    shd.push(...C, Math.cos(reach + .01));
+  }
   // segments, in chunks of 8 with a bounding cap
   const seg = [], chk = [];
   for (const p of paths) {
@@ -861,7 +870,7 @@ void main(){
   col+=vec3(2.5,2.,1.8)*heat*crack*1.5*uAtt;
   if(uVar==0){
     float win,lip;vec4 fs=fissures(d,win,lip);
-    vec2 sh=shardHoles(d);win=max(win,sh.x);
+    vec2 sh=shardHoles(d);win=max(win,sh.x);lip*=1.-sh.x;   // no trace of a crack inside a hole
     if(uDbg>0.) win=1.;                                 // ?dbg=1: the other world everywhere (checking only)
     if(win>0.) col=mix(col,otherSide(d)*(1.-.55*lip),win);   // the lips' thickness, in shadow, then the other world
     hole=max(hole,win);

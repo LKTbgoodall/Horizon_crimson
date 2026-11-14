@@ -16,6 +16,11 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.2.4
+- **No trace of a crack inside a hole**: the shaded edges of the cracks are gone there too.
+- **A window onto the Spire**: a hole of its own on the left, where the Spire stands, opening just after the
+  climax, so the Pale Realm's main structure can be seen.
+
 ## New in 0.2.3 (Bastien's look at 0.2.2)
 - **Just a hole**: inside a hole there is only the other world now. No crack line crosses it, and where shards
   overlap only the outline of the whole opening burns (no edge drawn inside another hole).

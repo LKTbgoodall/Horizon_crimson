@@ -996,7 +996,7 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     let win = max(fs.win, sh.x) * present;
     let flash = fog_flash();
     if (win > 0.0) {
-        col = mix(col, other_side(d, flash) * (1.0 - 0.55 * fs.lip), win);
+        col = mix(col, other_side(d, flash) * (1.0 - 0.55 * fs.lip * (1.0 - sh.x)), win);
         weight = max(weight, win);
     }
     let hush = select(0.0, ss(58.3, 59.5, s), s < 60.5);

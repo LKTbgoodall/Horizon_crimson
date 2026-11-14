@@ -563,8 +563,51 @@ fn plan_shards(pl: &mut Planner, left: usize, right: usize) -> Vec<Shard> {
             }
         }
     }
+    // A window onto the Spire, the Pale Realm's main structure, so it can be seen (Bastien).
+    let falls = EYE_OPENS + 1.0 + 0.5 * pl.unit();
+    if let Some(s) = window_at(pl, SPIRE_AZIMUTH, 0.5, 0.085, falls) {
+        shards.push(s);
+    }
     shards.truncate(MAX_SHARDS);
     shards
+}
+
+/// Where the Spire stands behind the sky: its azimuth (the moon rises at 0, x east, z south).
+pub const SPIRE_AZIMUTH: f32 = -0.62 / 0.88;
+
+/// A rough pentagonal hole of about `radius` centred on the direction at `azimuth` and `elevation`.
+fn window_at(
+    pl: &mut Planner,
+    azimuth: f32,
+    elevation: f32,
+    radius: f32,
+    falls: f32,
+) -> Option<Shard> {
+    let c = [
+        elevation.cos() * azimuth.cos(),
+        elevation.sin(),
+        elevation.cos() * azimuth.sin(),
+    ];
+    let e1 = norm(cross([0.0, 1.0, 0.0], c));
+    let e2 = cross(c, e1);
+    let mut corners = [[0.0; 3]; 5];
+    for (k, corner) in corners.iter_mut().enumerate() {
+        let a = (k as f32 + 0.35 * (pl.unit() - 0.5)) / 5.0 * std::f32::consts::TAU;
+        let r = radius * (0.75 + 0.4 * pl.unit());
+        *corner = norm(add(c, add(scale(e1, a.cos() * r), scale(e2, a.sin() * r))));
+    }
+    let center = norm(corners.iter().fold([0.0; 3], |acc, p| add(acc, *p)));
+    let reach = corners
+        .iter()
+        .map(|p| dot(center, *p).clamp(-1.0, 1.0).acos())
+        .fold(0.0, f32::max);
+    Some(Shard {
+        corners,
+        falls,
+        size: radius * 0.6,
+        center,
+        cos_reach: (reach + 0.01).cos(),
+    })
 }
 
 /// A shard on crack `c` from point `i` to point `i + n`, on `side`, reaching `depth` off the crack.
