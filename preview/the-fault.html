@@ -74,9 +74,9 @@ if (Q.get('ui') === '0') document.body.classList.add('hide');
 
 // ---------------------------------------------------------------- shared geometry of the fault (same formulas in GLSL)
 const fract = x => x - Math.floor(x);
-const cz = z => 2.4*Math.sin(z*.19+.3) + 1.1*Math.sin(z*.47+1.7) + .5*Math.sin(z*1.13+4.) + .6*(Math.abs(fract(z*.17)-.5)*4.-1.);
-const wz = z => 2.4 + .9*Math.sin(z*.27+2.1) + .4*Math.sin(z*.71);
-const tOpen = z => Math.abs(z) / 11;
+const cz = z => 4.5*Math.sin(z*.12+.3) + 2.0*Math.sin(z*.31+1.7) + .8*Math.sin(z*.83+4.) + 1.0*(Math.abs(fract(z*.11)-.5)*4.-1.);
+const wz = z => 6.5 + 2.0*Math.sin(z*.18+2.1) + .8*Math.sin(z*.47);
+const tOpen = z => Math.abs(z) / 16;
 const spreadS = tl => 1.0*ss(0,.35,tl) + 1.0*ss(1.6,1.95,tl) + 1.4*ss(3.4,3.8,tl);
 function ss(a, b, x) { x = Math.min(1, Math.max(0, (x-a)/(b-a))); return x*x*(3-2*x); }
 function hash3(x, y, z) { let h = (Math.imul(x,374761393) + Math.imul(y,668265263) + Math.imul(z,1442695041)) | 0;
@@ -84,7 +84,7 @@ function hash3(x, y, z) { let h = (Math.imul(x,374761393) + Math.imul(y,66826526
 function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
   t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 function heightAt(x, z) {
-  const e = Math.min(1, Math.max(0, (31 - Math.max(Math.abs(x+.5), Math.abs(z+.5))) / 6));
+  const e = Math.min(1, Math.max(0, (Math.min(44-Math.abs(x+.5), 48-Math.abs(z+.5)) - 1) / 7));
   const v = 1.4 + 1.2*Math.sin(x*.13+z*.07) + .8*Math.sin(z*.17-x*.05+2) + .4*Math.sin(x*.41+z*.33);
   return Math.max(0, Math.min(3, Math.round(v*e)));
 }
@@ -105,7 +105,7 @@ function program(vs, fs) { const p = gl.createProgram(); gl.attachShader(p, shad
 
 const COMMON = `
 float h2(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
-float czf(float z){ return 2.4*sin(z*.19+.3)+1.1*sin(z*.47+1.7)+.5*sin(z*1.13+4.)+.6*(abs(fract(z*.17)-.5)*4.-1.); }
+float czf(float z){ return 4.5*sin(z*.12+.3)+2.0*sin(z*.31+1.7)+.8*sin(z*.83+4.)+1.0*(abs(fract(z*.11)-.5)*4.-1.); }
 `;
 
 // ---- blocks
@@ -130,7 +130,7 @@ void fall(float f, float rnd, float rnd2, float side, float pop, inout vec3 off,
   off.z += (rnd2-.5)*1.6*f;
   R = rotA(vec3(rnd-.5, rnd2-.5, .35), f*(2.+rnd*7.)) * R;
   heat = max(heat, smoothstep(0.,.5,f));
-  if(f>2.3) sc=0.;
+  if(f>2.8) sc=0.;
 }
 void main(){
   float type=aI0.x, rnd=aI0.y, side=aI0.z, dE=aI0.w;
@@ -143,13 +143,13 @@ void main(){
   if(type>6.5){ /* ring and floor: static */ }
   else if(uV==0){ // ---------------- F1 THE STRIKE
     if(crystal) sc=0.;
-    float r=length(c.xz), wt=uT-uTrig-.15-r/16.;
-    off.y += 1.25*exp(-wt*wt*28.)*exp(-r/24.);                        // shock wave ripple (whole columns)
-    if(inside) fall(tl-.05-rnd*.45-depth*.035, rnd, rnd2, side, 2.5, off, R, heat, sc);
-    else if(dE<1.6 && depth<5.){
-      float e=smoothstep(0.,.6,tl)*(1.-dE/1.6);
-      off.y -= .35*e; R = rotA(vec3(0,0,1), -side*.14*e);
-      if(rnd<.32 && dE<1.) fall(tl-1.2-rnd2*7., rnd, rnd2, side, 1., off, R, heat, sc);
+    float r=length(c.xz), wt=uT-uTrig-.15-r/22.;
+    off.y += 1.7*exp(-wt*wt*22.)*exp(-r/34.);                        // shock wave ripple (whole columns)
+    if(inside) fall(tl-.05-rnd*.5-depth*.03, rnd, rnd2, side, 2.5, off, R, heat, sc);
+    else if(dE<2.6 && depth<7.){
+      float e=smoothstep(0.,.6,tl)*(1.-dE/2.6);
+      off.y -= .5*e; R = rotA(vec3(0,0,1), -side*.16*e);
+      if(rnd<.35 && dE<1.8) fall(tl-1.2-rnd2*7., rnd, rnd2, side, 1., off, R, heat, sc);
     }
   } else if(uV==1){ // ---------------- F2 THE UPHEAVAL
     if(crystal) sc=0.;
@@ -176,7 +176,7 @@ void main(){
     }
   } else if(uV==2){ // ---------------- F3 THE TECTONIC TEAR
     float s = spreadS(tl);
-    float fo = 1.-smoothstep(15.,24.,abs(c.x));
+    float fo = 1.-smoothstep(26.,38.,abs(c.x));
     if(!inside || crystal){
       float de=max(dE,0.);
       off.x += side*s*.9*fo;
@@ -196,16 +196,16 @@ void main(){
     }
   } else { // ---------------- F4 THE MAELSTROM
     if(crystal) sc=0.;
-    bool sucked = (inside && depth<9.) || (dE<1.3 && depth<5. && rnd<.4);
+    bool sucked = (inside && depth<12.) || (dE<1.3 && depth<5. && rnd<.4);
     float del = inside ? rnd*.6+depth*.04 : 1.2+rnd2*6.;
     float f = tl - del;
     if(sucked && f>0.){
-      vec2 ax = vec2(czv, -2.);
+      vec2 ax = vec2(czv, -3.);
       vec2 rel = c.xy - ax;
       float r0 = length(rel), a0 = atan(rel.y, rel.x);
       float lift = smoothstep(0.,.7,f);
       float ang = a0 + side*(1.5*f + .22*f*f);
-      float rr = mix(r0, min(r0,6.), smoothstep(0.,1.2,f))*mix(1., .35, smoothstep(0.,9.,f)) + 1.4*lift;
+      float rr = mix(r0, min(r0,10.), smoothstep(0.,1.2,f))*mix(1., .35, smoothstep(0.,9.,f)) + 1.4*lift;
       vec2 np = ax + vec2(cos(ang)*rr*.55, sin(ang)*rr);
       np.y -= .12*f*f;
       off.xy += np - c.xy;
@@ -213,7 +213,7 @@ void main(){
       R = rotA(vec3(0,0,1), ang-a0) * rotA(vec3(rnd,rnd2,.5), f*rnd*3.);
       heat = .12 + .6*(1.-smoothstep(0.,2.,f));
       sc = 1.-smoothstep(8.,11.,f);
-    } else if(inside && depth>=9.) fall(tl-.4-rnd*1.2-(depth-9.)*.05, rnd, rnd2, side, 0., off, R, heat, sc);
+    } else if(inside && depth>=12.) fall(tl-.4-rnd*1.2-(depth-12.)*.04, rnd, rnd2, side, 0., off, R, heat, sc);
     else if(!inside && dE<1.6 && depth<5.){
       float e=smoothstep(0.,.6,tl)*(1.-dE/1.6);
       off.y -= .3*e; R = rotA(vec3(0,0,1), -side*.12*e);
@@ -261,11 +261,11 @@ void main(){
   float shade = abs(nl.y)>.5 ? (nl.y>0.?1.:.5) : (abs(nl.x)>.5?.78:.64);
   vec3 col = alb*shade*(vec3(.075,.035,.04) + vec3(.48,.15,.13)*max(dot(N,L),0.));
   // light rising from the abyss, along the fault
-  float tz = uT-uTrig-abs(vW.z)/11.;
+  float tz = uT-uTrig-abs(vW.z)/16.;
   float op = smoothstep(0.,2.5,tz);
-  vec3 Lp = vec3(czf(vW.z), -10., vW.z), tl = Lp-vW; float dl=length(tl);
-  vec3 upc = mix(vec3(1.,.22,.15), vec3(1.,.72,.62), smoothstep(-2.,-18.,vW.y));
-  col += alb*upc*op*max(dot(N,tl/dl),0.)*90./(10.+dl*dl);
+  vec3 Lp = vec3(czf(vW.z), -20., vW.z), tl = Lp-vW; float dl=length(tl);
+  vec3 upc = mix(vec3(1.,.22,.15), vec3(1.,.72,.62), smoothstep(-2.,-32.,vW.y));
+  col += alb*upc*op*max(dot(N,tl/dl),0.)*320./(30.+dl*dl);
   // hot edges on blocks that move
   vec2 fu=fract(uv); float ed=min(min(fu.x,1.-fu.x),min(fu.y,1.-fu.y));
   emi += vec3(2.2,.3,.16)*vHeat*(smoothstep(.07,.0,ed)+.05);
@@ -273,19 +273,19 @@ void main(){
   if(nl.y>.5 && t==0){
     vec2 q=(floor(vBase.xz*16.)+.5)/16.;
     float dm=abs(q.x-czf(q.y));
-    float tq=uT-uTrig-abs(q.y)/11.;
+    float tq=uT-uTrig-abs(q.y)/16.;
     float cool=.35+.65*exp(-max(tq-2.,0.)*.3);
-    float seam=step(dm,.13)*smoothstep(-.6,-.15,tq);
-    float e=vor(q*.42+3.1);
-    float reach=(uV==2?9.:7.)*smoothstep(-.3,2.8,tq);
-    float br=smoothstep(.08,.025,e)*step(dm,reach)*step(-.3,tq)*(1.-dm/(reach+.001));
+    float seam=step(dm,.2)*smoothstep(-.6,-.15,tq);
+    float e=vor(q*.26+3.1);
+    float reach=(uV==2?17.:14.)*smoothstep(-.3,3.2,tq);
+    float br=smoothstep(.05,.015,e)*step(dm,reach)*step(-.3,tq)*(1.-dm/(reach+.001));
     emi += vec3(3.,.32,.2)*max(seam,br)*cool;
   }
   col += emi;
   float dist=length(vW-uCam);
   vec3 fogc=vec3(.10,.022,.028);
-  col = mix(col, fogc, 1.-exp(-dist*.0065));
-  float deep=smoothstep(-7.,-24.,vW.y);
+  col = mix(col, fogc, 1.-exp(-dist*.0042));
+  float deep=smoothstep(-12.,-42.,vW.y);
   col = mix(col, upc*op*.9+fogc*(1.-op), deep*.7);
   o=vec4(col,1.);
 }`;
@@ -403,29 +403,29 @@ const P_BRIGHT = program(FS_VS, BRIGHT_FS), P_BLUR = program(FS_VS, BLUR_FS), P_
 function buildBlocks() {
   const A = []; const R = rng(1234);
   const push = (...v) => { for (const x of v) A.push(x); };
-  for (let x = -32; x < 32; x++) for (let z = -32; z < 32; z++) {
-    const H = heightAt(x, z), band = Math.abs(x+.5) < 15, yb = band ? -22 : -3;
+  for (let x = -44; x < 44; x++) for (let z = -48; z < 48; z++) {
+    const H = heightAt(x, z), band = Math.abs(x+.5) < 26, yb = band ? -40 : -3;
     const zc = z+.5, c = cz(zc), w = wz(zc), tO = tOpen(zc), dx = x+.5-c, side = dx < 0 ? -1 : 1;
     for (let y = H; y >= yb; y--) {
       const depth = H - y;
-      const jit = .65*Math.sin(y*.9+zc*.7)*Math.sin(y*.37-zc*1.3) + (hash3(x,y,z)-.5)*.5;
+      const jit = 1.1*Math.sin(y*.6+zc*.5)*Math.sin(y*.25-zc*.9) + (hash3(x,y,z)-.5)*.6;
       const dE = Math.abs(dx) - (w + jit);
       if (!(dE < 3.5 || depth < 4)) continue;
       const r = hash3(x,y,z+99), r2 = hash3(x+7,y,z);
-      let type = depth === 0 ? 0 : depth <= 3 + (r2 < .3 ? 1 : 0) ? 1 : depth < 11 + Math.round(Math.sin(x*.3+zc*.2)*1.5) ? 2 : 3;
+      let type = depth === 0 ? 0 : depth <= 3 + (r2 < .3 ? 1 : 0) ? 1 : depth < 16 + Math.round(Math.sin(x*.3+zc*.2)*2) ? 2 : 3;
       if ((type === 2 || type === 3) && r < .045 && depth > 5) type = 4;
       if (type === 3 && r > .985 && dE > 0) type = 6;
       push(x,y,z, 1,1,1, type,r,side,dE, tO,c,depth,r2);
-      if (band && dE >= 0 && dE < 1 && depth >= 3 && depth <= 17 && R() < .09) {
+      if (band && dE >= 0 && dE < 1 && depth >= 3 && depth <= 30 && R() < .09) {
         const s = .45+R()*.3, l = 1+R()*1.4;
         push(x+.5-side*.8-s/2, y+.5-l/2, z+.5-s/2, s,l,s, 5,R(),side,.5, tO,c,depth,R());
       }
     }
   }
   const ring = (x,y,z,sx,sy,sz,t) => push(x,y,z, sx,sy,sz, t,.5,0,99, 0,0,0,.5);
-  ring(-200,-3,-200, 400,4,168, 7); ring(-200,-3,32, 400,4,168, 7);
-  ring(-200,-3,-32, 168,4,64, 7);   ring(32,-3,-32, 168,4,64, 7);
-  ring(-32,-4,-32, 17,1,64, 8);     ring(15,-4,-32, 17,1,64, 8);
+  ring(-300,-3,-300, 600,4,252, 7); ring(-300,-3,48, 600,4,252, 7);
+  ring(-300,-3,-48, 256,4,96, 7);   ring(44,-3,-48, 256,4,96, 7);
+  ring(-44,-4,-48, 18,1,96, 8);     ring(26,-4,-48, 18,1,96, 8);
   return new Float32Array(A);
 }
 const CUBE = (() => { const v = [];
@@ -448,55 +448,55 @@ function buildParticles(v) {
   const add = (x,y,z, vx,vy,vz, spawn,life, r,g,b,size, type,grav,drag) => P.push(x,y,z,spawn, vx,vy,vz,life, r,g,b,size, type,grav,drag,R());
   const top = (x,z) => heightAt(Math.floor(x), Math.floor(z)) + 1;
   // common: dust off both lips, chunks, embers, light shafts
-  for (let z = -32; z < 32; z += .5) {
+  for (let z = -48; z < 48; z += .5) {
     const c = cz(z), w = wz(z), t = TRIG + tOpen(z);
     for (let k = 0; k < 2; k++) { const s = k ? 1 : -1;
-      add(c+s*w, top(c+s*w,z)+.2, z+R()*.5, s*(1+R()*2), 1.2+R()*2.4, R()-.5, t+R()*.35, 2.5+R()*2, .045,.03,.028, 1.6+R()*1.9, 0, .25, 1.5); }
-    for (let k = 0; k < 3; k++) add(c+(R()-.5)*w*2, top(c,z), z+R()*.5, (R()-.5)*4, 4+R()*6, (R()-.5)*2, t+R()*.4, 1.6, .28,.18,.12, .16+R()*.16, 2, -28, 0);
+      add(c+s*w, top(c+s*w,z)+.2, z+R()*.5, s*(1+R()*3), 1.5+R()*3, R()-.5, t+R()*.35, 3+R()*2.5, .045,.03,.028, 2.5+R()*3, 0, .25, 1.5); }
+    for (let k = 0; k < 6; k++) add(c+(R()-.5)*w*2, top(c,z), z+R()*.5, (R()-.5)*6, 5+R()*9, (R()-.5)*2, t+R()*.4, 1.6, .28,.18,.12, .16+R()*.16, 2, -28, 0);
   }
-  for (let i = 0; i < 2600; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+.5; const t = t0 + R()*(T_REALM-t0);
-    add(cz(z)+(R()-.5)*3.5, -4-R()*14, z, (R()-.5)*.6, 3+R()*4, (R()-.5)*.6, t, 3+R()*3, 4,.9,.4, .12+R()*.13, 1, .4, 0); }
-  for (let z = -31; z < 32; z += 2.2) add(cz(z), -6, z, 0,0,0, TRIG+tOpen(z)+.3, T_REALM-TRIG-tOpen(z)-.3, .13,.035,.025, 2+R()*1.6, 3, 0, 12+R()*8);
+  for (let i = 0; i < 4500; i++) { const z = R()*96-48; const t0 = TRIG+tOpen(z)+.5; const t = t0 + R()*(T_REALM-t0);
+    add(cz(z)+(R()-.5)*9, -6-R()*28, z, (R()-.5)*.6, 4+R()*5, (R()-.5)*.6, t, 3+R()*3, 4,.9,.4, .12+R()*.13, 1, .4, 0); }
+  for (let z = -47; z < 48; z += 2.6) add(cz(z)+(R()-.5)*4, -12, z, 0,0,0, TRIG+tOpen(z)+.3, T_REALM-TRIG-tOpen(z)-.3, .11,.03,.02, 3.5+R()*3, 3, 0, 24+R()*14);
   if (v === 0) { // the bolt from the moon, the flash, the shock wave
-    const end = [0, top(0,0), 0], st = [16, 75, 34];
+    const end = [0, top(0,0), 0], st = [26, 120, 54];
     let prev = st;
     for (let s = 1; s <= 22; s++) { const k = s/22;
       const p = [st[0]+(end[0]-st[0])*k+(s<22?(R()-.5)*5:0), st[1]+(end[1]-st[1])*k, st[2]+(end[2]-st[2])*k+(s<22?(R()-.5)*5:0)];
       const L = Math.hypot(p[0]-prev[0], p[1]-prev[1], p[2]-prev[2]), n = Math.ceil(L/.25);
       for (let j = 0; j < n; j++) { const q = j/n; const x = prev[0]+(p[0]-prev[0])*q, y = prev[1]+(p[1]-prev[1])*q, zz = prev[2]+(p[2]-prev[2])*q;
-        add(x,y,zz, 0,0,0, TRIG-.05, .45, 3.5,.6,.5, .6, 4, 0, 0);
-        add(x,y,zz, 0,0,0, TRIG-.05, .45, .45,.06,.05, 2.4, 4, 0, 0);
+        add(x,y,zz, 0,0,0, TRIG-.05, .45, 3.5,.6,.5, 1.1, 4, 0, 0);
+        add(x,y,zz, 0,0,0, TRIG-.05, .45, .45,.06,.05, 4.5, 4, 0, 0);
         if (R() < .03) { let bx = x, by = y, bz = zz; for (let b = 0; b < 30; b++) { bx += (R()-.5)*.6; by -= .25; bz += (R()-.5)*.6; add(bx,by,bz,0,0,0,TRIG-.03,.3,2.5,.45,.35,.4,4,0,0); } } }
       prev = p; }
-    add(0, top(0,0)+1, 0, 0,0,0, TRIG, 1.2, 1.1,.22,.16, 8, 5, 0, 0);
-    for (let i = 0; i < 180; i++) { const a = i/180*Math.PI*2; add(Math.cos(a)*1.5, top(0,0)+.4, Math.sin(a)*1.5, Math.cos(a)*19, .6, Math.sin(a)*19, TRIG+.05, 2, .05,.03,.03, 2.6+R()*1.5, 0, 0, .9); }
+    add(0, top(0,0)+1, 0, 0,0,0, TRIG, 1.2, 1.1,.22,.16, 16, 5, 0, 0);
+    for (let i = 0; i < 260; i++) { const a = i/260*Math.PI*2; add(Math.cos(a)*1.5, top(0,0)+.4, Math.sin(a)*1.5, Math.cos(a)*27, .6, Math.sin(a)*27, TRIG+.05, 2.2, .05,.03,.03, 4+R()*2.5, 0, 0, .9); }
     for (let i = 0; i < 350; i++) { const a = R()*Math.PI*2, sp = 4+R()*12; add(0, top(0,0)+.3, 0, Math.cos(a)*sp, 8+R()*16, Math.sin(a)*sp, TRIG+R()*.1, 1.5+R(), 6,1.4,.5, .14, 1, -22, 0); }
   }
   if (v === 1) { // eruption, anti-gravity motes around the hanging blocks
-    for (let z = -32; z < 32; z += .5) { const c = cz(z), t = TRIG+tOpen(z);
+    for (let z = -48; z < 48; z += .5) { const c = cz(z), t = TRIG+tOpen(z);
       for (let k = 0; k < 5; k++) add(c+(R()-.5)*3, top(c,z), z, (R()-.5)*7, 14+R()*14, (R()-.5)*3, t+R()*.3, 2.2, .3,.19,.12, .18+R()*.2, 2, -20, 0);
       for (let k = 0; k < 3; k++) add(c+(R()-.5)*3, top(c,z), z, (R()-.5)*3, 12+R()*16, (R()-.5)*2, t+R()*.3, 1.6, 6,1.4,.5, .16, 1, -10, 0);
       add(c, top(c,z)+.5, z, 0,0,0, t, .6, 4,.9,.6, 7, 5, 0, 0); }
-    for (let i = 0; i < 1800; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+1; const t = t0 + R()*(T_REALM-t0);
+    for (let i = 0; i < 1800; i++) { const z = R()*96-48; const t0 = TRIG+tOpen(z)+1; const t = t0 + R()*(T_REALM-t0);
       add(cz(z)+(R()-.5)*10, 4+R()*22, z, 0, .4+R()*.6, 0, t, 3+R()*3, 1.4,.9,.85, .1+R()*.1, 8, 0, 0); }
-    for (let i = 0; i < 900; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+1.5; const t = t0 + R()*(T_REALM-t0);
+    for (let i = 0; i < 900; i++) { const z = R()*96-48; const t0 = TRIG+tOpen(z)+1.5; const t = t0 + R()*(T_REALM-t0);
       add(cz(z)+(R()-.5)*8, 8+R()*18, z, 0, -.5, 0, t, 2.5, 5,1,.4, .1, 1, -3, 0); }
   }
   if (v === 2) { // dust at each jolt, lava falls from the walls
-    for (const jt of [0, 1.6, 3.4]) for (let z = -32; z < 32; z += .7) { const c = cz(z), w = wz(z), t = TRIG+tOpen(z)+jt, sp = spreadS(jt+.4)*.9;
+    for (const jt of [0, 1.6, 3.4]) for (let z = -48; z < 48; z += .7) { const c = cz(z), w = wz(z), t = TRIG+tOpen(z)+jt, sp = spreadS(jt+.4)*.9;
       for (const s of [-1, 1]) add(c+s*(w+sp), top(c+s*w,z)+.1, z, s*(1+R()), 1+R()*2, R()-.5, t+R()*.15, 2.5+R()*1.5, .045,.03,.028, 2+R()*2, 0, .2, 1.4); }
     for (let i = 0; i < 14; i++) { const z = -26 + i*4 + R()*2, s = i % 2 ? 1 : -1, y = -3 - R()*6, c = cz(z), w = wz(z);
       const t0 = TRIG+tOpen(z)+2.2;
       for (let t = t0; t < T_REALM; t += .022) { const sp = spreadS(t-TRIG-tOpen(z))*.9;
         add(c+s*(w+sp-.1), y, z+(R()-.5)*.6, -s*(1+R()*.7), 0, (R()-.5)*.2, t, 1.8, 6,1.6,.3, .3+R()*.15, 7, -16, 0); } }
-    for (let i = 0; i < 700; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+4.5; const t = t0 + R()*(T_REALM-t0);
+    for (let i = 0; i < 700; i++) { const z = R()*96-48; const t0 = TRIG+tOpen(z)+4.5; const t = t0 + R()*(T_REALM-t0);
       add(cz(z)+(R()-.5)*9, -3-R()*14, z, 0, .3, 0, t, 2.5, 4,.5,.5, .09, 8, 0, 0); }
   }
   if (v === 3) { // the vortex
-    for (let i = 0; i < 3600; i++) { const z = R()*64-32; const t0 = TRIG+tOpen(z)+.2; const t = t0 + R()*(T_REALM-t0);
+    for (let i = 0; i < 3600; i++) { const z = R()*96-48; const t0 = TRIG+tOpen(z)+.2; const t = t0 + R()*(T_REALM-t0);
       const pale = R() < .4; add(cz(z), -2, z, 1.5+R()*6, R()*6.28, (z*0+1)*(1.6+R()*2.2)*(R()<.5?1:1), t, 3+R()*4,
         pale?2.2:3.5, pale?1.8:.7, pale?1.7:.5, .14+R()*.14, 6, 0, 0); }
-    for (let z = -32; z < 32; z += .5) { const c = cz(z), t = TRIG+tOpen(z);
+    for (let z = -48; z < 48; z += .5) { const c = cz(z), t = TRIG+tOpen(z);
       for (let k = 0; k < 3; k++) add(c+(R()-.5)*3, top(c,z), z, (R()-.5)*3, 6+R()*6, (R()-.5)*2, t+R()*.3, 1.4, 5,1.2,.6, .15, 1, -14, 0); }
   }
   return new Float32Array(P);
@@ -566,15 +566,15 @@ function shakeAmp(t) {
 }
 function camera(t) {
   if (t >= T_REALM) { const a = .12 + (t-T_REALM)*.03; return { pos:[0,1.7,0], tgt:[Math.sin(a)*10, 1.9+(t-T_REALM)*.05, Math.cos(a)*10], roll:0 }; }
-  const yaw = -2.0 + t*.05 + userYaw, rad = 25 - t*.35;
+  const yaw = -2.0 + t*.045 + userYaw, rad = 40 - t*.5;
   const lift = V === 1 ? ss(TRIG, TRIG+5, t) : 0;
-  let pos = [Math.sin(yaw)*rad, 14 + 5*lift + userPitch*12, Math.cos(yaw)*rad];
-  let tgt = [0, 5*lift - (V !== 1 ? 3*ss(TRIG+1, TRIG+5, t) : 0), 2];
+  let pos = [Math.sin(yaw)*rad, 36 + 6*lift + userPitch*12, Math.cos(yaw)*rad];
+  let tgt = [0, 6*lift - (V !== 1 ? 9*ss(TRIG+1, TRIG+5, t) : 0), 3];
   const k = ss(T_CRANE, T_DIVE, t);
-  pos = mixv(pos, [cz(-17), 17, -17], k); tgt = mixv(tgt, [cz(2), -7, 2], k);
+  pos = mixv(pos, [cz(-30), 30, -30], k); tgt = mixv(tgt, [cz(4), -16, 4], k);
   let roll = 0;
-  if (t > T_DIVE) { const e = Math.pow(Math.min(1, (t-T_DIVE)/(T_REALM-T_DIVE)), 2.1); const z = -17 + e*20;
-    pos = [cz(z), 17 - e*46, z]; tgt = mixv([cz(2), -7, 2], [cz(z+3), pos[1]-8, z+3], ss(T_DIVE, T_DIVE+.8, t));
+  if (t > T_DIVE) { const e = Math.pow(Math.min(1, (t-T_DIVE)/(T_REALM-T_DIVE)), 2.1); const z = -30 + e*34;
+    pos = [cz(z), 30 - e*80, z]; tgt = mixv([cz(4), -16, 4], [cz(z+4), pos[1]-10, z+4], ss(T_DIVE, T_DIVE+.8, t));
     roll = Math.PI*ss(T_DIVE+.9, T_REALM-.1, t); }
   const a = shakeAmp(t);
   if (a > 0) { const n = (f, o) => Math.sin(t*f+o)*.6 + Math.sin(t*f*1.73+o*2.1)*.4;

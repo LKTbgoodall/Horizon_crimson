@@ -44,7 +44,7 @@ All "mid, no real animation", except the ground fault (P2), which needs a huge a
 
 | # | Name | The opening |
 |---|---|---|
-| F1 | **The Strike** | a red bolt from the moon, a shock wave ripples the land, the fault races out both ways, the ground crumbles block by block with glowing edges, the lips keep breaking off |
+| F1 ✅ picked (big) | **The Strike** | a red bolt from the moon, a shock wave ripples the land, the fault races out both ways, the ground crumbles block by block with glowing edges, the lips keep breaking off |
 | F2 | **The Upheaval** | the ground swells along a line with spreading glowing cracks, then erupts; hundreds of blocks stay hanging over the chasm, turning slowly |
 | F3 | **The Tectonic Tear** | three jolts pull the two plates apart, the edges bend down, lava pours from the walls, crimson crystals grow out of the rock |
 | F4 | **The Maelstrom** | the top of the fault is torn into a spinning helix of blocks sucked down along the chasm into the light |
