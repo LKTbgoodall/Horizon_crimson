@@ -386,12 +386,24 @@ vec3 otherSide(vec3 d){
   // an upside-down land hangs over the rift: dark rock, hanging spires, lava streams, lights
   float ridge=.055+.015*fbm(vec2(x*9.,1.))-.03*pow(abs(sin(x*21.+2.*fbm(vec2(x*6.,8.)))),7.)-.016*pow(abs(sin(x*57.+1.3)),12.);
   c+=vec3(.7,.12,.08)*exp(-abs(u.y-ridge)*60.)*.35;
-  if(u.y>ridge){
+  // far floating islands, upside-down mountains, hazy in the violet
+  vec2 ig=vec2(u.x*5.,u.y*7.);ivec2 ic=ivec2(floor(ig));vec2 iv=fract(ig)-.5;
+  if(u.y>.1&&hi2(ic+ivec2(31,7))<.35){
+    float ih=hi2(ic+ivec2(3,11)),iw=.18+.18*ih;
+    float top=.12+.04*vnoise(vec2(ig.x*6.,float(ic.y)));                          // flat top
+    float bot=-.25*(1.-pow(abs(iv.x)/iw,1.5))-.12*pow(abs(sin(iv.x*40.+ih*9.)),6.); // hanging spikes
+    float isl=step(abs(iv.x),iw)*step(bot,iv.y)*step(iv.y,top);
+    vec3 ir=mix(vec3(.05,.01,.04),vec3(.22,.05,.22),.55);                          // far: violet haze over the rock
+    ir+=vec3(1.,.35,.1)*exp(-(iv.y-bot)*40.)*.6;                                   // lava glow under it
+    c=mix(c,ir,isl);
+  }
+  float thick=.07+.05*fbm(vec2(x*5.,3.));                                          // the land is a band over the rift, not a lid
+  if(u.y>ridge&&u.y<ridge+thick){
     vec3 land=vec3(.03,.008,.012)*(.6+.8*fbm(u*vec2(60.,90.)));
     float lv=1.-abs(2.*fbm(u*vec2(18.,40.)+3.)-1.);
     land+=vec3(1.,.32,.05)*pow(lv,14.)*1.2;                                       // lava streams
     land+=vec3(1.,.6,.25)*pow(hi2(ivec2(floor(u*vec2(500.,600.)))),70.)*2.;       // lights
-    c=mix(c,land,smoothstep(0.,.0015,u.y-ridge));
+    c=mix(c,land,smoothstep(0.,.0015,u.y-ridge)*smoothstep(0.,.004,ridge+thick-u.y));
     c+=vec3(1.,.35,.12)*exp(-(u.y-ridge)*500.)*1.1;                              // its edge, lit from below
   }
   c=levi(c,u,1.,-.25+(uT-74.)*.075,1.,-.012,0.,0.);       // near: swims along the rift
