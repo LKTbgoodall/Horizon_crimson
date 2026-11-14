@@ -81,6 +81,7 @@
   <div id="track"><div id="segs"></div><div id="rail"><div id="fill"></div></div><div id="knob"></div></div>
   <div class="vers" id="vers"></div>
   <div class="vers" id="worlds" title="C1: what is behind the sky (W)"></div>
+  <div class="vers" id="structs" title="Pale Realm: its main structure (S)"></div>
   <button id="clx" title="Jump to 1:04 (C)">⟲ Climax</button>
   <button id="snd" title="Rough synth stand-in">🔇 Sound</button>
   <button id="nb">Notes</button>
@@ -460,6 +461,51 @@ vec3 storm(vec2 u,out vec3 fogC){
 float sdBox(vec2 p,vec2 b){vec2 d=abs(p)-b;return length(max(d,0.))+min(max(d.x,d.y),0.);}
 float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
 float sdSeg(vec2 p,vec2 a,vec2 b){vec2 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h);}
+// The Pale Realm's main structure, seen from far: four candidates. Local units at distance D, base lost in the fog.
+uniform int uStruct;
+float structSD(vec2 lp,out float glow){
+  glow=0.;float d=1e3;
+  if(uStruct==0){                                                              // S1 · the Spire
+    float H=120.,y=clamp(lp.y,0.,H),k=1.-y/H;
+    float w=1.6+15.*pow(k,1.3)+3.5*step(fract(y/14.),.18)*k;                     // tapering, with ledges
+    d=max(abs(lp.x)-w,max(-lp.y,lp.y-H));
+    for(int i=0;i<6;i++){float yy=18.+float(i)*16.,kk=1.-yy/H;                 // side spikes
+      d=min(d,sdSeg(lp,vec2((1.6+15.*pow(kk,1.3))*sign(float(i%2)-.5),yy),vec2((8.+20.*kk)*sign(float(i%2)-.5),yy+7.+5.*kk))-1.2*kk-.4);}
+    float a=uT*.05;                                                            // broken rings turning around it
+    for(int i=0;i<2;i++){float ry=74.+float(i)*22.,rr=30.-float(i)*9.;
+      vec2 q=vec2(lp.x,(lp.y-ry)*3.2);float ang=atan(q.y,q.x)+a*(i==0?1.:-1.3);
+      float ring=abs(length(q)-rr)-.9;ring=max(ring,-(.15-abs(fract(ang*2.5/6.2832)-.5)));
+      d=min(d,ring);}
+    glow=exp(-length(lp-vec2(0.,H+2.))*.25)*(.7+.3*sin(uT*1.7));
+  }else if(uStruct==1){                                                        // S2 · the Gate
+    vec2 q=vec2(abs(lp.x),lp.y);
+    d=sdBox(q-vec2(22.,35.),vec2(4.5,35.));                                    // pillars
+    d=min(d,max(abs(length(lp-vec2(0.,70.))-22.)-5.,-(lp.y-70.)));             // arch
+    d=min(d,sdBox(q-vec2(0.,96.),vec2(2.,4.))); d=min(d,sdSeg(q,vec2(9.,90.),vec2(12.,101.))-1.);   // crown spikes
+    d=min(d,sdBox(q-vec2(22.,72.),vec2(7.,2.)));                               // capitals
+    float in_=max(abs(lp.x)-17.5,lp.y-70.);in_=min(in_,length(lp-vec2(0.,70.))-17.);  // the opening
+    if(in_<0.&&lp.y>-5.){glow=-1.;}                                            // signals: portal pixel
+  }else if(uStruct==2){                                                        // S3 · the floating Citadel
+    vec2 q=lp-vec2(0.,1.2*sin(uT*.3));
+    float t=clamp((q.y-8.)/47.,0.,1.),w=30.*pow(t,.7)*(.85+.3*fbm(vec2(q.y*.15,2.)));
+    d=max(abs(q.x)-w,max(8.-q.y,q.y-55.));                                     // an upside-down mountain
+    for(int i=0;i<6;i++){float fx=-22.+float(i)*8.8+3.*hi(i),hh=14.+26.*hi(i+5),ww=2.+2.5*hi(i+9);  // towers
+      d=min(d,max(sdBox(q-vec2(fx,55.+hh*.5),vec2(ww,hh*.5)),0.));
+      d=min(d,sdSeg(q,vec2(fx-ww,55.+hh),vec2(fx,55.+hh+7.+5.*hi(i+3)))-.2);
+      d=min(d,sdSeg(q,vec2(fx+ww,55.+hh),vec2(fx,55.+hh+7.+5.*hi(i+3)))-.2);}
+    for(int i=0;i<4;i++){float cx=-15.+float(i)*10.,sway=1.5*sin(uT*.4+float(i));   // chains into the fog
+      d=min(d,sdSeg(q,vec2(cx,12.),vec2(cx+sway,-40.))-.35);}
+  }else{                                                                       // S4 · the dead Tree
+    d=sdSeg(lp,vec2(0.,-10.),vec2(1.5,62.))-(6.-.06*max(lp.y,0.));
+    for(int i=0;i<6;i++){float fi=float(i),sd=sign(fi-2.5);
+      vec2 a=vec2(1.,30.+fi*6.),b=a+vec2(sd*(18.+10.*hi(i)),12.+10.*hi(i+3))+vec2(.5*sin(uT*.3+fi),0.);
+      d=min(d,sdSeg(lp,a,b)-(2.6-fi*.25));
+      for(int j=0;j<3;j++){float fj=float(j);vec2 c=mix(a,b,.45+.2*fj),e=c+vec2(sd*(6.+6.*hi(i*3+j)),7.+8.*hi(i*5+j))+vec2(.4*sin(uT*.5+fj),0.);
+        d=min(d,sdSeg(lp,c,e)-.9);
+        d=min(d,sdSeg(lp,e,e+vec2(sd*3.,4.+3.*hi(j+i)))-.35);}}
+  }
+  return d;
+}
 vec3 pale(vec2 u,out vec3 fogC){
   const float H0=.24;                                                          // its horizon, in our sky
   fogC=vec3(.8,.78,.74);
@@ -477,6 +523,19 @@ vec3 pale(vec2 u,out vec3 fogC){
     float sz=.02+.03*hi(k+7),sd=abs(q.x)/(sz*.55)+abs(q.y)/(sz*1.6);
     c=mix(c,mix(vec3(.03),fogC,.1+.35*hi(k+11)),smoothstep(1.02,.98,sd));
     c+=vec3(1.)*exp(-abs(sd-1.)*30.)*.12;
+  }
+  {                                                                            // the main structure, far off on the left
+    float D=uStruct==0?160.:145.;
+    vec2 lp=vec2(u.x*D-(-.62*D),(u.y-(H0-.26))*D);
+    float glow,sd=structSD(lp,glow);
+    float rise=smoothstep(H0-.14,H0+.12,u.y);
+    float hz=.26-.1*smoothstep(H0,H0+.5,u.y);                                  // haze: thicker low down
+    if(glow<0.){                                                               // the Gate's opening: a swirling void
+      vec2 q=rot(uT*.15)*(lp-vec2(0.,55.))*.06;
+      vec3 vc=vec3(.01,.008,.015)+vec3(.25,.22,.3)*pow(fbm(q*3.+vec2(fbm(q*2.+uT*.05))),3.)+vec3(1.)*pow(hi2(ivec2(floor(lp*1.5))),80.)*.8;
+      c=mix(c,mix(vec3(.01),vc,.9),rise*.95);
+    }else c+=vec3(.95,.95,1.)*glow*rise*.9;
+    c=mix(c,mix(vec3(.025,.022,.03),fogC,hz),smoothstep(.7,-.7,sd)*rise);
   }
   {                                                                            // one presence: a black shadow walking far off
     float D=85.,X=22.+(uT-76.)*1.7;                                            // its feet are far below, lost in the fog
@@ -849,7 +908,7 @@ function prog(vs, fs, name) {
   const locs = {};
   return { p, loc: k => (k in locs ? locs[k] : (locs[k] = gl.getUniformLocation(p, k))) };
 }
-const INTS = new Set(['uWorld', 'uVar', 'uTex', 'uBloom', 'uHgt', 'uRays', 'uSeg', 'uChk', 'uNChk']);
+const INTS = new Set(['uStruct', 'uWorld', 'uVar', 'uTex', 'uBloom', 'uHgt', 'uRays', 'uSeg', 'uChk', 'uNChk']);
 function setU(pr, o) {
   gl.useProgram(pr.p);
   for (const k in o) {
@@ -984,6 +1043,7 @@ function mul(a, b) { const o = new Float32Array(16); for (let c = 0; c < 4; c++)
 const qs = new URLSearchParams(location.search);
 let ver = Math.max(0, ['c1', 'c2', 'c3'].indexOf((qs.get('v') || 'c1').toLowerCase()));
 let world = clamp((parseInt(qs.get('w')) || 2) - 1, 0, 1);
+let struct = clamp((parseInt(qs.get('s')) || 1) - 1, 0, 3);
 let time = clamp(qs.has('t') ? parseFloat(qs.get('t')) || 0 : 58, 0, TT), playing = qs.get('play') !== '0';
 if (qs.get('ui') === '0') document.body.classList.add('hide');
 let mx = 0, my = 0, lookX = 0, lookY = 0, gaze = [0, 0], pupil = .3, pupV = 0, lastNow = performance.now(), realT = 0, prevTime = time;
@@ -1033,7 +1093,7 @@ function render(dt) {
   gl.bindVertexArray(fullVAO);
   setU(P.sky, { uRes: [W, H], uF: F, uR: R, uU: U, uTan: tf, uAsp: asp, uT: time, uP: S.p, uVar: ver, uMoon: S.moon, uSun: S.sun, uHor: S.hor, uZen: S.zen,
     uFog: S.fog, uSunset: S.sunset, uBeat: S.beat, uOpen: Math.max(S.open, 0), uSeam: S.seam, uPupil: pupil, uGaze: gaze, uFlash: S.flash, uShock: S.shock, uShockK: S.shockK,
-    uMoonRad: S.moonRad, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uTc: S.u, uMem: S.mem, uBurst: S.burst, uRift: S.rift, uAtt: S.att, uSeg: 3, uChk: 4, uNChk: NCHK, uEv: S.ev, uWorld: world, uDbg: qs.get('dbg') === '1' ? 1 : 0 });
+    uMoonRad: S.moonRad, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uTc: S.u, uMem: S.mem, uBurst: S.burst, uRift: S.rift, uAtt: S.att, uSeg: 3, uChk: 4, uNChk: NCHK, uEv: S.ev, uWorld: world, uStruct: struct, uDbg: qs.get('dbg') === '1' ? 1 : 0 });
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.enable(gl.DEPTH_TEST); gl.bindVertexArray(worldVAO);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, hgtTex);
@@ -1111,6 +1171,9 @@ function setVer(i) { ver = i; [...$('vers').children].forEach((b, j) => b.classL
 const WORLDS = ['W1 · Storm Realm', 'W2 · Pale Realm'];
 WORLDS.forEach((n, i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => setWorld(i); $('worlds').appendChild(b); });
 function setWorld(i) { world = i; [...$('worlds').children].forEach((b, j) => b.classList.toggle('on', j === i)); }
+const STRUCTS = ['S1 · Spire', 'S2 · Gate', 'S3 · Floating citadel', 'S4 · Dead tree'];
+STRUCTS.forEach((n, i) => { const b = document.createElement('button'); b.textContent = n; b.onclick = () => setStruct(i); $('structs').appendChild(b); });
+function setStruct(i) { struct = i; [...$('structs').children].forEach((b, j) => b.classList.toggle('on', j === i)); }
 function setPlaying(p) { if (p && time >= TT) time = 0; playing = p; $('play').textContent = p ? '❚❚' : '▶'; }
 function updateUI() {
   const k = time / TT * 100; $('fill').style.width = k + '%'; $('knob').style.left = k + '%';
@@ -1134,13 +1197,14 @@ addEventListener('keydown', e => {
   else if (e.key >= '1' && e.key <= '3') setVer(+e.key - 1);
   else if (e.key.toLowerCase() === 'c') replay();
   else if (e.key.toLowerCase() === 'w') setWorld((world + 1) % 2);
+  else if (e.key.toLowerCase() === 's') setStruct((struct + 1) % 4);
   else if (e.key === 'ArrowLeft') time = clamp(time - 5, 0, TT);
   else if (e.key === 'ArrowRight') time = clamp(time + 5, 0, TT);
   else if (e.key.toLowerCase() === 'h') document.body.classList.toggle('hide');
 });
 // for checking: window.__shot(t, v) renders one exact frame at time t for candidate v, paused
 window.__shot = (t, v) => { setPlaying(false); setVer(v); time = t; prevTime = t; for (let i = 0; i < 40; i++) render(.05); updateUI(); return gl.getError(); };
-setVer(ver); setWorld(world); setPlaying(playing);
+setVer(ver); setWorld(world); setStruct(struct); setPlaying(playing);
 requestAnimationFrame(frame);
 </script>
 </body>
