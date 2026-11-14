@@ -93,6 +93,12 @@ Bastien: the leviathan is just a black shape; he wants something almost realisti
 - **The creature**: a sea serpent seen side-on, drawn as a shaded tube lit from above. Dark olive-brown back with mottling and overlapping scales, pale belly with ventral plates, bony knobs along the back, broken wet sheen, caustics on its back. It has a translucent red-orange dorsal frill on spines, two pairs of rowing fins with bony rays, a tail fin, and a dragon skull (snout, nostril, jaw line, brow, amber slit eye, two swept-back horns). The swimming wave runs down its body.
 - **Its own path**: the near one (1.6 times bigger) crosses from right to left from 1:00 to 1:44 and passes behind the moon around 1:30; a far one, smaller and hazy, goes the other way higher up. Seen only through the openings.
 
+### Not an ocean: three worlds to pick from (2026-11-14)
+Bastien turned the ocean down ("trouvons autre chose"). Rather than guess again, C1 now has **three other-world candidates** (buttons W1 to W3, key W, `?w=1..3`). The serpent dragon stays in all three (now flying); its light and skin come from the world (`gLc`, `gBack`, `gBelly`, `gFrill`, `gDap`):
+- **W1 · Storm Realm**: slate storm clouds drifting, lightning every 2 to 3 s lighting the clouds from inside, visible bolts, rain in front; the dragon (slate, deep red frill) is lit by the flashes.
+- **W2 · Pale Realm**: bone-white fog, a black sun with a thin bright ring, giant ribs rising far off in the fog, drifting ash; a pale dragon.
+- **W3 · Upside-down Overworld**: another overworld in broad daylight hanging over the sky, seen from below: blocky ground (grass, forests, water, sand) 12 blocks up, blocky clouds under it, blue sky; a green dragon flies below.
+
 ## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.
