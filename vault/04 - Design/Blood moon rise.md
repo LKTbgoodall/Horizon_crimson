@@ -122,6 +122,7 @@ Bastien's screenshots of 0.2.0: the openings looked like blobs ("des pâtés"), 
 - **Cracks**: openings cut to about a third, lips faceted (piecewise straight width, no smoothing), cracks start under the moon (no empty disc). A sound per crack (`fissure.ogg`) and a small jolt.
 - **What flies there**: three winged things roam the Pale Realm's fog all night, on wrapping paths, never stopping. They are invisible except when a flash lights the fog right behind one (every 6.5 s or so, behind the one nearest the moon): for about 1.5 s, an abstract black winged shape against the light. Like seeing a shape in a cloud in a lightning flash. The flash leaks through the cracks near it.
 - Removed: the black shadow walker, the far serpents (the Spire stays).
+- **0.2.1 seen in game**: the holes were too small to see the other world and the lens-shaped openings still did not look like real breaks (tubes, veins). 0.2.2: thin crack lines again, and the holes come from **falling shards**: convex pentagons with one side on a crack, straight edges and corners, breaking off on either side of the main fault every few steps (bigger further out), on some moon cracks and on most climax cracks; a few fall during the eclipse, most at the climax; each drops out over 0.3 s with a burning edge, and closes at dawn.
 - **Dawn** (Bastien, seen at sunrise in 0.2.0): the holes close and vanish. `fissures::seal`: the lips close over the first 20 s of dawn (tick 22800) with a golden seam along each crack, the lines fade 15 s later, before sunrise.
 
 ## Next

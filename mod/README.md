@@ -16,6 +16,14 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.2.2 (Bastien's look at 0.2.1)
+- **Real broken glass**: the cracks are thin sharp lines again, and the big openings now come from **shards
+  falling out**: convex pieces with straight edges and corners break off along the cracks, on either side (along
+  the main fault every few steps, bigger further out; on some moon cracks; on most climax cracks). A few fall
+  during the eclipse, most at the climax; each drops out over 0.3 s, its broken edge burning, and the holes show
+  the Pale Realm well. They close again at dawn. Planned by `fissures.rs` (`Shard`), drawn from a third storage
+  buffer.
+
 ## New in 0.2.1 (Bastien's look at 0.2.0)
 - **Each crack is heard**: a new sound (`fissure.ogg`, a snap like ice and ticks running away) when a crack is
   born, a little higher or lower each time, and a small jolt of the camera.

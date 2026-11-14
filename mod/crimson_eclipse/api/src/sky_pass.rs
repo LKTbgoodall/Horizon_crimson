@@ -11,7 +11,9 @@
 //! version C plus `preview/abyss-climax.html`'s C1 (W2, S1), in WGSL.
 
 use crate::eye::Eye;
-use crate::fissures::{seal, seed_for_day, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS};
+use crate::fissures::{
+    seal, seed_for_day, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, MAX_SHARDS, SEGMENT_FLOATS, SHARD_FLOATS,
+};
 use crate::moon::{day_of, time_of_day};
 use crate::night::{eclipse_seconds, presence};
 use crate::rise::frame;
@@ -64,6 +66,7 @@ struct Gpu {
     /// The fissures' segments and chunks (`crate::fissures`), and the seed of the plan they hold.
     segments: wgpu::Buffer,
     chunks: wgpu::Buffer,
+    shards: wgpu::Buffer,
     uploaded: Option<u64>,
 }
 
@@ -129,11 +132,15 @@ impl RenderHooks for Sky {
             gpu.ensure_copy(w.device, w.color, w.size, w.color_format);
         }
         let chunk_count = fissures.as_ref().map_or(0, |p| p.chunks.len());
+        let shard_count = fissures.as_ref().map_or(0, |p| p.shards.len());
         if let Some(p) = &fissures {
             if gpu.uploaded != Some(seed) {
                 let bytes = |f: Vec<f32>| -> Vec<u8> { f.iter().flat_map(|x| x.to_le_bytes()).collect() };
                 w.queue.write_buffer(&gpu.segments, 0, &bytes(p.segment_floats()));
                 w.queue.write_buffer(&gpu.chunks, 0, &bytes(p.chunk_floats()));
+                if !p.shards.is_empty() {
+                    w.queue.write_buffer(&gpu.shards, 0, &bytes(p.shard_floats()));
+                }
                 gpu.uploaded = Some(seed);
             }
         }
@@ -150,7 +157,7 @@ impl RenderHooks for Sky {
         ]);
         // The preview's clock started 14 seconds before the eclipse.
         u.extend_from_slice(&[seconds + 14.0, frame.progress, frame.beat, w.camera.y as f32]);
-        u.extend_from_slice(&[frame.void_radius, frame.crack_reach, frame.torn, frame.corona]);
+        u.extend_from_slice(&[frame.void_radius, shard_count as f32, 0.0, frame.corona]);
         u.extend_from_slice(&[frame.blood, frame.stars_pull, frame.grade * presence, colors.weight]);
         u.extend_from_slice(&[
             1.0 - (1.0 - frame.dark) * presence,
@@ -224,6 +231,10 @@ impl RenderHooks for Sky {
                 wgpu::BindGroupEntry {
                     binding: 4,
                     resource: gpu.chunks.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: gpu.shards.as_entire_binding(),
                 },
             ],
         });
@@ -320,6 +331,7 @@ impl Gpu {
                 },
                 storage_entry(3),
                 storage_entry(4),
+                storage_entry(5),
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -370,6 +382,7 @@ impl Gpu {
         };
         let segments = storage("Crimson Eclipse fissure segments", MAX_SEGMENTS * SEGMENT_FLOATS);
         let chunks = storage("Crimson Eclipse fissure chunks", MAX_CHUNKS * CHUNK_FLOATS);
+        let shards = storage("Crimson Eclipse fallen shards", MAX_SHARDS * SHARD_FLOATS);
         let blank = device
             .create_texture(&wgpu::TextureDescriptor {
                 label: Some("Crimson Eclipse blank"),
@@ -396,6 +409,7 @@ impl Gpu {
             copy: None,
             segments,
             chunks,
+            shards,
             uploaded: None,
         }
     }
@@ -436,7 +450,7 @@ struct U {
     moon: vec4<f32>,    // xyz: direction of the moon, w: its radius in radians
     size: vec4<f32>,    // the frame's width and height, the depth's width and height
     a: vec4<f32>,       // time in seconds, eclipse progress, heartbeat pulse, the camera's height
-    b: vec4<f32>,       // void radius, (unused: the old web's reach and torn share), corona
+    b: vec4<f32>,       // void radius, the shards' count, (unused), corona
     c: vec4<f32>,       // blood, stars pull, world grade, sky weight
     d: vec4<f32>,       // dark, flash, shock radius, shock strength
     e: vec4<f32>,       // lid seam, lid opening, pupil width, 1 with a frame copy
@@ -453,6 +467,8 @@ struct U {
 // per chunk two vec4 (cap centre, cos of its reach), (first segment, count, start time, width).
 @group(0) @binding(3) var<storage, read> fis_seg: array<vec4<f32>>;
 @group(0) @binding(4) var<storage, read> fis_chk: array<vec4<f32>>;
+// Shards (crate::fissures::Shard): six vec4 each, five corners (w: when it falls, then its size) and a cap.
+@group(0) @binding(5) var<storage, read> fis_shd: array<vec4<f32>>;
 
 struct V {
     @builtin(position) pos: vec4<f32>,
@@ -659,6 +675,45 @@ fn fissures(d: vec3<f32>, s: f32) -> Fis {
     o.win = ss(0.0008, -0.0008, emin);
     o.lip = ss(0.006, 0.0, -emin) * step(emin, 0.0);
     return o;
+}
+
+// The holes left by fallen shards at `d`: x how much is a hole, y its burning rim. Each shard is a convex
+// pentagon; it is tested flat, on the plane touching the sky at its centre. A shard drops out over 0.3 s
+// (the hole grows from its middle), and closes again at dawn.
+fn shard_holes(d: vec3<f32>, s: f32) -> vec2<f32> {
+    var hole = 0.0;
+    var rim = 0.0;
+    let n = u32(u.b.y);
+    for (var k = 0u; k < n; k++) {
+        let base = k * 6u;
+        let cap = fis_shd[base + 5u];
+        if (dot(d, cap.xyz) < cap.w) { continue; }
+        let falls = fis_shd[base].w;
+        if (s < falls) { continue; }
+        let size = fis_shd[base + 1u].w;
+        let c = cap.xyz;
+        var up = vec3<f32>(0.0, 1.0, 0.0);
+        if (abs(c.y) > 0.99) { up = vec3<f32>(0.0, 0.0, 1.0); }
+        let e1 = normalize(cross(up, c));
+        let e2 = cross(c, e1);
+        let pd = d / dot(d, c);
+        let p = vec2<f32>(dot(pd, e1), dot(pd, e2));
+        var sd = -1e9;
+        for (var i = 0u; i < 5u; i++) {
+            let va = fis_shd[base + i].xyz;
+            let vb = fis_shd[base + (i + 1u) % 5u].xyz;
+            let a = vec2<f32>(dot(va, e1), dot(va, e2)) / dot(va, c);
+            let b = vec2<f32>(dot(vb, e1), dot(vb, e2)) / dot(vb, c);
+            let e = b - a;
+            sd = max(sd, dot(p - a, normalize(vec2<f32>(e.y, -e.x))));
+        }
+        let age = s - falls;
+        let inset = (1.0 - ss(0.0, 0.3, age)) * size + (1.0 - u.g.w) * size * 1.2;
+        let edge = sd + inset;
+        hole = max(hole, ss(0.0006, -0.0006, edge));
+        rim = max(rim, exp(-abs(edge) / 0.0012) * (1.0 + 2.5 * exp(-age * 3.0)));
+    }
+    return vec2<f32>(hole, rim);
 }
 
 fn sd_box(p: vec2<f32>, b: vec2<f32>) -> f32 {
@@ -933,7 +988,8 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     let tc = s - 60.5;
     let present = u.g.z;
     let fs = fissures(d, s);
-    let win = fs.win * present;
+    let sh = shard_holes(d, s);
+    let win = max(fs.win, sh.x) * present;
     let flash = fog_flash();
     if (win > 0.0) {
         col = mix(col, other_side(d, flash) * (1.0 - 0.55 * fs.lip), win);
@@ -945,6 +1001,9 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     col += (lc * (fs.core * 1.7 + fs.glow * 0.4 * (1.0 - fs.win)) * (0.75 + 0.25 * u.a.z + u.d.y) * att
         + vec3<f32>(4.0, 3.0, 2.4) * fs.tip * 2.5) * present;
     col += vec3<f32>(1.0, 0.35, 0.25) * u.g.x * 0.12 * present;
+    // The broken edge of a hole burns, brighter just after the shard falls.
+    col += vec3<f32>(1.0, 0.42, 0.16) * sh.y * 1.4 * att * present;
+    weight = max(weight, clamp(sh.y, 0.0, 1.0) * present);
     // Sealing at dawn: a golden seam runs along each crack as its lips meet.
     col += vec3<f32>(1.0, 0.75, 0.3) * (fs.core * 2.0 + fs.glow * 0.5) * u.g.w * (1.0 - u.g.w) * 4.0 * present;
     // A flash behind the sky leaks through the cracks near it.

@@ -31,6 +31,9 @@ pub const MAX_CHUNKS: usize = 512;
 /// Floats per segment and per chunk, as the shader reads them.
 pub const SEGMENT_FLOATS: usize = 12;
 pub const CHUNK_FLOATS: usize = 8;
+/// The most shards a plan holds, and floats per shard as the shader reads them.
+pub const MAX_SHARDS: usize = 128;
+pub const SHARD_FLOATS: usize = 24;
 /// New cracks stop here: the hush before the eye.
 const LAST_CRACK: f32 = 58.0;
 /// How far a crack's glow reaches past its line, in radians (for the caps).
@@ -65,11 +68,26 @@ pub struct Chunk {
     pub width: f32,
 }
 
+/// A piece of the sky's shell that breaks off along a crack and falls, leaving a hole onto the world behind:
+/// a convex pentagon (counter-clockwise seen from inside the sky) with one side on the crack.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Shard {
+    pub corners: [[f32; 3]; 5],
+    /// When it falls out.
+    pub falls: f32,
+    /// About how far its centre is from its edges, in radians.
+    pub size: f32,
+    /// A cap holding it, as for chunks.
+    pub center: [f32; 3],
+    pub cos_reach: f32,
+}
+
 /// A night's fissures.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Plan {
     pub segments: Vec<Segment>,
     pub chunks: Vec<Chunk>,
+    pub shards: Vec<Shard>,
     /// Each new crack or stage: when, and how strong its flicker of light is.
     pub events: Vec<(f32, f32)>,
 }
@@ -98,6 +116,24 @@ impl Plan {
         for s in &self.segments {
             out.extend_from_slice(&[s.a[0], s.a[1], s.a[2], s.ta, s.b[0], s.b[1], s.b[2], s.tb]);
             out.extend_from_slice(&[s.along[0], s.along[1], s.born, s.opening]);
+        }
+        out
+    }
+
+    /// The shards as the shader reads them: six vec4 per shard, the corners (the first's w is when it
+    /// falls, the second's its size) and the cap.
+    pub fn shard_floats(&self) -> Vec<f32> {
+        let mut out = Vec::with_capacity(self.shards.len() * SHARD_FLOATS);
+        for sh in &self.shards {
+            for (i, c) in sh.corners.iter().enumerate() {
+                let w = match i {
+                    0 => sh.falls,
+                    1 => sh.size,
+                    _ => 0.0,
+                };
+                out.extend_from_slice(&[c[0], c[1], c[2], w]);
+            }
+            out.extend_from_slice(&[sh.center[0], sh.center[1], sh.center[2], sh.cos_reach]);
         }
         out
     }
@@ -320,8 +356,8 @@ pub fn plan(seed: u64) -> Plan {
     let tf = beat_time(18.0);
     let (lp, lh) = pl.limb(tf, std::f32::consts::PI - 0.45);
     let (rp, rh) = pl.limb(tf, 0.4);
-    let left = pl.walk(lp, lh, 1.3, 0.1, 2.2, 0.028);
-    let right = pl.walk(rp, rh, 1.3, 0.1, 2.2, 0.028);
+    let left = pl.walk(lp, lh, 1.3, 0.1, 2.2, 0.01);
+    let right = pl.walk(rp, rh, 1.3, 0.1, 2.2, 0.01);
     for (k, (n, s)) in [
         (18.0, 0.2),
         (24.0, 0.38),
@@ -347,13 +383,13 @@ pub fn plan(seed: u64) -> Plan {
                 flicker: 0.4,
                 jitter: 0.22,
                 width: 1.0,
-                opening: 0.004,
+                opening: 0.003,
             },
         );
     }
     for n in [34.0, 43.0, 45.0, 51.0] {
         let len = 0.15 + 0.3 * pl.unit();
-        pl.branch(beat_time(n), len, 0.8, 0.25, 0.0025);
+        pl.branch(beat_time(n), len, 0.8, 0.25, 0.002);
     }
     // Faster and faster toward the climax.
     let mut n = 58.0;
@@ -369,12 +405,12 @@ pub fn plan(seed: u64) -> Plan {
                     flicker: 0.35,
                     jitter: 0.22,
                     width: 1.0,
-                    opening: 0.004,
+                    opening: 0.003,
                 },
             );
         } else {
             let len = 0.12 + 0.3 * pl.unit();
-            pl.branch(beat_time(n), len, 0.9, 0.22, 0.0025);
+            pl.branch(beat_time(n), len, 0.9, 0.22, 0.002);
         }
         n += if n < 72.0 { 2.0 } else { 1.0 };
     }
@@ -383,7 +419,7 @@ pub fn plan(seed: u64) -> Plan {
         let t = EYE_OPENS + 0.02 * pl.unit();
         let len = 0.5 + 0.8 * pl.unit();
         let th = i as f32 / 14.0 * tau + (pl.unit() - 0.5) * 0.35;
-        let opening = 0.006 + 0.006 * pl.unit();
+        let opening = 0.004 + 0.003 * pl.unit();
         pl.moon_crack(
             t,
             th,
@@ -400,8 +436,10 @@ pub fn plan(seed: u64) -> Plan {
     for _ in 0..10 {
         let t = EYE_OPENS + 0.35 + 0.5 * pl.unit();
         let len = 0.15 + 0.35 * pl.unit();
-        pl.branch(t, len, 1.4, 0.0, 0.003);
+        pl.branch(t, len, 1.4, 0.0, 0.002);
     }
+
+    let shards = plan_shards(&mut pl, left, right);
 
     // Segments, in chunks with a bounding cap.
     let mut segments = Vec::new();
@@ -451,8 +489,121 @@ pub fn plan(seed: u64) -> Plan {
     Plan {
         segments,
         chunks,
+        shards,
         events,
     }
+}
+
+/// Pieces breaking off along the cracks. Along the main fault every few steps, on either side, bigger
+/// further out; one on some cracks from the moon; one on most of the climax's. A few fall during the
+/// eclipse, most at the climax.
+fn plan_shards(pl: &mut Planner, left: usize, right: usize) -> Vec<Shard> {
+    let mut shards = Vec::new();
+    let late = |pl: &mut Planner| EYE_OPENS + 0.15 + 1.2 * pl.unit();
+    for fault in [left, right] {
+        let last = pl.cracks[fault].last();
+        let mut i = 2;
+        while i + 3 < last {
+            let n = 3 + (pl.unit() * 3.0) as usize;
+            if i + n > last {
+                break;
+            }
+            let side = if pl.unit() < 0.5 { -1.0 } else { 1.0 };
+            let depth = (0.05 + 0.06 * pl.unit()) * (0.6 + i as f32 / last as f32);
+            let passed = pl.cracks[fault].time_at(i + n);
+            let falls = if pl.unit() < 0.35 && passed + 4.0 < LAST_CRACK {
+                passed + 1.0 + 3.0 * pl.unit()
+            } else {
+                late(pl)
+            };
+            if let Some(s) = shard_along(pl, fault, i, n, side, depth, falls) {
+                shards.push(s);
+            }
+            i += n + (pl.unit() * 3.0) as usize;
+        }
+    }
+    for c in 0..pl.cracks.len() {
+        if c == left || c == right || pl.cracks[c].stages.is_empty() {
+            continue;
+        }
+        let born = pl.cracks[c].stages[0].t0;
+        let last = pl.cracks[c].last();
+        let climax = born >= EYE_OPENS;
+        if last < 8 || pl.unit() > if climax { 0.8 } else { 0.4 } {
+            continue;
+        }
+        let i = (last as f32 * (0.3 + 0.3 * pl.unit())) as usize;
+        let n = (3 + (pl.unit() * 2.0) as usize).min(last - i);
+        let side = if pl.unit() < 0.5 { -1.0 } else { 1.0 };
+        let depth = if climax {
+            0.045 + 0.03 * pl.unit()
+        } else {
+            0.03 + 0.02 * pl.unit()
+        };
+        let falls = if climax {
+            EYE_OPENS + 0.3 + 0.8 * pl.unit()
+        } else if born + 5.0 < LAST_CRACK {
+            born + 2.0 + 3.0 * pl.unit()
+        } else {
+            late(pl)
+        };
+        if let Some(s) = shard_along(pl, c, i, n, side, depth, falls) {
+            shards.push(s);
+        }
+    }
+    shards.truncate(MAX_SHARDS);
+    shards
+}
+
+/// A shard on crack `c` from point `i` to point `i + n`, on `side`, reaching `depth` off the crack.
+fn shard_along(
+    pl: &mut Planner,
+    c: usize,
+    i: usize,
+    n: usize,
+    side: f32,
+    depth: f32,
+    falls: f32,
+) -> Option<Shard> {
+    let crack = &pl.cracks[c];
+    let (a, b) = (crack.points[i], crack.points[i + n]);
+    let m = crack.points[i + n / 2];
+    let off = scale(norm(cross(m, crack.headings[i + n / 2])), side);
+    let r = [pl.unit(), pl.unit(), pl.unit(), pl.unit()];
+    let at = |p: [f32; 3], d: f32| norm(add(p, scale(off, d)));
+    let mid = norm(add(
+        scale(a, 0.5 - 0.2 * (r[3] - 0.5)),
+        scale(b, 0.5 + 0.2 * (r[3] - 0.5)),
+    ));
+    let mut corners = [
+        a,
+        b,
+        at(b, depth * (0.55 + 0.4 * r[0])),
+        at(mid, depth * (1.0 + 0.3 * r[1])),
+        at(a, depth * (0.55 + 0.4 * r[2])),
+    ];
+    let center = norm(corners.iter().fold([0.0; 3], |acc, p| add(acc, *p)));
+    // Counter-clockwise seen from the centre of the sky.
+    let turn: f32 = (0..5)
+        .map(|k| dot(cross(corners[k], corners[(k + 1) % 5]), center))
+        .sum();
+    if !turn.is_finite() || turn.abs() < 1e-9 {
+        return None;
+    }
+    if turn < 0.0 {
+        corners.reverse();
+    }
+    let reach = corners
+        .iter()
+        .map(|p| dot(center, *p).clamp(-1.0, 1.0).acos())
+        .fold(0.0, f32::max);
+    Some(Shard {
+        corners,
+        falls,
+        size: depth * 0.45,
+        center,
+        cos_reach: (reach + 0.01).cos(),
+    })
 }
 
 fn add(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {

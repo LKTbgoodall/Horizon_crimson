@@ -1,5 +1,6 @@
 use crimson_core::fissures::{
-    plan, seed_for_day, CHUNK, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS,
+    plan, seed_for_day, CHUNK, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, MAX_SHARDS, SEGMENT_FLOATS,
+    SHARD_FLOATS,
 };
 use crimson_core::rise::{beat_time, beats_at, EYE_OPENS};
 
@@ -127,4 +128,39 @@ fn the_fissures_seal_at_dawn_before_sunrise() {
     let (open, lines) = seal(at(DAWN_START) + 25.0);
     assert!(open == 0.0 && lines > 0.0 && lines < 1.0);
     assert_eq!(seal(at(DAWN_END) - 10.0), (0.0, 0.0));
+}
+
+#[test]
+fn shards_break_off_along_the_cracks_mostly_at_the_climax() {
+    for seed in 0..10 {
+        let p = plan(seed);
+        assert!(
+            p.shards.len() >= 12 && p.shards.len() <= MAX_SHARDS,
+            "seed {seed}: {}",
+            p.shards.len()
+        );
+        assert_eq!(p.shard_floats().len(), p.shards.len() * SHARD_FLOATS);
+        let late = p.shards.iter().filter(|s| s.falls >= EYE_OPENS).count();
+        assert!(
+            late * 2 >= p.shards.len(),
+            "seed {seed}: {late} of {}",
+            p.shards.len()
+        );
+        for s in &p.shards {
+            assert!(s.falls.is_finite() && s.falls > 0.0 && s.size > 0.0 && s.size < 0.1);
+            // Convex, counter-clockwise seen from inside the sky, and inside its cap.
+            for k in 0..5 {
+                let (a, b, c) = (s.corners[k], s.corners[(k + 1) % 5], s.corners[(k + 2) % 5]);
+                let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+                let bc = [c[0] - b[0], c[1] - b[1], c[2] - b[2]];
+                let n = [
+                    ab[1] * bc[2] - ab[2] * bc[1],
+                    ab[2] * bc[0] - ab[0] * bc[2],
+                    ab[0] * bc[1] - ab[1] * bc[0],
+                ];
+                assert!(dot(n, s.center) >= -1e-7, "seed {seed}: not convex {s:?}");
+                assert!(dot(a, s.center) >= s.cos_reach);
+            }
+        }
+    }
 }
