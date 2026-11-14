@@ -57,7 +57,7 @@ pub struct Colors {
     pub zenith: [f32; 3],
     /// 0: the vanilla sky as it is. 1: only ours.
     pub weight: f32,
-    /// How solid our own moon is drawn over the vanilla one, 0 to 1.
+    /// How solid our own moon is drawn over the vanilla one: 0 or 1.
     pub moon: f32,
 }
 
@@ -80,7 +80,9 @@ pub fn colors(frame: &Frame, presence: f32) -> Colors {
         // A third of the sky is ours by the end of the omens (the sunset is
         // too red), all of it a quarter into the eclipse.
         weight: presence * (0.35 + 0.65 * smoothstep(0.0, 0.25, frame.progress)),
-        moon: smoothstep(0.0, 0.5, presence),
+        // Solid from the first instant: the vanilla moon must never show
+        // through. It is still under the horizon then, so nothing pops in.
+        moon: if presence > 0.0 { 1.0 } else { 0.0 },
     }
 }
 

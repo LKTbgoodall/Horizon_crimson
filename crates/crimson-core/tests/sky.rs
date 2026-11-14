@@ -78,6 +78,12 @@ fn our_sky_takes_over_through_the_omens_and_the_start_of_the_eclipse() {
     };
     assert_eq!(at(OMENS_START).weight, 0.0);
     assert_eq!(at(OMENS_START).moon, 0.0);
+    assert_eq!(
+        at(OMENS_START + 1).moon,
+        1.0,
+        "our moon hides the vanilla one as soon as the omens start"
+    );
+    assert_eq!(at(DAWN_START + 900).moon, 1.0, "and until dawn ends");
     let dusk = at(ECLIPSE_START);
     assert!(close(dusk.weight, 0.35) && close(dusk.moon, 1.0));
     let quarter = at(ECLIPSE_START + 300);

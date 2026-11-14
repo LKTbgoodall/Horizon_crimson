@@ -10,13 +10,13 @@ updated: 2026-11-14
 ## 📍 Where we are
 | | |
 |---|---|
-| **Phase** | **Phase 1** (2026-11-14). Bastien picked staging **C · The Abyss** from the preview (`preview/blood-moon-rise.html`). The repo skeleton, the pure core `crimson-core` (38 tests) and the glue 0.1.0 are written: night logic, `/crimson` test command, red fog, camera shake, and the **sky pass for staging C** (`sky_pass.rs`: one full-screen draw in `world_drawn`, WGSL ported from the preview). **0.1.0 ran in game** (2026-11-14, `cagebound-dev`): the pass draws, Bastien sent screenshots and four problems. **0.1.1** answers them (real moon path, amber moon, hash fix for white shapes, soft horizon, sound from vanilla events) and **0.1.2** removes the vanilla clouds during the blood moon (Bastien: they are in the way); checked and validated, **not seen in game yet** |
+| **Phase** | **Phase 1** (2026-11-14). Bastien picked staging **C · The Abyss** from the preview (`preview/blood-moon-rise.html`). The repo skeleton, the pure core `crimson-core` (38 tests) and the glue 0.1.0 are written: night logic, `/crimson` test command, red fog, camera shake, and the **sky pass for staging C** (`sky_pass.rs`: one full-screen draw in `world_drawn`, WGSL ported from the preview). **0.1.0 ran in game** (2026-11-14, `cagebound-dev`): the pass draws, Bastien sent screenshots and four problems. **0.1.1** answers them (real moon path, amber moon, hash fix for white shapes, soft horizon, sound from vanilla events) and **0.1.2** removes the vanilla clouds during the blood moon (Bastien: they are in the way); **0.1.2 seen in game**: the moon is on the real one (confirmed), but the vanilla moon showed through ours during the omens; **0.1.3** makes ours solid and draws it over the haze; not seen yet |
 | **Proven before** | On Cagebound (same author, same Horizon pin `9f42064`): a typed-API native mod built and ran in game; block entity drawing, hologram text, coloured lights, glue checked against the pin before any build → [[From Cagebound]] |
 | **Key choices** | Blood moon as the trigger for events ([[ADR-014 Fresh start as Crimson Eclipse]]); rendering through our own GPU passes ([[ADR-015 Rendering through our own GPU passes]]) |
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-1. **Bastien**: build 0.1.2 (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
+1. **Bastien**: build 0.1.3 (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
 2. **Claude**: fix what the first in-game look shows (moon position, depth, colours), then bloom, burgundy foliage (`biome_colors`), embers, sound.
 
 ## 🗺️ Vault map

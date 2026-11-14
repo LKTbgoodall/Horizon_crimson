@@ -641,17 +641,21 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
         let glow = (exp(-rr * 2.0) * (pn(sw, rr * 1.2, 2.0) * 0.7 + 0.5 * pow(0.5 + 0.5 * sin(sw * 3.0), 3.0)) * 1.8 + exp(-rr * 7.0)) * u.b.w;
         col += vec3<f32>(1.0, 0.2, 0.04) * glow + vec3<f32>(1.0, 0.7, 0.3) * glow * glow * 0.5;
         weight = max(weight, clamp(glow, 0.0, 1.0));
-        if (r < 1.03) {
-            let disc = ss(1.0, 0.985, r);
-            col = mix(col, moon_col(q, r, a), disc);
-            weight = max(weight, disc * u.f.z);
-        }
     }
     // Without bloom the bright parts would clip to white: compress them.
     col = vec3<f32>(1.0) - exp(-col * 1.2);
     // The sky sinks into the land's fog near the horizon and below it.
     let haze = max(exp(-max(d.y, 0.0) * 14.0) * 0.65, ss(0.0, -0.1, d.y));
     col = mix(col, u.fog.rgb, haze);
+    // The moon goes over the haze, solid, so the vanilla moon behind it never
+    // shows; the haze only tints it a little, and it sinks under the horizon.
+    if (r < 1.03) {
+        let disc = ss(1.0, 0.985, r);
+        var mc = vec3<f32>(1.0) - exp(-moon_col(q, r, a) * 1.2);
+        mc = mix(mc, u.fog.rgb, max(haze * 0.3, ss(-0.02, -0.12, d.y)));
+        col = mix(col, mc, disc);
+        weight = max(weight, disc * u.f.z);
+    }
     return vec4<f32>(col, clamp(weight, 0.0, 1.0));
 }
 

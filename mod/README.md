@@ -16,6 +16,11 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.1.3
+- **The vanilla moon no longer shows through ours** (seen in 0.1.2: ours was drawn half transparent during
+  the omens). Ours is solid from the first instant and is drawn over the horizon haze, which flattened it
+  to a red disc. Its position was confirmed right in game.
+
 ## New in 0.1.2
 - **No more clouds during the blood moon**: they dissolve through the omens and come back at dawn
   (the cloud fog's end is pulled to nothing with `render_fog`; the sky pass also paints over the cloud

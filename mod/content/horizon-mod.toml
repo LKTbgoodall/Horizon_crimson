@@ -1,6 +1,6 @@
 id = "crimson_eclipse"
 name = "Crimson Eclipse"
-version = "0.1.2"
+version = "0.1.3"
 description = "On some full moon nights the moon turns red, the sky tears open and an eye watches you until dawn."
 authors = ["LKTbgoodall"]
 api = "0.2"
