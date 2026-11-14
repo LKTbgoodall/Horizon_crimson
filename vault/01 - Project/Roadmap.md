@@ -21,6 +21,8 @@ Back: [[00 - Home]]
   - [x] The break redone after 0.2.5 ("not natural"): `preview/sky-break.html`, Bastien picked **B1 · Impact glass** (first version); ported as 0.3.0 (`crimson-core::shell`, 11 tests; `sky_pass.rs`), [[ADR-017 The sky is a thick shell]]. Checked (fmt, clippy, tests, shader, glue), not seen in game (2026-11-14)
   - [x] 0.3.0 seen in game (Bastien, 2026-11-14): it runs, "much better, I like it much more"; three things to fix
   - [x] 0.3.1: cracks as rays and cross cracks (no spreading patch), holes only high in the sky and fewer, whole sky under the moon. Checked, not seen in game (2026-11-14)
+  - [x] 0.3.1 seen in game (Bastien, 2026-11-14): a thin dark line across the holes; the sky may break under the moon
+  - [x] 0.3.2: the line fixed (a fractional power of 0 at the Spire's tip), slabs under the moon fall at the climax. Checked, not seen in game (2026-11-14)
   - [ ] Port the rest: C1's eye (strands, third eyelid, lock-on), the god-ray pass, crack sounds and shake
   - [ ] Check whether a native mod can add a dimension (travel into the Pale Realm)
   - [x] Bastien picked **C · The Abyss** (2026-11-14)

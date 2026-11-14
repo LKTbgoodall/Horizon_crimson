@@ -39,7 +39,11 @@ pub const RAYS: usize = ROWS as usize;
 /// A slab only falls if its lowest point is this high above the horizon, in radians: a hole is in the sky,
 /// never something one could walk to (Bastien).
 pub const HOLE_FLOOR: f32 = 0.22;
-/// At least this many slabs fall each night.
+/// Within this distance of the impact, in radians, every slab falls at the climax; slabs there are smaller
+/// than [`CORE_SIZE`].
+pub const CORE: f32 = 0.25;
+pub const CORE_SIZE: f32 = 0.5 * SLAB[1] * CORE / A;
+/// At least this many slabs fall each night, not counting those under the moon.
 pub const MIN_HOLES: usize = 9;
 /// A slab that never falls "falls" then.
 pub const NEVER: f32 = 1e9;
@@ -320,17 +324,21 @@ pub fn plan(seed: u64) -> Plan {
             // Cracked all round once both its rays have passed and the cross cracks have followed.
             let settles = (plan.ray_time(row, r).max(plan.ray_time(row + 1, r)) + 0.5 + 3.0 * wait)
                 .min(EYE_OPENS);
-            // Patches of the sky fall, most of it near the impact, little far away; nothing under the moon,
-            // nothing that reaches down toward the horizon.
+            // Patches of the sky fall, most of it near the impact, little far away; nothing that reaches down
+            // toward the horizon. Under the moon it all goes at the climax: the moon bursts the shell (Bastien:
+            // it may break under the moon).
             let patch = vnoise([p[0] * 2.4 + 5.3, p[1] * 2.4 + 1.7], salt);
             let high = dir[1].clamp(-1.0, 1.0).asin() - 1.2 * size > HOLE_FLOOR;
             let mut falls = NEVER;
             let margin = patch - (0.36 + 0.46 * smoothstep(0.3, 1.5, r));
             let at_climax = EYE_OPENS + 0.15 + r * 1.1 + roll * 0.5;
-            if high && r > 0.2 && r < 2.2 && margin <= 0.0 {
+            if high && r <= CORE {
+                falls = at_climax;
+            }
+            if high && r > CORE && r < 2.2 && margin <= 0.0 {
                 spare.push((plan.slabs.len(), margin, at_climax));
             }
-            if high && r > 0.2 && r < 2.2 && margin > 0.0 {
+            if high && r > CORE && r < 2.2 && margin > 0.0 {
                 falls = at_climax;
                 if roll < 0.22 && r < 0.9 {
                     // A few fall during the eclipse, a while after they settled, never in the hush.
@@ -352,7 +360,11 @@ pub fn plan(seed: u64) -> Plan {
     }
     // Every night opens the sky: at least [`MIN_HOLES`] slabs fall, the nearest to falling first.
     spare.sort_by(|a, b| b.1.total_cmp(&a.1));
-    let holes = plan.slabs.iter().filter(|s| s.falls < NEVER).count();
+    let holes = plan
+        .slabs
+        .iter()
+        .filter(|s| s.falls < NEVER && s.size > CORE_SIZE)
+        .count();
     for (i, _, at_climax) in spare.into_iter().take(MIN_HOLES.saturating_sub(holes)) {
         plan.slabs[i].falls = at_climax;
     }
@@ -386,7 +398,7 @@ pub fn plan(seed: u64) -> Plan {
             plan.events.push((s.falls, 0.35));
             plan.sounds.push((s.falls - LOOSE, 0.3));
             plan.sounds.push((s.falls, 0.5));
-        } else if i % 3 == 0 {
+        } else if i % 3 == 0 && s.size > CORE_SIZE {
             plan.sounds.push((s.falls, 0.5));
         }
     }

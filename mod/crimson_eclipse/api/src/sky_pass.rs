@@ -614,7 +614,9 @@ fn spire(lp: vec2<f32>, glow: ptr<function, f32>) -> f32 {
     let hgt = 120.0;
     let y = clamp(lp.y, 0.0, hgt);
     let k = 1.0 - y / hgt;
-    let w = 1.6 + 15.0 * pow(k, 1.3) + 3.5 * step(fract(y / 14.0), 0.18) * k;
+    // Never a fractional power of 0: on some GPUs it is not a number, and above the Spire's top (k = 0) that
+    // drew a thin dark line right across the Pale Realm at the height of its tip (seen in game, 0.3.1).
+    let w = 1.6 + 15.0 * pow(max(k, 0.0001), 1.3) + 3.5 * step(fract(y / 14.0), 0.18) * k;
     var d = max(abs(lp.x) - w, max(-lp.y, lp.y - hgt));
     for (var i = 0; i < 6; i++) {
         let yy = 18.0 + f32(i) * 16.0;
@@ -911,7 +913,7 @@ fn base_sky(d: vec3<f32>) -> vec3<f32> {
     let ang = acos(clamp(dot(d, moon), -1.0, 1.0));
     let qa = vec2<f32>(dot(d, mr), dot(d, mu)) + 0.000001;
     let a = atan2(qa.y, qa.x);
-    var col = mix(u.hor.rgb, u.zen.rgb, pow(ss(-0.02, 0.75, d.y), 0.6));
+    var col = mix(u.hor.rgb, u.zen.rgb, pow(max(ss(-0.02, 0.75, d.y), 0.0001), 0.6));
     col += vec3<f32>(1.0, 0.95, 0.9) * stars(d, ang, a);
     let au = aurora(ang, a);
     return col * (1.0 - au.a) + au.rgb;
@@ -1022,7 +1024,7 @@ fn eye(e: vec2<f32>, lid: f32, dy: f32) -> vec3<f32> {
     nb += vec3<f32>(1.0, 0.9, 0.85) * pow(h21(floor(ne * 120.0)), 50.0) * 1.5;
     nb *= ss(1.05, 0.5, ir) + 0.25;
     var c = mix(dr * (1.0 - cosmic * 0.75) + nb * cosmic * 1.25, scl, ss(0.96, 1.03, ir));
-    c *= mix(1.0, 0.35, exp(-pow((ir - 1.0) * 14.0, 2.0)));
+    c *= mix(1.0, 0.35, exp(-(ir - 1.0) * (ir - 1.0) * 196.0));
     let ph = ri * 0.93;
     let yy = ie.y / ph;
     var dp = abs(ie.x) + (abs(yy) - 1.0) * ph;
@@ -1060,7 +1062,7 @@ fn moon_col(q: vec2<f32>, r: f32, a: f32) -> vec3<f32> {
         let e = rot(0.1) * q;
         let xn = e.x / 0.93;
         if (abs(xn) < 1.0) {
-            let shape = pow(1.0 - xn * xn, 0.75);
+            let shape = pow(max(1.0 - xn * xn, 0.0001), 0.75);
             let lid = u.e.y * 0.5 * shape;
             let dy = abs(e.y - 0.07 * (vnoise(vec2<f32>(e.x * 7.0, 3.0)) - 0.5) * clamp(1.0 - u.e.y, 0.0, 1.0));
             let seam_on = step(abs(xn), u.e.x);
@@ -1096,8 +1098,9 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     if (lines > 0.0 && s > shell_buf[SH_STEPS].x - 0.1 && d.y > -0.12) {
         let p = sh_p(d);
         let rr = length(p);
-        // Under the moon the sky stays whole: the cracks start around it.
-        let fade = ss(0.1, 0.22, rr) * lines;
+        // Right at the impact the facets are too small to read: the cracks start a little way out. (That part
+        // falls at the climax anyway.)
+        let fade = ss(0.05, 0.14, rr) * lines;
         let sh = shell_at(d);
         let age_a = s - sh_falls(sh.grp);
         let age_b = s - sh_falls(sh.grp2);

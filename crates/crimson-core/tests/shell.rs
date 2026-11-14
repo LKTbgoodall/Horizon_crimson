@@ -2,8 +2,8 @@ use crimson_core::moon::TICKS_PER_SECOND;
 use crimson_core::night::{DAWN_END, DAWN_START, ECLIPSE_START};
 use crimson_core::rise::{beat_time, beats_at, BLACKOUT_START, EYE_OPENS};
 use crimson_core::shell::{
-    from_w, plan, seal, seed_for_day, slab_index, to_w, FLOATS, HOLE_FLOOR, LOOSE, NEVER, RING0,
-    RINGS, ROWS, SPIRE_AZIMUTH, SPIRE_ELEVATION, STEPS,
+    from_w, plan, seal, seed_for_day, slab_index, to_w, CORE, CORE_SIZE, FLOATS, HOLE_FLOOR, LOOSE,
+    NEVER, RING0, RINGS, ROWS, SPIRE_AZIMUTH, SPIRE_ELEVATION, STEPS,
 };
 
 fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
@@ -102,25 +102,20 @@ fn slabs_fall_after_they_settle_a_few_early_most_at_the_climax() {
     for seed in 0..20 {
         let p = plan(seed);
         let falling: Vec<_> = p.slabs.iter().filter(|s| s.falls < NEVER).collect();
+        // Not counting the small slabs under the moon, which all go at the climax.
+        let big = falling.iter().filter(|s| s.size > CORE_SIZE).count();
         let early = falling.iter().filter(|s| s.falls < EYE_OPENS).count();
-        total += falling.len();
-        assert!(
-            (9..=40).contains(&falling.len()),
-            "seed {seed}: {} fall",
-            falling.len()
-        );
-        assert!(
-            early * 2 <= falling.len(),
-            "seed {seed}: {early} early of {}",
-            falling.len()
-        );
+        total += big;
+        assert!((9..=40).contains(&big), "seed {seed}: {big} fall");
+        assert!(early * 2 <= big, "seed {seed}: {early} early of {big}");
         for s in p.slabs.iter() {
             assert!(s.settles >= p.steps[0] && s.settles <= EYE_OPENS);
         }
         for s in &falling {
             let at = p.to_p(s.dir);
             let r = (at[0] * at[0] + at[1] * at[1]).sqrt();
-            assert!(r > 0.19, "nothing falls under the moon");
+            // Under the moon everything goes at the climax, nothing before.
+            assert!(r > CORE || s.falls >= EYE_OPENS, "seed {seed}");
             assert!(
                 s.falls >= s.settles + 1.9 || s.falls >= EYE_OPENS,
                 "seed {seed}"

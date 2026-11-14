@@ -16,6 +16,16 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.3.2 (Bastien's look at 0.3.1)
+- **The thin dark line across the Pale Realm is gone** (to confirm in game). It sat at the height of the Spire's
+  tip, all round the sky, only in holes. Cause, deduced from the screenshots, not reproduced: above the tip the
+  Spire's width was `pow(0, 1.3)`, which is not a number on his GPU, and the shape's distance then fell back to
+  "height above the tip", painting a band 0.7 units thick. The power's base is now never 0 (same guard on the
+  three other fractional powers of the shader).
+- **The sky breaks under the moon too** (Bastien: it may): every slab within 0.25 rad of the impact falls at the
+  climax, as long as it does not reach below the hole floor. The cracks now start 0.05 to 0.14 rad from the
+  impact (the facets nearer than that are too small to read).
+
 ## New in 0.3.1 (Bastien's look at 0.3.0: much better, three things to fix)
 - **Cracks crack, no spreading patch**: the cracks no longer appear as a disc growing from the moon with the
   cracked sky inside it. Twelve **rays** leave the impact, each running outward along slab borders in jumps on
