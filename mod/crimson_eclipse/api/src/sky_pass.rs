@@ -435,9 +435,10 @@ struct U {
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var depth_tex: texture_depth_2d;
 @group(0) @binding(2) var scene_tex: texture_2d<f32>;
-// The shell (crate::shell::Plan::floats): [0] the impact and the facets' salt, [1..5) when each jump of the crack
-// front starts, [5..14) the front's factor per direction around the impact, then four vec4 per slab:
-// (centre in fracture space, when it falls, dawn order), (direction, size), (flight dice), (askew x y, tint, -).
+// The shell (crate::shell::Plan::floats): [0] the impact and the facets' salt, [1..5) when each step of the
+// cracks starts, [5..8) each ray's pace, [8..11) how many steps late it starts, then four vec4 per slab:
+// (centre in fracture space, when it falls, dawn order), (direction, size), (flight dice),
+// (askew x y, tint, when it settles).
 @group(0) @binding(3) var<storage, read> shell_buf: array<vec4<f32>>;
 
 struct V {
@@ -772,8 +773,8 @@ const SH_A = 5.7295780;
 const SH_FACET = vec2<f32>(0.625, 1.0);
 const SH_SLAB = vec2<f32>(3.2, 3.0);
 const SH_STEPS = 1u;
-const SH_SPOKES = 5u;
-const SH_SLABS = 14u;
+const SH_RAYS = 5u;
+const SH_SLABS = 11u;
 var<private> sh_c: vec3<f32>;
 var<private> sh_e1: vec3<f32>;
 var<private> sh_e2: vec3<f32>;
@@ -795,17 +796,33 @@ fn sh_w(p: vec2<f32>) -> vec2<f32> {
     return vec2<f32>(log(max(length(p), 0.02)) * SH_A, atan2(p.y, p.x) * SH_A);
 }
 fn sh_wrap(y: i32, n: i32) -> i32 { return ((y % n) + n) % n; }
-// When the crack front reaches p: it jumps on heartbeats, further in some directions.
-fn sh_crack(p: vec2<f32>) -> f32 {
-    let x = fract(atan2(p.y, p.x) / 6.2831853 + 1.0) * 36.0;
-    let i = min(u32(x), 35u);
-    let j = (i + 1u) % 36u;
-    let spoke = mix(shell_buf[SH_SPOKES + i / 4u][i % 4u], shell_buf[SH_SPOKES + j / 4u][j % 4u], x - f32(i));
-    let re = length(p) * spoke / 0.15;
+// Cracks are lines that run, not a patch that spreads. A ray is the crack between two rows of slabs: it leaves
+// the impact and runs outward in jumps, on heartbeats, at its own pace, some starting later. This is when ray b
+// reaches the distance r.
+fn sh_ray(b: i32, r: f32) -> f32 {
+    let bi = u32(sh_wrap(b, 12));
+    let re = r * shell_buf[SH_RAYS + bi / 4u][bi % 4u] / 0.15 + shell_buf[SH_RAYS + 3u + bi / 4u][bi % 4u];
     let k = floor(re);
     if (k >= 16.0) { return 60.5; }
     let ki = u32(k);
     return min(shell_buf[SH_STEPS + ki / 4u][ki % 4u] + 0.14 * (re - k), 60.5);
+}
+// When the border between slabs a and b cracks, at the distance r. Between two rows of one ring it is a piece
+// of a ray. Between two rings it is a cross crack: it snaps a moment after the rays on both its sides have
+// passed, each at its own time.
+fn sh_edge(a: i32, b: i32, r: f32) -> f32 {
+    if (a < 0 || b < 0) { return 60.5; }
+    let wa = a % 12;
+    let wb = b % 12;
+    if (a / 12 == b / 12) {
+        var bd = max(wa, wb);
+        if (min(wa, wb) == 0 && bd == 11) { bd = 0; }
+        return sh_ray(bd, r);
+    }
+    let t = max(max(sh_ray(wa, r), sh_ray(wa + 1, r)), max(sh_ray(wb, r), sh_ray(wb + 1, r)));
+    let za = shell_buf[SH_SLABS + u32(a) * 4u + 3u].z;
+    let zb = shell_buf[SH_SLABS + u32(b) * 4u + 3u].z;
+    return min(t + 0.2 + 2.5 * fract((za + zb) * 9.7), 60.5);
 }
 // The index of the slab of ring cx and row cy, or -1 outside the table.
 fn sh_slab(cx: i32, cy: i32) -> i32 {
@@ -899,15 +916,16 @@ fn base_sky(d: vec3<f32>) -> vec3<f32> {
     let au = aurora(ang, a);
     return col * (1.0 - au.a) + au.rgb;
 }
-// A piece of the shell. Once cracked it sits a little askew: the sky painted on it is shifted, its tint changes,
-// some slabs catch the moon. A crack between two slabs is a dark line with a red glint on one side, hot for an
-// instant when the front passes; inside a slab, hairlines between facets come a little later.
-fn shard_col(d: vec3<f32>, sh: Shell, crk: f32, crk_min: f32, heat: f32) -> vec3<f32> {
+// A piece of the shell. Once cracked all round it settles a little askew (`skew`): the sky painted on it is
+// shifted, its tint changes a little, some slabs catch the moon. A crack between two slabs (`crk`) is a dark line
+// with a red glint on one side, hot for an instant when its tip passes; inside a slab, hairlines between facets
+// come later (`crk_min`).
+fn shard_col(d: vec3<f32>, sh: Shell, skew: f32, crk: f32, crk_min: f32, heat: f32) -> vec3<f32> {
     var roll = vec4<f32>(0.5, 0.5, 0.5, 0.0);
     if (sh.grp >= 0) { roll = shell_buf[SH_SLABS + u32(sh.grp) * 4u + 3u]; }
-    var c = base_sky(normalize(d + (sh_e1 * (roll.x - 0.5) + sh_e2 * (roll.y - 0.5)) * 0.035 * crk));
-    c *= 1.0 + ((roll.z - 0.5) * 0.55 + (hi(sh.id + vec2<i32>(8, 1)) - 0.5) * 0.16 * crk_min) * crk;
-    c += vec3<f32>(0.22, 0.03, 0.02) * ss(0.6, 1.0, fract(roll.z * 7.31 + roll.x)) * crk;
+    var c = base_sky(normalize(d + (sh_e1 * (roll.x - 0.5) + sh_e2 * (roll.y - 0.5)) * 0.035 * skew));
+    c *= 1.0 + (roll.z - 0.5) * 0.35 * skew + (hi(sh.id + vec2<i32>(8, 1)) - 0.5) * 0.16 * crk_min;
+    c += vec3<f32>(0.14, 0.02, 0.013) * ss(0.6, 1.0, fract(roll.z * 7.31 + roll.x)) * skew;
     let wd = 0.0016;
     if (sh.grp != sh.grp2) {
         let line = ss(wd, wd * 0.4, sh.ed);
@@ -967,7 +985,7 @@ fn pieces(d: vec3<f32>, wpix: vec2<f32>, s: f32) -> vec4<f32> {
             if (er > th) { continue; }
             var col: vec3<f32>;
             if (ct > 0.0) {
-                col = shard_col(dr, sr, 1.0, 1.0, 0.0) * (0.5 + 0.5 * ct);
+                col = shard_col(dr, sr, 1.0, 1.0, 1.0, 0.0) * (0.5 + 0.5 * ct);
                 col += vec3<f32>(1.0, 0.35, 0.22) * pow(max(0.0, sin(tum * 1.3 + r4.x * 6.2831853)), 24.0) * 0.5;
             } else {
                 col = PALE_FOG * (0.35 + 0.5 * abs(ct)) * (0.75 + 0.4 * fbm(nuv * 3.0));
@@ -1077,21 +1095,30 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     sh_setup();
     if (lines > 0.0 && s > shell_buf[SH_STEPS].x - 0.1 && d.y > -0.12) {
         let p = sh_p(d);
+        let rr = length(p);
+        // Under the moon the sky stays whole: the cracks start around it.
+        let fade = ss(0.1, 0.22, rr) * lines;
         let sh = shell_at(d);
         let age_a = s - sh_falls(sh.grp);
         let age_b = s - sh_falls(sh.grp2);
-        let tk = sh_crack(p);
-        let crk = ss(0.0, 0.05, s - tk) * lines;
-        let crk_min = max(ss(0.0, 0.3, s - tk - 3.0), step(60.5, s)) * lines;
-        var heat = 0.0;
-        if (s > tk) { heat = exp(-(s - tk) * 4.0) * lines; }
         let major = sh.grp != sh.grp2;
+        // The border between two slabs cracks when its own crack gets there; a slab settles askew once it is
+        // cracked all round, and its hairlines follow.
+        var tk = 1e9;
+        if (major) { tk = sh_edge(sh.grp, sh.grp2, rr); }
+        let crk = ss(0.0, 0.05, s - tk) * fade;
+        var settle = 60.5;
+        if (sh.grp >= 0) { settle = shell_buf[SH_SLABS + u32(sh.grp) * 4u + 3u].w; }
+        let skew = ss(0.0, 0.2, s - settle) * fade;
+        let crk_min = max(ss(0.0, 0.3, s - settle - 1.5), step(60.5, s)) * fade;
+        var heat = 0.0;
+        if (s > tk) { heat = exp(-(s - tk) * 4.0) * fade; }
         // The light of the other side presses through every crack in the hush, and bursts at the climax.
         var press = exp(-max(tc, 0.0) * 1.3);
         if (tc < 0.0) { press = ss(-2.5, 0.0, tc) * (0.55 + 0.45 * sin(t * 14.0)); }
         let flash = fog_flash();
         if (age_a <= 0.0) {
-            col = shard_col(d, sh, crk, crk_min, heat);
+            col = shard_col(d, sh, skew, crk, crk_min, heat);
             if (major) {
                 // A slab comes loose: light leaks round it, wider and wider.
                 var pre = ss(-1.3, 0.0, age_a);

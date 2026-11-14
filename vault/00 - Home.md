@@ -16,7 +16,7 @@ updated: 2026-11-14
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-0. **Bastien**: build **0.3.0** and look at the new break in game (B1 · Impact glass, [[ADR-017 The sky is a thick shell]]; what to look at: `mod/README.md` § New in 0.3.0). It has never run on a GPU: watch the frame rate and `latest.log`. Then Claude fixes what the screenshots show.
+0. **Bastien**: build **0.3.1** (cracks as rays instead of a spreading patch, no hole near the horizon and fewer holes, whole sky under the moon; `mod/README.md` § New in 0.3.1) and look. 0.3.0 was seen in game: it runs, "much better". Earlier line, kept for the record: build **0.3.0** and look at the new break in game (B1 · Impact glass, [[ADR-017 The sky is a thick shell]]; what to look at: `mod/README.md` § New in 0.3.0). It has never run on a GPU: watch the frame rate and `latest.log`. Then Claude fixes what the screenshots show.
 1. **Bastien**: build **0.2.5** (shards that really break and fall, a window onto the Spire, clean big holes from falling shards, thin cracks opening big angular holes, crack sounds, hidden flying things, dawn sealing; `mod/README.md` § New in 0.2.5) and look at it in game. Build 0.1.5 was (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
 2. **Claude**: fix what 0.2.0 shows in game; then port C1's eye, the god rays, crack sounds and shake (moon position, depth, colours), then bloom, burgundy foliage (`biome_colors`), embers, sound.
 

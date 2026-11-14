@@ -16,6 +16,23 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.3.1 (Bastien's look at 0.3.0: much better, three things to fix)
+- **Cracks crack, no spreading patch**: the cracks no longer appear as a disc growing from the moon with the
+  cracked sky inside it. Twelve **rays** leave the impact, each running outward along slab borders in jumps on
+  heartbeats, at its own pace, some starting later; the **cross cracks** between two rays snap one by one a
+  moment after both rays have passed. A slab only settles askew (shift, tint) once it is cracked all round, on
+  its own, over 0.2 s; the tint change is smaller.
+- **Holes are in the sky**: a slab only falls if its lowest point is at least 0.22 rad (about 13 degrees) above
+  the horizon, so no hole reaches the ground: nothing looks like a place one could walk to. Fewer slabs fall
+  (about 9 to 21 a night, never fewer than 9).
+- **Under the moon the sky stays whole**: no cracks, no askew slabs within about 0.1 rad of the impact, fading
+  in up to 0.22 rad (the tiny dense facets there looked wrong).
+- The Spire's slab still falls after the climax, unless it would reach too low.
+
+What to look at: the cracks during the eclipse (rays then cross cracks, no patch), the horizon all round after
+the climax (sky everywhere low down), the place under the moon once it has risen on.
+Not seen in game yet.
+
 ## New in 0.3.0 (the break redone: the sky is a thick shell)
 Bastien on 0.2.5: the break did not look natural. He picked **B1 · Impact glass** in `preview/sky-break.html`
 (as first written). The fissure lines and the pentagon shards are gone (`fissures.rs` is replaced by `shell.rs`).

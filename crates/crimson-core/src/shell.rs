@@ -2,8 +2,9 @@
 //!
 //! One fracture network decides everything: small facets grouped into slabs, radial around the impact (where
 //! the moon is two thirds into the eclipse), small near it and huge far away. Cracks run along the slabs'
-//! borders as a front that leaves the impact in jumps, on heartbeats, further in some directions than in
-//! others. A cracked slab sits askew. Some slabs come loose and fall on our side, a few during the eclipse,
+//! borders: first as rays leaving the impact, each one running outward in jumps on heartbeats, some starting
+//! later and running slower than others; then the cross cracks between two rays, one by one. Once a slab is
+//! cracked all round it settles a little askew. Under the moon the sky stays whole. Some slabs come loose and fall on our side, a few during the eclipse,
 //! most at the climax; the hole a slab leaves is exactly its outline, onto the world behind the sky.
 //!
 //! What is decided is here: the impact, when the front jumps, how far it runs in each direction, where each
@@ -33,15 +34,20 @@ pub const STEPS: usize = 16;
 pub const REACH: f32 = 0.15;
 /// A jump takes this long.
 pub const JUMP: f32 = 0.14;
-/// Directions around the impact for which the front's factor is given.
-pub const SPOKES: usize = 36;
+/// Rays: the cracks that leave the impact, one between each two rows of slabs.
+pub const RAYS: usize = ROWS as usize;
+/// A slab only falls if its lowest point is this high above the horizon, in radians: a hole is in the sky,
+/// never something one could walk to (Bastien).
+pub const HOLE_FLOOR: f32 = 0.22;
+/// At least this many slabs fall each night.
+pub const MIN_HOLES: usize = 9;
 /// A slab that never falls "falls" then.
 pub const NEVER: f32 = 1e9;
 /// A slab comes loose this long before it falls: light leaks round it (the shader draws it).
 pub const LOOSE: f32 = 1.3;
 /// Floats per slab, and in the whole buffer the shader reads (see [`Plan::floats`]).
 pub const SLAB_FLOATS: usize = 16;
-pub const HEADER_FLOATS: usize = 4 + STEPS + SPOKES;
+pub const HEADER_FLOATS: usize = 4 + STEPS + 2 * RAYS;
 pub const FLOATS: usize = HEADER_FLOATS + (RINGS * ROWS) as usize * SLAB_FLOATS;
 /// When the impact is fixed: the moon is behind it from the first crack to the climax.
 const IMPACT_AT: f32 = 40.0;
@@ -57,6 +63,8 @@ pub struct Slab {
     /// Its centre as a direction in the world, and about its angular radius.
     pub dir: [f32; 3],
     pub size: f32,
+    /// When it is cracked all round and settles askew.
+    pub settles: f32,
     /// When it falls, or [`NEVER`].
     pub falls: f32,
     /// Dice, 0 to 1: `[0]` the order slabs close in at dawn; `[1..5]` how it flies once loose (drift, tumble,
@@ -73,8 +81,10 @@ pub struct Plan {
     pub salt: i32,
     /// When each jump of the front starts.
     pub steps: [f32; STEPS],
-    /// How far the front must run to reach a point, per direction around the impact: a factor on its distance.
-    pub spokes: [f32; SPOKES],
+    /// Per ray (ray `b` runs between rows `b - 1` and `b`): how much slower than the steps it runs (a factor on
+    /// the distance) and how many steps late it starts.
+    pub ray_factor: [f32; RAYS],
+    pub ray_offset: [f32; RAYS],
     /// Ring by ring from the impact outward, row by row.
     pub slabs: Vec<Slab>,
     /// Jolts and flickers: when, how strong.
@@ -101,15 +111,10 @@ impl Plan {
             .map(|(_, k)| *k)
     }
 
-    /// When the crack front reaches `p` (a point around the impact, see [`Plan::to_p`]): at the climax at
-    /// the latest.
-    pub fn crack_time(&self, p: [f32; 2]) -> f32 {
-        let r = (p[0] * p[0] + p[1] * p[1]).sqrt();
-        let x = (p[1].atan2(p[0]) / std::f32::consts::TAU).rem_euclid(1.0) * SPOKES as f32;
-        let i = (x as usize).min(SPOKES - 1);
-        let f = x - i as f32;
-        let spoke = self.spokes[i] + (self.spokes[(i + 1) % SPOKES] - self.spokes[i]) * f;
-        let re = r * spoke / REACH;
+    /// When ray `b` reaches the distance `r` from the impact: at the climax at the latest.
+    pub fn ray_time(&self, b: i32, r: f32) -> f32 {
+        let b = b.rem_euclid(ROWS) as usize;
+        let re = r * self.ray_factor[b] / REACH + self.ray_offset[b];
         let k = re.floor();
         if k >= STEPS as f32 {
             return EYE_OPENS;
@@ -151,23 +156,21 @@ impl Plan {
         best.1
     }
 
-    /// The plan as the shader reads it: the impact and the salt, the steps, the spokes, then per slab four
-    /// `vec4`: (centre in `w`, when it falls, dawn order), (direction, size), (flight dice), (askew, sheen, tint).
+    /// The plan as the shader reads it: the impact and the salt, the steps, the rays' factors then their
+    /// offsets, then per slab four `vec4`: (centre in `w`, when it falls, dawn order), (direction, size),
+    /// (flight dice), (askew x and y, tint, when it settles).
     pub fn floats(&self) -> Vec<f32> {
         let mut out = Vec::with_capacity(FLOATS);
-        out.extend_from_slice(&[
-            self.center[0],
-            self.center[1],
-            self.center[2],
-            self.salt as f32,
-        ]);
+        out.extend_from_slice(&self.center);
+        out.push(self.salt as f32);
         out.extend_from_slice(&self.steps);
-        out.extend_from_slice(&self.spokes);
+        out.extend_from_slice(&self.ray_factor);
+        out.extend_from_slice(&self.ray_offset);
         for s in &self.slabs {
             out.extend_from_slice(&[s.center_w[0], s.center_w[1], s.falls, s.dice[0]]);
             out.extend_from_slice(&[s.dir[0], s.dir[1], s.dir[2], s.size]);
             out.extend_from_slice(&s.dice[1..5]);
-            out.extend_from_slice(&[s.dice[5], s.dice[6], s.dice[7], 0.0]);
+            out.extend_from_slice(&[s.dice[5], s.dice[6], s.dice[7], s.settles]);
         }
         out
     }
@@ -265,28 +268,36 @@ pub fn plan(seed: u64) -> Plan {
     let salt = (rng.below(4096)) as i32;
     let center = moon_direction(ECLIPSE_START as f32 + IMPACT_AT * TICKS_PER_SECOND as f32);
 
-    // The front jumps on heartbeats, from the eighteenth, faster and faster, the last before the hush.
+    // The cracks jump on heartbeats, from the eighteenth, faster and faster, the last before the hush.
     let mut steps = [0.0; STEPS];
     for (k, step) in steps.iter_mut().enumerate() {
         *step = beat_time((18.0 + 4.4 * k as f32).round());
     }
-    // It runs further in some directions than in others.
-    let mut spokes = [0.0; SPOKES];
-    for (i, spoke) in spokes.iter_mut().enumerate() {
-        let th = i as f32 / SPOKES as f32 * std::f32::consts::TAU;
-        *spoke = 0.6 + 0.8 * vnoise([th.cos() * 1.7 + 7.3, th.sin() * 1.7 + 2.1], salt);
+    // Each ray has its own pace and its own start; the first to start does so on the first step.
+    let mut ray_factor = [0.0; RAYS];
+    let mut ray_offset = [0.0; RAYS];
+    for b in 0..RAYS {
+        ray_factor[b] = 0.5 + 1.5 * rng.unit();
+        ray_offset[b] = 6.0 * rng.unit();
+    }
+    let first = ray_offset.iter().copied().fold(f32::INFINITY, f32::min);
+    for offset in &mut ray_offset {
+        *offset -= first;
     }
     let mut plan = Plan {
         center,
         salt,
         steps,
-        spokes,
+        ray_factor,
+        ray_offset,
         slabs: Vec::with_capacity((RINGS * ROWS) as usize),
         events: Vec::new(),
         sounds: Vec::new(),
     };
 
     let (e1, e2) = frame_of(center);
+    // Slabs that could fall but stay: how close they were, and when they would go.
+    let mut spare: Vec<(usize, f32, f32)> = Vec::new();
     for ring in 0..RINGS {
         for row in 0..ROWS {
             let jitter = [rng.unit(), rng.unit()];
@@ -300,19 +311,30 @@ pub fn plan(seed: u64) -> Plan {
                 scale(center, r.cos()),
                 scale(add(scale(e1, p[0]), scale(e2, p[1])), r.sin() / r.max(1e-6)),
             );
+            let size = 0.5 * SLAB[1] * r / A;
             let mut dice = [0.0; 8];
             for d in &mut dice {
                 *d = rng.unit();
             }
-            let roll = rng.unit();
-            // Patches of the sky fall, most of it near the impact, little far away; nothing under the moon.
+            let (roll, wait) = (rng.unit(), rng.unit());
+            // Cracked all round once both its rays have passed and the cross cracks have followed.
+            let settles = (plan.ray_time(row, r).max(plan.ray_time(row + 1, r)) + 0.5 + 3.0 * wait)
+                .min(EYE_OPENS);
+            // Patches of the sky fall, most of it near the impact, little far away; nothing under the moon,
+            // nothing that reaches down toward the horizon.
             let patch = vnoise([p[0] * 2.4 + 5.3, p[1] * 2.4 + 1.7], salt);
+            let high = dir[1].clamp(-1.0, 1.0).asin() - 1.2 * size > HOLE_FLOOR;
             let mut falls = NEVER;
-            if r > 0.2 && r < 2.2 && patch > 0.3 + 0.48 * smoothstep(0.3, 1.5, r) {
-                falls = EYE_OPENS + 0.15 + r * 1.1 + roll * 0.5;
+            let margin = patch - (0.36 + 0.46 * smoothstep(0.3, 1.5, r));
+            let at_climax = EYE_OPENS + 0.15 + r * 1.1 + roll * 0.5;
+            if high && r > 0.2 && r < 2.2 && margin <= 0.0 {
+                spare.push((plan.slabs.len(), margin, at_climax));
+            }
+            if high && r > 0.2 && r < 2.2 && margin > 0.0 {
+                falls = at_climax;
                 if roll < 0.22 && r < 0.9 {
-                    // A few fall during the eclipse, a while after the front passed, never in the hush.
-                    let early = plan.crack_time(p) + 2.0 + 30.0 * roll;
+                    // A few fall during the eclipse, a while after they settled, never in the hush.
+                    let early = settles + 2.0 + 30.0 * roll;
                     if early < BLACKOUT_START - 0.5 {
                         falls = early;
                     }
@@ -321,25 +343,35 @@ pub fn plan(seed: u64) -> Plan {
             plan.slabs.push(Slab {
                 center_w,
                 dir,
-                size: 0.5 * SLAB[1] * r / A,
+                size,
+                settles,
                 falls,
                 dice,
             });
         }
     }
-    // The slab in front of the Spire falls just after the eye opens, so the Spire can be seen (Bastien).
+    // Every night opens the sky: at least [`MIN_HOLES`] slabs fall, the nearest to falling first.
+    spare.sort_by(|a, b| b.1.total_cmp(&a.1));
+    let holes = plan.slabs.iter().filter(|s| s.falls < NEVER).count();
+    for (i, _, at_climax) in spare.into_iter().take(MIN_HOLES.saturating_sub(holes)) {
+        plan.slabs[i].falls = at_climax;
+    }
+    // The slab in front of the Spire falls just after the eye opens, so the Spire can be seen (Bastien),
+    // unless it reaches too low.
     let spire = [
         SPIRE_ELEVATION.cos() * SPIRE_AZIMUTH.cos(),
         SPIRE_ELEVATION.sin(),
         SPIRE_ELEVATION.cos() * SPIRE_AZIMUTH.sin(),
     ];
     if let Some(i) = plan.slab_at(spire) {
-        if plan.slabs[i].falls > EYE_OPENS + 1.5 {
-            plan.slabs[i].falls = EYE_OPENS + 1.0 + 0.5 * rng.unit();
+        let slab = &mut plan.slabs[i];
+        let high = slab.dir[1].clamp(-1.0, 1.0).asin() - 1.2 * slab.size > HOLE_FLOOR;
+        if high && slab.falls > EYE_OPENS + 1.5 {
+            slab.falls = EYE_OPENS + 1.0 + 0.5 * rng.unit();
         }
     }
 
-    // Each jump of the front jolts and is heard; a slab is heard coming loose, then falling. At the climax
+    // Each step of the cracks jolts and is heard; a slab is heard coming loose, then falling. At the climax
     // too many fall at once to hear each: one in three.
     for (k, t) in plan.steps.iter().enumerate() {
         let strength = if k == 0 { 0.8 } else { 0.5 };

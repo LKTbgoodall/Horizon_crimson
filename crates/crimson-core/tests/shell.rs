@@ -2,8 +2,8 @@ use crimson_core::moon::TICKS_PER_SECOND;
 use crimson_core::night::{DAWN_END, DAWN_START, ECLIPSE_START};
 use crimson_core::rise::{beat_time, beats_at, BLACKOUT_START, EYE_OPENS};
 use crimson_core::shell::{
-    from_w, plan, seal, seed_for_day, slab_index, to_w, FLOATS, LOOSE, NEVER, RING0, RINGS, ROWS,
-    SPIRE_AZIMUTH, SPIRE_ELEVATION, STEPS,
+    from_w, plan, seal, seed_for_day, slab_index, to_w, FLOATS, HOLE_FLOOR, LOOSE, NEVER, RING0,
+    RINGS, ROWS, SPIRE_AZIMUTH, SPIRE_ELEVATION, STEPS,
 };
 
 fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
@@ -68,7 +68,7 @@ fn every_direction_of_the_sky_has_a_slab() {
 }
 
 #[test]
-fn the_front_jumps_on_heartbeats_before_the_hush() {
+fn rays_run_outward_in_jumps_on_heartbeats_before_the_hush() {
     let p = plan(1);
     assert_eq!(p.steps.len(), STEPS);
     assert!(p.steps[0] > 15.0);
@@ -76,57 +76,85 @@ fn the_front_jumps_on_heartbeats_before_the_hush() {
     assert!(p.steps[STEPS - 1] < BLACKOUT_START);
     // Faster and faster.
     assert!(p.steps[STEPS - 1] - p.steps[STEPS - 2] < p.steps[1] - p.steps[0]);
-    // Near the impact first, far later, everything by the climax.
-    assert!(p.crack_time([0.05, 0.0]) < p.crack_time([0.6, 0.0]));
-    assert_eq!(p.crack_time([3.0, 0.0]), EYE_OPENS);
-    for s in p.spokes {
-        assert!((0.6..=1.4).contains(&s));
+    for b in 0..ROWS {
+        // Near the impact first, far later, everything by the climax; ray 12 is ray 0.
+        assert!(p.ray_time(b, 0.05) <= p.ray_time(b, 0.6));
+        assert!(p.ray_time(b, 0.05) >= p.steps[0]);
+        assert_eq!(p.ray_time(b, 50.0), EYE_OPENS);
+        assert_eq!(p.ray_time(b + ROWS, 0.4), p.ray_time(b, 0.4));
     }
+    // One ray starts on the first step; they do not all run together.
+    assert!(p.ray_offset.contains(&0.0));
+    let times: Vec<f32> = (0..ROWS).map(|b| p.ray_time(b, 0.5)).collect();
+    let (min, max) = times
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(a, b), t| (a.min(*t), b.max(*t)));
+    assert!(
+        max - min > 3.0,
+        "rays at 0.5 rad all within {} s",
+        max - min
+    );
 }
 
 #[test]
-fn slabs_fall_after_their_crack_a_few_early_most_at_the_climax() {
+fn slabs_fall_after_they_settle_a_few_early_most_at_the_climax() {
+    let mut total = 0;
     for seed in 0..20 {
         let p = plan(seed);
         let falling: Vec<_> = p.slabs.iter().filter(|s| s.falls < NEVER).collect();
         let early = falling.iter().filter(|s| s.falls < EYE_OPENS).count();
+        total += falling.len();
         assert!(
-            (6..=70).contains(&falling.len()),
+            (9..=40).contains(&falling.len()),
             "seed {seed}: {} fall",
             falling.len()
         );
         assert!(
-            early * 2 < falling.len(),
+            early * 2 <= falling.len(),
             "seed {seed}: {early} early of {}",
             falling.len()
         );
+        for s in p.slabs.iter() {
+            assert!(s.settles >= p.steps[0] && s.settles <= EYE_OPENS);
+        }
         for s in &falling {
             let at = p.to_p(s.dir);
             let r = (at[0] * at[0] + at[1] * at[1]).sqrt();
             assert!(r > 0.19, "nothing falls under the moon");
             assert!(
-                s.falls >= p.crack_time(at) + 1.9 || s.falls >= EYE_OPENS,
+                s.falls >= s.settles + 1.9 || s.falls >= EYE_OPENS,
                 "seed {seed}"
             );
             assert!(s.falls < BLACKOUT_START - 0.4 || s.falls > EYE_OPENS);
             assert!(s.falls < EYE_OPENS + 5.0);
             assert!((dot(s.dir, s.dir) - 1.0).abs() < 1e-3);
+            // A hole is in the sky: its lowest point is well above the horizon.
+            assert!(
+                s.dir[1].asin() - 1.2 * s.size > HOLE_FLOOR,
+                "seed {seed}: a hole reaches the horizon"
+            );
         }
     }
+    assert!(total >= 20 * 5, "too few holes: {total} over 20 nights");
 }
 
 #[test]
-fn the_slab_in_front_of_the_spire_falls() {
+fn the_slab_in_front_of_the_spire_falls_when_it_is_high_enough() {
     let spire = [
         SPIRE_ELEVATION.cos() * SPIRE_AZIMUTH.cos(),
         SPIRE_ELEVATION.sin(),
         SPIRE_ELEVATION.cos() * SPIRE_AZIMUTH.sin(),
     ];
+    let mut opened = 0;
     for seed in 0..20 {
         let p = plan(seed);
         let slab = p.slabs[p.slab_at(spire).expect("a slab")];
-        assert!(slab.falls <= EYE_OPENS + 1.5, "seed {seed}: {}", slab.falls);
+        if slab.dir[1].asin() - 1.2 * slab.size > HOLE_FLOOR {
+            assert!(slab.falls <= EYE_OPENS + 1.5, "seed {seed}: {}", slab.falls);
+            opened += 1;
+        }
     }
+    assert!(opened > 0);
 }
 
 #[test]

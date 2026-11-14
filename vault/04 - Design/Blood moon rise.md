@@ -146,6 +146,11 @@ Checked with headless Chrome at 1280x720 (B1 at 0:09, 0:11, 0:15, 0:19, 0:20; B2
 
 **Bastien picked B1 (first version)** → ported as 0.3.0, [[ADR-017 The sky is a thick shell]]. In the mod the timeline is the eclipse's: the front makes 16 jumps on heartbeats from 0:18 to 0:57 (the preview's 11 s become 39 s), early slabs fall 2 to 9 s after the front passed, the rest from 0:60.65, nearest first. The impact is where the moon is at 0:40. Dawn: slabs come back one by one with a gold seam.
 
+**0.3.0 seen in game** (two screenshots, night): it runs and Bastien likes it much more. Three remarks → 0.3.1:
+- *Under the moon*: the tiny dense facets at the impact look wrong. Now the sky stays whole there (no crack, no askew slab within 0.1 rad, fading in to 0.22).
+- *Too much sky gone, and holes down to the horizon*: a hole must be **in the sky**, something you look at and would have to fly to, never an opening at ground level you could walk into. Rule (`shell::HOLE_FLOOR`): a slab only falls if its lowest point is 0.22 rad above the horizon. Fewer fall (9 to 21 a night), still many.
+- *The cracking looked like a patch growing and uncovering a second, cracked sky*: cracks must crack. The radial front (one disc, everything inside cracked and tinted at once) is replaced by twelve rays running outward on their own, then cross cracks snapping one by one; a slab settles askew only once cracked all round.
+
 ## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.
