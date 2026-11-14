@@ -71,6 +71,13 @@ He prefers **C1**, but disliked the web around the moon: it moved with the moon 
 - Cracks widen and their glow spreads with age (light seeping through). At the climax 14 cracks shoot out all around the moon at high speed, then branch; a few shards next to the moon blow out onto the light. The moon-centred web only exists in that small blown-out zone after the climax.
 - The eye (strands, third eyelid, lock-on) is unchanged.
 
+### Behind the shell: another world (2026-11-14)
+Bastien: much better, but inside the breaks it is just light; he wants things passing behind, as if it were another world. Now the holes and the old, wide fissures open onto **the other side** (`otherSide` in the preview, world-fixed azimuth / elevation, it follows neither the moon nor the camera):
+- Its own abyss: dark crimson and violet, with stars and a far red sun.
+- **An upside-down land** hanging over it: dark rock, hanging spires, lava rivers, little lights, its edge lit from below.
+- **Leviathans** swimming past: a near one crossing behind the moon through the eclipse and the night, a far hazy one going the other way. Dark silhouette lit from behind, spines on the back, fins below, rows of glowing spots, a glowing eye.
+- Hole edges are thin and hot now; the shell's thickness shows as shadow inside the edge. The corona and the flash stay on our side of the shell (they do not cover the holes). Blown shards vanish whole.
+
 ## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.

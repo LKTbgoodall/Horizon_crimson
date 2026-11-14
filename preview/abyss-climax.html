@@ -94,7 +94,7 @@ const F0 = .75, F1 = 2.3;                                // heartbeat, Hz, at th
 const PHASES = [['Omens', 0], ['Eclipse', T0], ['The eye', TE], ['Night', TN]];
 const VERS = [
   { key:'C1', name:'Shell of Light', tag:'The sky is a shell and something blinding is behind it. Cracks run white-hot from the moon, shards blow out and light pours through in shafts. The eye tears open against strands of flesh, then a third eyelid sweeps across it.',
-    rot:-.1, rays:.9, shake:1.7, since:3.9 },
+    rot:-.1, rays:.6, shake:1.7, since:3.9 },
   { key:'C2', name:'Glass Abyss', tag:'The sky is glass: shards bend the stars, split light like a prism, then fall away in a wave onto deep space. No lid: the void that ate the moon was a pupil dilated in the dark, and at the flash it snaps into a slit.',
     rot:0, rays:.85, shake:1.3, since:.55 },
   { key:'C3', name:'The Sky Opens', tag:'One rift grows across the whole sky through the eclipse. At the climax it lights up from horizon to horizon and the sky itself opens like an eyelid. The moon becomes the pupil of an eye as big as the sky, and it follows you.',
@@ -251,7 +251,7 @@ function state(t, v) {
     lcol = mul3(mix3([.42, .5, .7], [2.1, .24, .15], sstep(.1, .8, p)), sstep(13, 17, t) * night * (1 + .1 * beat + (v === 0 ? .6 * evFlash(t) : 0)));
   }
   const corona = (sstep(.03, .6, p) * (.45 + .55 * p) * (1 + .09 * beat) + .25 * eyeK) * (1 - .85 * hush);
-  const rev = v === 0 ? .42 * sstep(TC, TC + .45, t) : v === 2 ? .9 * Math.pow(p, 1.3) : 1.6 * Math.pow(p, 1.3) + .6 * sstep(TC, 76, t);
+  const rev = v === 0 ? .95 * sstep(TC, TC + .6, t) : v === 2 ? .9 * Math.pow(p, 1.3) : 1.6 * Math.pow(p, 1.3) + .6 * sstep(TC, 76, t);
   const ev = v === 0 ? evFlash(t) : 0;
   return {
     p, ev, beat, beatN: Math.floor(ph), open, seam, flash, mem, burst, rift, shock, shockK, shake, hor, zen, amb, sun, moon, L, lcol, corona, rev,
@@ -340,6 +340,54 @@ vec3 deepSpace(vec3 d,vec2 qa,float ang,float a){
   c+=vec3(1.,.8,.7)*arms*pow(hi2(ivec2(floor(nq*300.))),40.)*3.;
   return c;
 }
+// C1: the other side of the sky. Its own abyss under a far red sun, and colossal things swimming past.
+// World-fixed coordinates (azimuth, elevation): it does not follow the moon or the camera.
+vec3 levi(vec3 c,vec2 u,float sc,float hx,float dir,float y0,float haze,float seed){
+  float L=1.7*sc,x=(hx-u.x)*dir;                 // x: distance behind the head, along the body
+  if(x<-.12*sc||x>L) return c;
+  float s=clamp(x/L,0.,1.);
+  float y=y0+.07*sc*sin(u.x*3.5/sc+uT*.45+seed)+.03*sc*sin(u.x*9./sc-uT*.6+seed);
+  float dy=u.y-y;
+  float R=sc*.085*(.4+.6*smoothstep(0.,.14,s))*pow(1.-s,.7)*(1.+.12*sin(x*30./sc))+sc*.04*exp(-pow(x/(.06*sc),2.));
+  float spine=pow(abs(sin(u.x*26./sc+seed)),5.)*.03*sc*(.3+.7*fbm(vec2(u.x*12./sc,seed)))*(1.-s)*step(0.,dy);
+  float fin=pow(abs(sin(u.x*11./sc+seed*2.)),24.)*.07*sc*smoothstep(.1,.25,s)*(1.-s)*step(dy,0.);
+  float sd=abs(dy)-R-spine-fin;
+  float body=smoothstep(.003,-.003,sd)*(1.-haze);
+  vec3 sil=vec3(.035,.004,.01)*(.6+.8*fbm(u*40./sc+seed));
+  c=mix(c,sil,body);
+  c+=vec3(1.,.28,.1)*exp(-abs(sd)*mix(160.,90.,haze))*(1.-haze)*.9;              // lit from behind
+  vec2 g=vec2(u.x*70./sc,(dy/max(R,1e-4))*2.5);                              // rows of glowing spots
+  float spot=pow(hi2(ivec2(floor(g))+ivec2(0,7)),6.)*smoothstep(.32,.05,length(fract(g)-.5))*step(sd,0.);
+  c+=vec3(1.,.5,.2)*spot*1.6*(1.-haze)*(1.-s);
+  vec2 e=vec2(x-.03*sc,dy-.012*sc);                                          // its eye
+  c+=vec3(1.,.7,.3)*exp(-length(e)/(.004*sc))*3.*(1.-haze);
+  return c;
+}
+vec3 otherSide(vec3 d){
+  vec2 u=vec2(atan(d.z,d.x),asin(clamp(d.y,-1.,1.)));
+  float n1=fbm(u*3.+vec2(uT*.01,0.)),n2=fbm(u*7.-3.);
+  vec3 c=vec3(.008,0.,.02)+vec3(.3,.01,.08)*pow(n1,3.)*1.6+vec3(.18,.03,.35)*pow(n2,3.)*1.2;
+  vec2 sp=u-vec2(.3,.72);
+  c+=vec3(1.,.22,.06)*exp(-length(sp)*3.5)*1.3+vec3(1.,.6,.3)*exp(-length(sp)*16.)*1.5;
+  c+=vec3(1.,.8,.7)*starLayer(d,90.,.06,.003)*.7;
+  // an upside-down land hangs over it: dark rock, hanging spires, lava rivers, lights
+  float ridge=.92-.26*fbm(vec2(u.x*2.2,1.))-.07*fbm(vec2(u.x*9.,5.));
+  ridge-=.22*pow(abs(sin(u.x*7.+2.*fbm(vec2(u.x*3.,8.)))),9.)+.1*pow(abs(sin(u.x*19.+1.3)),14.);
+  float haze=exp(-max(u.y-ridge,0.)*14.);
+  c+=vec3(.6,.1,.08)*exp(-abs(u.y-ridge)*9.)*.35;                                 // light under the land
+  if(u.y>ridge){
+    vec2 lq=u*vec2(14.,22.);
+    vec3 land=vec3(.03,.008,.012)*(.6+.8*fbm(u*30.));
+    land+=vec3(1.,.3,.05)*exp(-voro2(lq+.3*fbm(lq))*45.)*.9*smoothstep(.2,.6,fbm(u*5.+4.));   // lava rivers
+    land+=vec3(1.,.6,.25)*pow(hi2(ivec2(floor(u*vec2(300.,240.)))),60.)*2.;     // lights
+    land=mix(land,vec3(.25,.04,.05),haze*.6);
+    c=mix(c,land,smoothstep(0.,.004,u.y-ridge));
+    c+=vec3(1.,.35,.12)*exp(-(u.y-ridge)*120.)*.9;                                 // its edge, lit from below
+  }
+  c=levi(c,u,.55,1.6-(uT-66.)*.04,-1.,.68,.45,3.1);        // far, slow, going left
+  c=levi(c,u,.95,-1.5+(uT-50.)*.07,1.,.42,0.,0.);          // near, crossing past the moon
+  return c;
+}
 // The eye, in iris units (iris radius 1). Mostly cosmic: nebula iris, slit pupil that is a void with stars.
 vec3 eyeShade(vec2 n){
   vec2 io=uVar==1?vec2(0):uGaze*.42,po=uVar==1?uGaze*.3:io;
@@ -424,8 +472,8 @@ vec3 moonEyeC1(vec3 c,vec2 q){
 uniform highp sampler2D uSeg,uChk;
 uniform int uNChk;
 uniform float uEv;
-vec4 fissures(vec3 d){
-  float core=0.,glow=0.,heat=0.,tip=0.;
+vec4 fissures(vec3 d,out float inner){
+  float core=0.,glow=0.,heat=0.,tip=0.;inner=0.;
   for(int c=0;c<1024;c++){
     if(c>=uNChk) break;
     vec4 k1=texelFetch(uChk,ivec2(c*2+1,0),0);
@@ -443,9 +491,10 @@ vec4 fissures(vec3 d){
       float h=clamp(dot(d-A.xyz,ab)/max(dot(ab,ab),1e-10),0.,1.);
       float dist=length(d-A.xyz-ab*h);
       float age=uT-mix(A.w,B.w,h*f);
-      float w=k1.w*(.0017+.0018*smoothstep(0.,8.,age)+.0006*uBurst);
+      float w=k1.w*(.0016+.0024*smoothstep(0.,8.,age)+.0004*uBurst);
       core=max(core,smoothstep(w,w*.3,dist));
-      glow=max(glow,exp(-dist/(.003+.007*smoothstep(0.,6.,age)))*min(k1.w,1.5));
+      inner=max(inner,smoothstep(w*.62,w*.3,dist)*smoothstep(.5,4.,age));
+      glow=max(glow,exp(-dist/(.0025+.0025*smoothstep(0.,6.,age)))*min(k1.w,1.3));
       heat=max(heat,smoothstep(w*2.2,0.,dist)*exp(-age*.9));
       if(f<1.) tip=max(tip,exp(-length(d-b)*300.));
     }
@@ -469,7 +518,7 @@ void main(){
   float inEye=uVar==2&&uOpen>0.&&dyR<Lr?1.:0.;
 
   // ── the shell of the sky ──
-  float crack=0.,crk3r=0.,crk3b=0.,glow=0.,heat=0.,hole=0.,holeRim=0.,rim=0.,glint=0.,fine=0.;vec2 bend=vec2(0.);float shade=1.;
+  float wall=0.,crack=0.,crk3r=0.,crk3b=0.,glow=0.,heat=0.,hole=0.,holeRim=0.,rim=0.,glint=0.,fine=0.;vec2 bend=vec2(0.);float shade=1.;
   if(ang>uMoonRad*.92&&ang<2.2){
     ivec2 cell;vec3 nt=net(ang,a,24,cell);
     vec3 h=vec3(hi2(cell),hi2(cell+ivec2(5,3)),hi2(cell+ivec2(9,1)));
@@ -486,11 +535,12 @@ void main(){
     if(vis>0.&&h.y<.6){ivec2 c2;vec3 fn=net(ang,a,64,c2);fine=smoothstep(w*.55,w*.15,fn.x)*smoothstep(.05,.4,age)*step(hi2(c2),.55);}
     float pre=step(h.y,uP*.17-.03)*step(nt.z,uRev*.7)*(uVar==2?step(h.z,.5):1.);
     float fall=0.;
-    if(uVar==0) fall=clamp((uTc-(.05+nt.z*.5+h.z*.25))/.35,0.,1.)*step(h.y,.28)*step(nt.z,.5);
+    if(uVar==0) fall=clamp((uTc-(.05+nt.z*.5+h.z*.25))/.35,0.,1.)*step(h.y,.62)*step(nt.z,1.);
     if(uVar==1) fall=clamp((uTc-(.1+nt.z*1.3+h.z*.45))/1.1,0.,1.)*step(h.y,.85)*step(nt.z,1.3);
-    float inset=fall*nt.z*.075;                    // the shard shrinks with its straight edges
+    float inset=fall*fall*nt.z*.2;                    // the shard shrinks with its straight edges
     hole=max(pre,fall>0.?step(nt.x,inset):0.);
-    holeRim=hole*exp(-nt.x/.004);
+    holeRim=hole*exp(-nt.x/(uVar==0?.0013:.004));
+    wall=hole*exp(-nt.x/.008);
     float gone=fall>0.?hole:0.;                    // a shard that fell takes its cracks with it
     crack*=1.-gone;crk3r*=1.-gone;crk3b*=1.-gone;glow*=1.-.85*gone;fine*=1.-gone;heat*=1.-gone;
     rim=(1.-hole)*exp(-max(nt.x-inset,0.)*400.)*fall*(1.-fall)*3.*step(.001,fall);
@@ -508,9 +558,9 @@ void main(){
   vec4 au=aurora(ang2,a);col=col*(1.-au.a)+au.rgb;
   col*=shade;
   if(hole>0.){
-    vec3 behind=uVar==0?lightBehind(qa,ang):deepSpace(d,qa,ang,a);
-    col=mix(col,behind*(uVar==0?uAtt:1.),hole);
-    col+=(uVar==0?vec3(3.,1.5,.8):vec3(1.4,.35,.25))*holeRim*uAtt;
+    vec3 behind=uVar==0?otherSide(d)*(1.-.75*wall):deepSpace(d,qa,ang,a);
+    col=mix(col,behind,hole);
+    col+=(uVar==0?vec3(2.6,.9,.35):vec3(1.4,.35,.25))*holeRim*uAtt;
   }
   col+=vec3(1.5,1.1,1.)*rim+vec3(2.,1.6,1.4)*glint*(1.-hole);
   float pulse=(.7+.25*uBeat+uFlash)*uAtt;
@@ -524,9 +574,10 @@ void main(){
   }
   col+=vec3(2.5,2.,1.8)*heat*crack*1.5*uAtt;
   if(uVar==0){
-    vec4 fs=fissures(d)*(1.-hole);
+    float inner;vec4 fs=fissures(d,inner)*(1.-hole);inner*=1.-hole;
     vec3 lc=mix(vec3(1.,.2,.08),vec3(3.,2.2,1.7),fs.z);
-    col+=lc*(fs.x*1.8+fs.y*.9)*(.75+.25*uBeat+uFlash)*uAtt+vec3(4.,3.,2.4)*fs.w*2.5;
+    col+=lc*(fs.x*1.6+fs.y*.45)*(.75+.25*uBeat+uFlash)*uAtt+vec3(4.,3.,2.4)*fs.w*2.5;
+    col=mix(col,otherSide(d)*1.3,inner*(1.-fs.z));      // an old, wide crack is a window onto the other side
     col+=vec3(1.,.35,.25)*uEv*.12;
   }
   col+=vec3(1.,.4,.3)*exp(-abs(ang-uShock)*35.)*uShockK*2.;
@@ -543,7 +594,7 @@ void main(){
   // ── corona and moon ──
   if(ang<1.7){
     float rr=max(r-1.,0.),sw=a+2.2*log(max(r,.2))-uT*.45;
-    float I=(exp(-rr*2.)*(pn(sw,rr*1.2,2.)*.7+.5*pow(.5+.5*sin(sw*3.),3.))*1.8+exp(-rr*7.))*uCorona*uAtt;
+    float I=(exp(-rr*2.)*(pn(sw,rr*1.2,2.)*.7+.5*pow(.5+.5*sin(sw*3.),3.))*1.8+exp(-rr*7.))*uCorona*uAtt*(1.-(uVar==0?.9:0.)*hole);       // the corona is on our side of the shell
     col+=vec3(1.,.2,.04)*I+vec3(1.,.7,.3)*I*I*.5;
     if(r<1.03){
       vec3 mc=moonSurf(q,r,a);
@@ -560,7 +611,7 @@ void main(){
   }
   col=mix(col,uFog,exp(-max(d.y,0.)*14.)*.65);
   if(d.y<0.) col=uFog;
-  col+=uFlash*vec3(1.,.55,.45)*(.3+.7*exp(-ang*1.5));
+  col+=uFlash*vec3(1.,.55,.45)*(.3+.7*exp(-ang*1.5))*(1.-(uVar==0?.8:0.)*hole);
   o=vec4(col,1.);
 }`;
 
