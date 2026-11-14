@@ -4,6 +4,7 @@
 //! The hook layer reads these and translates; it decides nothing.
 
 pub mod eye;
+pub mod fissures;
 pub mod moon;
 pub mod night;
 pub mod rise;

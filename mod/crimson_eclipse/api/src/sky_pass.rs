@@ -1,15 +1,19 @@
 //! The sky pass (`RenderHooks::world_drawn`): one full-screen draw right after
 //! the world. Where the world's depth says "sky" it paints the blood moon's
-//! sky (staging C: the swelling moon and its spiral void, the corona, the
-//! spiral aurora, the web of cracks tearing open on space, the eye); on the
-//! land it grades the picture red. Darkness and the flash cover both.
+//! sky (the swelling moon and its spiral void, the corona, the spiral aurora,
+//! the eye) and, since ADR-016, C1's break: real fissures fixed in the sky
+//! that open onto the Pale Realm (its black sun, shards, the Spire, a black
+//! shadow walking, far serpents). On the land it grades the picture red.
+//! Darkness and the flash cover both.
 //!
-//! The numbers are `crate::rise`'s and `crate::sky`'s; this file uploads
-//! them and draws. The shader is `preview/blood-moon-rise.html`'s, version C,
-//! in WGSL.
+//! The numbers are `crate::rise`'s, `crate::sky`'s and `crate::fissures`'s;
+//! this file uploads them and draws. The shader is `preview/blood-moon-rise.html`'s
+//! version C plus `preview/abyss-climax.html`'s C1 (W2, S1), in WGSL.
 
 use crate::eye::Eye;
-use crate::moon::time_of_day;
+use crate::fissures::{plan, Plan, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS};
+use crate::moon::{day_of, time_of_day};
+use crate::rng::mix;
 use crate::night::{eclipse_seconds, presence};
 use crate::rise::frame;
 use crate::server::{Shared, TARGET};
@@ -19,8 +23,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
-/// Floats in the uniform block: a 4 × 4 matrix and eleven `vec4`s.
-const UNIFORM_FLOATS: usize = 60;
+/// Floats in the uniform block: a 4 × 4 matrix and twelve `vec4`s.
+const UNIFORM_FLOATS: usize = 64;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -32,6 +36,8 @@ pub struct Sky {
     gpu: Mutex<Option<Gpu>>,
     /// The eye, and when it was last moved.
     eye: Mutex<(Eye, Option<Instant>)>,
+    /// Tonight's fissures and the seed they were planned with.
+    fissures: Mutex<Option<(u64, Arc<Plan>)>>,
     told: AtomicBool,
 }
 
@@ -41,6 +47,7 @@ impl Sky {
             shared,
             gpu: Mutex::new(None),
             eye: Mutex::new((Eye::default(), None)),
+            fissures: Mutex::new(None),
             told: AtomicBool::new(false),
         }
     }
@@ -58,6 +65,10 @@ struct Gpu {
     blank: wgpu::TextureView,
     /// The frame's copy, its size and its view.
     copy: Option<(wgpu::Texture, [u32; 2], wgpu::TextureView)>,
+    /// The fissures' segments and chunks (`crate::fissures`), and the seed of the plan they hold.
+    segments: wgpu::Buffer,
+    chunks: wgpu::Buffer,
+    uploaded: Option<u64>,
 }
 
 impl RenderHooks for Sky {
@@ -82,6 +93,15 @@ impl RenderHooks for Sky {
         let presence = presence(tod);
         let colors = colors(&frame, presence);
         let moon = moon_direction(tod as f32 + partial);
+        // Tonight's fissures: planned once per night, from the day.
+        let seed = mix(day_of(day_time) as u64 ^ 0xC1E5_0F15_5E5E_u64);
+        let fissures = {
+            let mut guard = lock(&self.fissures);
+            if guard.as_ref().is_none_or(|(s, _)| *s != seed) {
+                *guard = Some((seed, Arc::new(plan(seed))));
+            }
+            guard.as_ref().map(|(_, p)| Arc::clone(p))
+        };
 
         // The camera: where it looks, for the eye.
         let inverse = w.view_proj.inverse().to_cols_array();
@@ -118,6 +138,16 @@ impl RenderHooks for Sky {
         if can_copy {
             gpu.ensure_copy(w.device, w.color, w.size, w.color_format);
         }
+        let chunk_count = fissures.as_ref().map_or(0, |p| p.chunks.len());
+        if let Some(p) = &fissures {
+            if gpu.uploaded != Some(seed) {
+                let bytes = |f: Vec<f32>| -> Vec<u8> { f.iter().flat_map(|x| x.to_le_bytes()).collect() };
+                w.queue.write_buffer(&gpu.segments, 0, &bytes(p.segment_floats()));
+                w.queue.write_buffer(&gpu.chunks, 0, &bytes(p.chunk_floats()));
+                gpu.uploaded = Some(seed);
+            }
+        }
+        let crack_flash = fissures.as_ref().map_or(0.0, |p| p.flash(seconds));
 
         let mut u = Vec::with_capacity(UNIFORM_FLOATS);
         u.extend_from_slice(&inverse);
@@ -153,6 +183,7 @@ impl RenderHooks for Sky {
         u.extend_from_slice(&[colors.horizon[0], colors.horizon[1], colors.horizon[2], 0.0]);
         u.extend_from_slice(&[colors.zenith[0], colors.zenith[1], colors.zenith[2], 0.0]);
         u.extend_from_slice(&[frame.fog_rgb[0], frame.fog_rgb[1], frame.fog_rgb[2], 0.0]);
+        u.extend_from_slice(&[crack_flash, chunk_count as f32, presence, 0.0]);
         debug_assert_eq!(u.len(), UNIFORM_FLOATS);
         let bytes: Vec<u8> = u.iter().flat_map(|f| f.to_le_bytes()).collect();
         w.queue.write_buffer(&gpu.uniform, 0, &bytes);
@@ -194,6 +225,14 @@ impl RenderHooks for Sky {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(scene),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: gpu.segments.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: gpu.chunks.as_entire_binding(),
+                },
             ],
         });
         let attachments = [Some(wgpu::RenderPassColorAttachment {
@@ -231,6 +270,20 @@ fn forward(inverse: &[f32; 16]) -> [f32; 3] {
         [d[0] / len, d[1] / len, d[2] / len]
     } else {
         [0.0, 0.0, 1.0]
+    }
+}
+
+/// A read-only storage buffer seen by the fragment stage.
+fn storage_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only: true },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
     }
 }
 
@@ -273,6 +326,8 @@ impl Gpu {
                     },
                     count: None,
                 },
+                storage_entry(3),
+                storage_entry(4),
             ],
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -313,6 +368,16 @@ impl Gpu {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
+        let storage = |label: &str, floats: usize| {
+            device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some(label),
+                size: (floats * 4) as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            })
+        };
+        let segments = storage("Crimson Eclipse fissure segments", MAX_SEGMENTS * SEGMENT_FLOATS);
+        let chunks = storage("Crimson Eclipse fissure chunks", MAX_CHUNKS * CHUNK_FLOATS);
         let blank = device
             .create_texture(&wgpu::TextureDescriptor {
                 label: Some("Crimson Eclipse blank"),
@@ -337,6 +402,9 @@ impl Gpu {
             uniform,
             blank,
             copy: None,
+            segments,
+            chunks,
+            uploaded: None,
         }
     }
 
@@ -376,7 +444,7 @@ struct U {
     moon: vec4<f32>,    // xyz: direction of the moon, w: its radius in radians
     size: vec4<f32>,    // the frame's width and height, the depth's width and height
     a: vec4<f32>,       // time in seconds, eclipse progress, heartbeat pulse, the camera's height
-    b: vec4<f32>,       // void radius, crack reach, torn share, corona
+    b: vec4<f32>,       // void radius, (unused: the old web's reach and torn share), corona
     c: vec4<f32>,       // blood, stars pull, world grade, sky weight
     d: vec4<f32>,       // dark, flash, shock radius, shock strength
     e: vec4<f32>,       // lid seam, lid opening, pupil width, 1 with a frame copy
@@ -384,10 +452,15 @@ struct U {
     hor: vec4<f32>,
     zen: vec4<f32>,
     fog: vec4<f32>,     // the colour the land's fog goes to
+    g: vec4<f32>,       // the flicker of new cracks, the fissures' chunk count, presence
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var depth_tex: texture_depth_2d;
 @group(0) @binding(2) var scene_tex: texture_2d<f32>;
+// The fissures (crate::fissures): per segment three vec4 (a, ta), (b, tb), (along at a, along at b, born, opening);
+// per chunk two vec4 (cap centre, cos of its reach), (first segment, count, start time, width).
+@group(0) @binding(3) var<storage, read> fis_seg: array<vec4<f32>>;
+@group(0) @binding(4) var<storage, read> fis_chk: array<vec4<f32>>;
 
 struct V {
     @builtin(position) pos: vec4<f32>,
@@ -486,15 +559,6 @@ fn voro(p: vec2<f32>) -> vec3<f32> {
     return vec3<f32>(0.5 * (sqrt(d2) - sqrt(d1)), hi(cell), sqrt(d1));
 }
 
-// Far stars behind the torn sky: small round points.
-fn far_stars(p: vec2<f32>) -> f32 {
-    let id = floor(p);
-    let h = h21(id);
-    if (h < 0.9) { return 0.0; }
-    let at = fract(p) - 0.5 - (h22(id + 9.0) - 0.5) * 0.5;
-    return ss(0.2, 0.0, length(at)) * (0.4 + 0.6 * h21(id + 4.0));
-}
-
 // The spiral aurora around the moon. rgb: its light, a: how much sky it hides.
 fn aurora(ang: f32, a: f32) -> vec4<f32> {
     let k = ss(0.08, 0.5, u.a.y);
@@ -544,26 +608,272 @@ fn stars(d: vec3<f32>, ang: f32, a: f32) -> f32 {
     return mix(near, far, ss(0.5, 1.0, ang));
 }
 
-// The web of cracks around the moon. x: crack core, y: crack glow, z: sky torn open.
-fn sky_cracks(ang: f32, a: f32) -> vec3<f32> {
-    let reach = u.b.y;
-    let rad = u.moon.w;
-    let m = ss(reach, reach - 0.18, ang) * ss(rad * 0.95, rad * 1.12, ang);
-    if (m <= 0.0) { return vec3<f32>(0.0); }
-    let n = 26.0;
-    let k = a / 6.2832 * n + 0.4 * (pn(a, ang * 3.0, 2.0) - 0.5);
-    let sid = floor(k);
-    let da = (0.5 - abs(fract(k) - 0.5)) * (6.2832 / n) * ang;
-    let lr = log(ang * 10.0 + 1.0) * 4.5 + 0.35 * h11(sid * 7.3);
-    let cell = vec2<f32>(sid, floor(lr));
-    let torn = step(h21(cell + vec2<f32>(5.0, 5.0)), u.b.z - 0.0001);
-    // Rings are broken up, except around a torn piece: it shows its whole outline.
-    var dr = (0.5 - abs(fract(lr) - 0.5)) * (ang * 10.0 + 1.0) / 45.0;
-    if (h21(cell) < 0.45 && torn < 0.5) { dr = 1.0; }
-    let e = min(da, dr);
-    let w = mix(0.004, 0.0016, clamp(ang / max(reach, 0.01), 0.0, 1.0));
-    // The edge of a torn piece burns from inside.
-    return vec3<f32>(ss(w, w * 0.3, e), exp(-e * 90.0) + torn * exp(-e * 30.0) * 0.8, torn) * m;
+// The fissures at `d`, `s` seconds into the eclipse. The tip of each crack runs along its segments; then its
+// lips part into a lens (widest mid-crack), a little through the eclipse, wide at the climax. The whole crack is
+// one shape (the union of its segments), so its rim is clean. Only the chunks whose cap holds `d` are tested.
+struct Fis { core: f32, glow: f32, heat: f32, tip: f32, win: f32, lip: f32 };
+fn fissures(d: vec3<f32>, s: f32) -> Fis {
+    let tc = s - 60.5;
+    var tip = 0.0;
+    var emin = 1.0;
+    var hmin = 0.0;
+    var wmin = 1.0;
+    let n = u32(u.g.y);
+    for (var c = 0u; c < n; c++) {
+        let k1 = fis_chk[c * 2u + 1u];
+        if (s < k1.z) { continue; }
+        let k0 = fis_chk[c * 2u];
+        if (dot(d, k0.xyz) < k0.w) { continue; }
+        let first = u32(k1.x);
+        let count = u32(k1.y);
+        for (var i = 0u; i < count; i++) {
+            let si = (first + i) * 3u;
+            let pa = fis_seg[si];
+            if (s < pa.w) { break; }
+            let pb = fis_seg[si + 1u];
+            let pc = fis_seg[si + 2u];
+            let f = clamp((s - pa.w) / max(pb.w - pa.w, 0.0001), 0.0, 1.0);
+            let b = mix(pa.xyz, pb.xyz, f);
+            let ab = b - pa.xyz;
+            let h = clamp(dot(d - pa.xyz, ab) / max(dot(ab, ab), 1e-10), 0.0, 1.0);
+            let dist = length(d - pa.xyz - ab * h);
+            let age = s - mix(pa.w, pb.w, h * f);
+            let sf = mix(pc.x, pc.y, h * f);
+            let op = pc.w * (0.22 * ss(pc.z, pc.z + 18.0, s) + 0.78 * ss(0.0, 1.4, tc))
+                * pow(max(sin(3.14159 * sf), 0.0), 0.45) * (0.7 + 0.6 * vnoise(vec2<f32>(sf * 26.0, pc.z)))
+                * ss(0.0, 0.4, age);
+            let e = dist - op;
+            if (e < emin) {
+                emin = e;
+                hmin = exp(-age * 0.9);
+                wmin = k1.w;
+            }
+            if (f < 1.0) { tip = max(tip, exp(-length(d - b) * 300.0)); }
+        }
+    }
+    let w = wmin * 0.0013;
+    var o: Fis;
+    o.core = ss(w, w * 0.3, abs(emin));
+    o.glow = exp(-max(emin, 0.0) / 0.0022) * min(wmin, 1.3);
+    o.heat = ss(w * 2.2, 0.0, abs(emin)) * hmin;
+    o.tip = tip;
+    o.win = ss(0.0008, -0.0008, emin);
+    o.lip = ss(0.006, 0.0, -emin) * step(emin, 0.0);
+    return o;
+}
+
+fn sd_box(p: vec2<f32>, b: vec2<f32>) -> f32 {
+    let d = abs(p) - b;
+    return length(max(d, vec2<f32>(0.0))) + min(max(d.x, d.y), 0.0);
+}
+fn sd_seg(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
+    let pa = p - a;
+    let ba = b - a;
+    let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h);
+}
+fn smin(a: f32, b: f32, k: f32) -> f32 {
+    let h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
+    return mix(b, a, h) - k * h * (1.0 - h);
+}
+fn hk(k: i32) -> f32 { return hi(vec2<i32>(k, 0)); }
+
+// The Pale Realm, the world behind the sky (ADR-016). World-fixed: x is the azimuth (the moon rises at 0), y the
+// elevation. Its own fog, far below, hides any ground.
+const PALE_FOG = vec3<f32>(0.8, 0.78, 0.74);
+const PALE_H0 = 0.24;
+
+// The Spire, its main structure, in local units at its distance; `glow` gets the pale light at its tip.
+fn spire(lp: vec2<f32>, glow: ptr<function, f32>) -> f32 {
+    let t = u.a.x;
+    let hgt = 120.0;
+    let y = clamp(lp.y, 0.0, hgt);
+    let k = 1.0 - y / hgt;
+    let w = 1.6 + 15.0 * pow(k, 1.3) + 3.5 * step(fract(y / 14.0), 0.18) * k;
+    var d = max(abs(lp.x) - w, max(-lp.y, lp.y - hgt));
+    for (var i = 0; i < 6; i++) {
+        let yy = 18.0 + f32(i) * 16.0;
+        let kk = 1.0 - yy / hgt;
+        let sd = select(-1.0, 1.0, i % 2 == 1);
+        d = min(d, sd_seg(lp, vec2<f32>((1.6 + 15.0 * pow(kk, 1.3)) * sd, yy), vec2<f32>((8.0 + 20.0 * kk) * sd, yy + 7.0 + 5.0 * kk)) - 1.2 * kk - 0.4);
+    }
+    for (var i = 0; i < 2; i++) {
+        let ry = 74.0 + f32(i) * 22.0;
+        let rr = 30.0 - f32(i) * 9.0;
+        let q = vec2<f32>(lp.x, (lp.y - ry) * 3.2);
+        let ang = atan2(q.y, q.x) + t * 0.05 * select(-1.3, 1.0, i == 0);
+        let ring = max(abs(length(q) - rr) - 0.9, -(0.15 - abs(fract(ang * 2.5 / 6.2832) - 0.5)));
+        d = min(d, ring);
+    }
+    *glow = exp(-length(lp - vec2<f32>(0.0, hgt + 2.0)) * 0.25) * (0.7 + 0.3 * sin(t * 1.7));
+    return d;
+}
+
+fn pale(uv: vec2<f32>) -> vec3<f32> {
+    let t = u.a.x;
+    var c = mix(vec3<f32>(0.85, 0.83, 0.79), vec3<f32>(0.6, 0.6, 0.64), ss(PALE_H0, 1.1, uv.y));
+    // The black sun, its thin bright ring and fine rays.
+    let sp = uv - vec2<f32>(-0.42, 0.7);
+    let sr = length(sp);
+    let sa = atan2(sp.y, sp.x);
+    c += vec3<f32>(1.0) * exp(-sr * 4.0) * 0.1;
+    c += vec3<f32>(1.0) * pow(max(0.0, sin(sa * 14.0 + 3.0 * fbm(vec2<f32>(sa * 3.0, t * 0.1)))), 20.0) * exp(-sr * 5.0) * 0.3 * step(0.088, sr);
+    c = mix(c, vec3<f32>(0.01), ss(0.088, 0.084, sr));
+    c += vec3<f32>(1.0) * exp(-abs(sr - 0.087) * 220.0) * 0.8;
+    c = mix(c, PALE_FOG * 1.02, ss(0.45, 0.75, fbm(uv * vec2<f32>(2.0, 6.0) + vec2<f32>(t * 0.02, 0.0))) * 0.35);
+    // Floating black shards.
+    for (var k = 0; k < 6; k++) {
+        let fk = f32(k);
+        let ctr = vec2<f32>(-1.2 + 0.5 * fk + 0.08 * sin(t * 0.1 + fk), 0.5 + 0.3 * hk(k) + 0.03 * sin(t * 0.3 + fk * 2.0));
+        let q = rot(t * 0.08 * (hk(k + 3) - 0.5) + fk) * (uv - ctr);
+        let sz = 0.02 + 0.03 * hk(k + 7);
+        let sd = abs(q.x) / (sz * 0.55) + abs(q.y) / (sz * 1.6);
+        c = mix(c, mix(vec3<f32>(0.03), PALE_FOG, 0.1 + 0.35 * hk(k + 11)), ss(1.02, 0.98, sd));
+        c += vec3<f32>(1.0) * exp(-abs(sd - 1.0) * 30.0) * 0.12;
+    }
+    // The Spire, far off on the left, its base lost in the fog.
+    {
+        let dist = 160.0;
+        let lp = vec2<f32>(uv.x * dist + 0.62 * dist, (uv.y - (PALE_H0 - 0.26)) * dist);
+        var glow = 0.0;
+        let sd = spire(lp, &glow);
+        let rise = ss(PALE_H0 - 0.14, PALE_H0 + 0.12, uv.y);
+        let hz = 0.26 - 0.1 * ss(PALE_H0, PALE_H0 + 0.5, uv.y);
+        c += vec3<f32>(0.95, 0.95, 1.0) * glow * rise * 0.9;
+        c = mix(c, mix(vec3<f32>(0.025, 0.022, 0.03), PALE_FOG, hz), ss(0.7, -0.7, sd) * rise);
+    }
+    // A black shadow walking far off, two eyes you notice; its feet are far below in the fog.
+    {
+        let dist = 85.0;
+        var lp = vec2<f32>(uv.x * dist - (22.0 + (t - 76.0) * 1.7), (uv.y - (PALE_H0 - 0.26)) * dist);
+        let wk = t * 1.3;
+        let sw = 0.25 * sin(wk);
+        lp.y -= abs(cos(wk)) * 0.5;
+        lp.x -= 0.6 * sin(wk * 0.5);
+        var dd = length((lp - vec2<f32>(0.0, 40.0)) / vec2<f32>(1.0, 1.15)) - 3.4;
+        dd = smin(dd, length((lp - vec2<f32>(0.0, 27.0)) / vec2<f32>(1.0, 2.3)) - 5.0, 3.0);
+        dd = smin(dd, sd_seg(lp, vec2<f32>(-4.5, 33.0), vec2<f32>(-5.5 + 3.0 * sin(sw), 14.0)) - 1.0, 2.5);
+        dd = smin(dd, sd_seg(lp, vec2<f32>(4.5, 33.0), vec2<f32>(5.5 - 3.0 * sin(sw), 14.0)) - 1.0, 2.5);
+        dd = smin(dd, sd_seg(lp, vec2<f32>(0.0, 22.0), vec2<f32>(0.0, 0.0)) - 4.0, 4.0);
+        dd += 2.2 * (fbm(lp * 0.12 + vec2<f32>(0.0, -t * 0.6)) - 0.5) * ss(32.0, 8.0, lp.y) + 1.2 * (fbm(lp * 0.3 + t * 0.2) - 0.5);
+        let rise = ss(PALE_H0 - 0.1, PALE_H0 + 0.1, uv.y);
+        c = mix(c, vec3<f32>(0.006, 0.005, 0.008), ss(1.0, -2.5, dd) * rise);
+        let blink = step(0.12, fract(t * 0.19 + 0.3));
+        let e1 = (lp - vec2<f32>(-1.4, 40.6)) * vec2<f32>(1.0, 2.2);
+        let e2 = (lp - vec2<f32>(1.4, 40.6)) * vec2<f32>(1.0, 2.2);
+        let eye = exp(-length(e1) * 2.6) + exp(-length(e2) * 2.6);
+        let halo = exp(-length(e1) * 1.2) + exp(-length(e2) * 1.2);
+        c += (vec3<f32>(1.0, 0.97, 0.92) * eye * 3.5 + vec3<f32>(0.75, 0.7, 1.0) * halo * 0.5) * rise * blink;
+    }
+    return mix(c, PALE_FOG * 1.04, ss(PALE_H0 + 0.12, PALE_H0 - 0.25, uv.y));
+}
+
+// A serpent dragon seen side-on, far off in the Pale Realm's haze: a shaded tube lit from above, scales, a
+// dorsal frill on spines, fins, a tail fin, a dragon skull with horns and an amber eye. x runs from the snout back.
+fn serpent(c: vec3<f32>, uv: vec2<f32>, hx: f32, y0: f32, sc: f32, fog: f32, dir: f32, seed: f32) -> vec3<f32> {
+    let t = u.a.x;
+    let x = (uv.x - hx) * dir;
+    let xs = x / sc;
+    if (xs < -0.1 || xs > 1.58) { return c; }
+    let lc = vec3<f32>(0.95, 0.93, 0.9);
+    let back = vec3<f32>(0.12, 0.11, 0.1);
+    let belly = vec3<f32>(0.62, 0.6, 0.55);
+    let frill = vec3<f32>(0.28, 0.25, 0.25);
+    let ph = xs * 7.0 - t * 1.6 + seed;
+    let amp = sc * (0.006 + 0.045 * clamp(xs / 1.5, 0.0, 1.0));
+    let dy = uv.y - (y0 + amp * sin(ph));
+    let g0 = (xs - 0.035) / 0.045;
+    let r = sc * (0.044 * exp(-g0 * g0) + 0.022 * ss(-0.085, -0.01, xs) * (1.0 - ss(-0.01, 0.04, xs))
+        + 0.013 * ss(-0.06, 0.03, xs) * (1.0 - ss(0.02, 0.12, xs))
+        + 0.04 * pow(max(sin(3.14159 * clamp((xs - 0.05) / 1.45, 0.0, 1.0)), 0.0), 0.9));
+    let ld = normalize(vec3<f32>(0.2, 0.85, 0.5));
+    var col = vec3<f32>(0.0);
+    var a = 0.0;
+    for (var k = 0; k < 2; k++) {
+        let fp = select(0.78, 0.3, k == 0);
+        let st = 0.45 * sin(t * 1.6 + fp * 6.0 + seed);
+        let fq = rot(-0.9 - st) * vec2<f32>(xs - fp, (dy + r * 0.4) / sc);
+        let ft = clamp(-fq.y / 0.075, 0.0, 1.0);
+        let hw = 0.018 * sin(3.14159 * pow(ft, 0.7)) * (1.0 - 0.3 * ft);
+        if (fq.y < 0.0 && fq.y > -0.075 && abs(fq.x - 0.012 * ft * ft) < hw) {
+            let e = abs(fq.x - 0.012 * ft * ft) / max(hw, 0.0001);
+            col = mix(vec3<f32>(0.16, 0.13, 0.08), vec3<f32>(0.45, 0.16, 0.08), ft * 0.7) * (0.55 + 0.6 * (1.0 - e)) + lc * 0.08;
+            col *= 0.8 + 0.3 * ss(0.1, 0.0, abs(fract(e * 3.0 + ft * 2.0) - 0.5));
+            a = 1.0;
+        }
+    }
+    if (xs > 1.36 && xs < 1.56) {
+        let tf = sc * 0.055 * ss(1.36, 1.54, xs) * (1.0 - ss(1.53, 1.56, xs));
+        if (abs(dy) < tf) {
+            col = frill * 0.6 * (0.5 + 0.5 * abs(dy) / tf) + lc * 0.1;
+            a = 0.85;
+        }
+    }
+    for (var k = 0; k < 2; k++) {
+        let hb = select(0.075, 0.055, k == 0);
+        let hl = select(0.07, 0.09, k == 0);
+        let hq = vec2<f32>(xs - hb, (dy - r * 0.7) / sc);
+        let ht = clamp(hq.x / hl, 0.0, 1.0);
+        let hy = 0.035 * ht * (1.0 - 0.35 * ht) + select(-0.004, 0.0, k == 0);
+        let hw = 0.009 * (1.0 - ht);
+        if (hq.x > 0.0 && hq.x < hl && abs(hq.y - hy) < hw) {
+            col = mix(vec3<f32>(0.55, 0.48, 0.36), vec3<f32>(0.18, 0.14, 0.1), ht) * (0.6 + 0.6 * ss(-hw, hw, hq.y - hy)) * (0.5 + 0.5 * lc);
+            a = 1.0;
+        }
+    }
+    let fh = sc * 0.04 * ss(0.06, 0.16, xs) * (1.0 - ss(1.05, 1.4, xs));
+    let spn = x * 28.0 / (sc * 3.14159);
+    let top = r + fh * (0.5 + 0.5 * pow(abs(cos(spn * 3.14159)), 3.0));
+    if (dy > r * 0.9 && dy < top) {
+        let m = ss(r, top, dy);
+        col = mix(frill * 0.75, frill, m) * (0.45 + 0.6 * m) * (0.6 + 0.5 * lc) * (0.85 + 0.3 * fbm(vec2<f32>(x * 80.0 / sc, dy * 200.0 / sc)));
+        col = mix(col, vec3<f32>(0.12, 0.06, 0.05), ss(0.14, 0.0, abs(fract(spn) - 0.5)));
+        a = 0.8;
+    }
+    let v = dy / max(r, 0.00001);
+    if (abs(v) < 1.0) {
+        let n = vec3<f32>(0.0, v, sqrt(1.0 - v * v));
+        let diff = max(dot(n, ld), 0.0);
+        var alb = mix(belly, back, ss(-0.35, 0.25, v));
+        alb = mix(alb, back * 0.7, 0.45 * ss(-0.1, 0.6, v) * fbm(vec2<f32>(x * 25.0 / sc, v * 2.0) + seed + 7.0));
+        alb *= 0.55 + 0.8 * fbm(vec2<f32>(x * 40.0 / sc, v * 3.0) + seed);
+        if (v < -0.3) { alb *= 0.75 + 0.25 * ss(0.0, 0.25, abs(fract(x * 90.0 / sc) - 0.5)); }
+        var g = vec2<f32>(x * 110.0 / sc, asin(v) * 5.0);
+        g.x += 0.5 * fract(floor(g.y) * 0.5) * 2.0;
+        alb *= 0.8 + 0.2 * ss(0.48, 0.3, length(fract(g) - vec2<f32>(0.5, 0.2)));
+        col = alb * (0.12 + 1.25 * diff * lc);
+        col += lc * 1.2 * pow(max(dot(n, normalize(ld + vec3<f32>(0.0, 0.0, 1.0))), 0.0), 60.0) * 0.25 * fbm(vec2<f32>(x * 120.0 / sc, v * 6.0));
+        let knob = ss(0.35, 0.0, length(vec2<f32>(fract(x * 45.0 / sc) - 0.5, (v - 0.82) * 3.0))) * ss(0.05, 0.15, xs);
+        col = mix(col, vec3<f32>(0.05, 0.06, 0.04), knob * 0.5) + lc * knob * diff * 0.15;
+        col += vec3<f32>(0.35, 0.12, 0.05) * pow(1.0 - n.z, 2.0) * ss(0.0, -0.8, v) * 0.4;
+        col += lc * 0.45 * pow(1.0 - n.z, 3.0);
+        if (xs < 0.07 && xs > -0.08 && abs(v + 0.12) < 0.05) { col *= 0.3; }
+        if (xs < -0.06 && v > 0.2 && v < 0.45) { col *= 0.6; }
+        let ex = (xs - 0.03) * 48.0;
+        let ey = (v - 0.4) * 4.5;
+        if (ex * ex + ey * ey < 1.0) {
+            col = mix(vec3<f32>(1.0, 0.62, 0.12), vec3<f32>(0.25, 0.05, 0.0), ss(0.2, 1.0, ex * ex + ey * ey));
+            col *= ss(0.12, 0.3, abs(ex));
+            col += vec3<f32>(1.0, 0.7, 0.3) * 0.25;
+        }
+        if (xs > 0.0 && xs < 0.07) { col *= 1.0 - 0.4 * ss(0.6, 0.9, v) * ss(0.15, 0.5, abs(ex) / 8.0); }
+        a = 1.0;
+    }
+    return mix(c, mix(col, PALE_FOG, fog), a);
+}
+
+// What is behind the sky along `d`: the Pale Realm, two far serpents, drifting ash.
+fn other_side(d: vec3<f32>) -> vec3<f32> {
+    let t = u.a.x;
+    let uv = vec2<f32>(atan2(d.z, d.x) * 0.88, asin(clamp(d.y, -1.0, 1.0)));
+    var c = pale(uv);
+    c = serpent(c, uv, -1.4 + (t - 70.0) * 0.04, 0.78, 0.55, 0.68, -1.0, 2.3);
+    c = serpent(c, uv, 1.3 - (t - 62.0) * 0.035, 0.52 + 0.04 * sin(t * 0.07), 0.45, 0.74, 1.0, 5.1);
+    let ag = uv * 70.0 + vec2<f32>(t * 0.5, -t * 0.2);
+    let ai = vec2<i32>(floor(ag));
+    let af = fract(ag) - 0.5 - (hi2(ai) - 0.5) * 0.5;
+    c = mix(c, vec3<f32>(0.12, 0.11, 0.1), step(hi(ai + vec2<i32>(4, 4)), 0.12) * ss(0.09, 0.03, length(af * vec2<f32>(1.0, 1.8))));
+    return c;
 }
 
 // The eye inside the lid: a reptile iris holding a nebula, a void for a pupil.
@@ -656,21 +966,29 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     col += vec3<f32>(1.0, 0.95, 0.9) * stars(d, ang, a);
     let au = aurora(ang, a);
     col = col * (1.0 - au.a) + au.rgb;
-    let ck = sky_cracks(ang, a);
-    if (ck.z > 0.0) {
-        // Space behind the sky: a violet nebula and far stars.
-        let space = vec3<f32>(0.03, 0.0, 0.06) + vec3<f32>(0.35, 0.02, 0.3) * pow(fbm(qa * 6.0 + t * 0.02), 2.0)
-            + vec3<f32>(1.0, 0.92, 0.95) * far_stars(qa * 70.0);
-        col = mix(col, space, ck.z);
-        weight = max(weight, ck.z);
+    // The fissures, and the Pale Realm through them.
+    let s = t - 14.0;
+    let tc = s - 60.5;
+    let present = u.g.z;
+    let fs = fissures(d, s);
+    let win = fs.win * present;
+    if (win > 0.0) {
+        col = mix(col, other_side(d) * (1.0 - 0.55 * fs.lip), win);
+        weight = max(weight, win);
     }
-    col += (vec3<f32>(1.0, 0.12, 0.06) * ck.y * 0.7 + vec3<f32>(1.0, 0.75, 0.6) * ck.x * 1.6) * (0.7 + 0.24 * u.a.z + u.d.y);
-    weight = max(weight, ck.x);
+    let hush = select(0.0, ss(58.3, 59.5, s), s < 60.5);
+    let att = 1.0 - 0.6 * hush + select(0.0, 0.5 * exp(-tc * 0.8), tc >= 0.0);
+    let lc = mix(vec3<f32>(1.0, 0.25, 0.1), vec3<f32>(3.0, 2.2, 1.7), fs.heat);
+    col += (lc * (fs.core * 1.7 + fs.glow * 0.4 * (1.0 - fs.win)) * (0.75 + 0.25 * u.a.z + u.d.y) * att
+        + vec3<f32>(4.0, 3.0, 2.4) * fs.tip * 2.5) * present;
+    col += vec3<f32>(1.0, 0.35, 0.25) * u.g.x * 0.12 * present;
+    weight = max(weight, max(fs.core, max(fs.glow * 0.6, fs.tip)) * present);
     col += vec3<f32>(1.0, 0.4, 0.3) * exp(-abs(ang - u.d.z) * 35.0) * u.d.w * 2.0;
     if (ang < 1.7) {
         let rr = max(r - 1.0, 0.0);
         let sw = a + 2.2 * log(max(r, 0.2)) - t * 0.45;
-        let glow = (exp(-rr * 2.0) * (pn(sw, rr * 1.2, 2.0) * 0.7 + 0.5 * pow(0.5 + 0.5 * sin(sw * 3.0), 3.0)) * 1.8 + exp(-rr * 7.0)) * u.b.w;
+        // The corona is on our side of the shell: it does not cover the openings.
+        let glow = (exp(-rr * 2.0) * (pn(sw, rr * 1.2, 2.0) * 0.7 + 0.5 * pow(0.5 + 0.5 * sin(sw * 3.0), 3.0)) * 1.8 + exp(-rr * 7.0)) * u.b.w * (1.0 - 0.9 * win);
         col += vec3<f32>(1.0, 0.2, 0.04) * glow + vec3<f32>(1.0, 0.7, 0.3) * glow * glow * 0.5;
         weight = max(weight, clamp(glow, 0.0, 1.0));
     }

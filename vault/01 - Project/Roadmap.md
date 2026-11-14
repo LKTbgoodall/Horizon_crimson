@@ -17,7 +17,8 @@ Back: [[00 - Home]]
   - [x] Climax push of C, 3 candidates (C1 Shell of Light, C2 Glass Abyss, C3 The Sky Opens): `preview/abyss-climax.html` (2026-11-14)
   - [x] Bastien picks a climax candidate: **C1**, with real fissures fixed in the sky instead of the moon-centred web (2026-11-14)
   - [x] C1 reshaped with Bastien: real fissures opening onto the Pale Realm, far serpents, a black shadow walker, the Spire (2026-11-14, [[ADR-016 C1 rise and the Pale Realm]])
-  - [ ] Port to the mod, step by step: fissure planner in the pure core + segment buffer, opening lenses, the Pale Realm (sky, sun, shards, Spire, shadow, serpents), the god-ray pass
+  - [x] Port to the mod, first step (0.2.0, 2026-11-14): fissure planner in `crimson-core` (`fissures.rs`, 7 tests) + two storage buffers, opening lenses, the Pale Realm (sky, black sun, shards, Spire, shadow, far serpents) in `sky_pass.rs`. Checked (fmt, clippy, tests, shader, glue), not seen in game
+  - [ ] Port the rest: C1's eye (strands, third eyelid, lock-on), the god-ray pass, crack sounds and shake
   - [ ] Check whether a native mod can add a dimension (travel into the Pale Realm)
   - [x] Bastien picked **C · The Abyss** (2026-11-14)
 - [x] Repo skeleton: workspace, pure crate `crimson-core`, bundle `mod/crimson_eclipse` (typed API), content mod (manifest only) (2026-11-14)

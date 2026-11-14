@@ -16,8 +16,8 @@ updated: 2026-11-14
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-1. **Bastien**: C1 + Pale Realm + Spire is chosen ([[ADR-016 C1 rise and the Pale Realm]]); say when to port it. Build 0.1.5 (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
-2. **Claude**: port C1 and the Pale Realm into the sky pass step by step (fissure planner in `crimson-core`, segment buffer, lenses, the world, god rays); fix what the first in-game look shows (moon position, depth, colours), then bloom, burgundy foliage (`biome_colors`), embers, sound.
+1. **Bastien**: build **0.2.0** (C1's fissures opening onto the Pale Realm, see `mod/README.md` § New in 0.2.0) and look at it in game. Build 0.1.5 was (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
+2. **Claude**: fix what 0.2.0 shows in game; then port C1's eye, the god rays, crack sounds and shake (moon position, depth, colours), then bloom, burgundy foliage (`biome_colors`), embers, sound.
 
 ## 🗺️ Vault map
 ### 01 · Project

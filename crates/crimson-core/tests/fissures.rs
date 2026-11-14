@@ -1,0 +1,93 @@
+use crimson_core::fissures::{plan, CHUNK, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS};
+use crimson_core::rise::{beat_time, beats_at, EYE_OPENS};
+
+fn len(v: [f32; 3]) -> f32 {
+    (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt()
+}
+
+fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+#[test]
+fn beat_time_inverts_beats_at() {
+    for p in [0.0f32, 0.1, 0.37, 0.8, 1.0] {
+        let t = beat_time(beats_at(p));
+        assert!((t - p * 60.0).abs() < 1e-2, "p {p}: {t}");
+    }
+    assert_eq!(beat_time(-5.0), 0.0);
+    assert_eq!(beat_time(1e6), 60.0);
+}
+
+#[test]
+fn same_seed_same_plan_other_seed_other_plan() {
+    assert_eq!(plan(7), plan(7));
+    assert_ne!(plan(7).segments, plan(8).segments);
+}
+
+#[test]
+fn a_plan_fits_the_gpu_buffers() {
+    for seed in 0..20 {
+        let p = plan(seed);
+        assert!(
+            p.segments.len() > 300 && p.segments.len() <= MAX_SEGMENTS,
+            "seed {seed}: {}",
+            p.segments.len()
+        );
+        assert!(p.chunks.len() <= MAX_CHUNKS);
+        assert_eq!(p.segment_floats().len(), p.segments.len() * SEGMENT_FLOATS);
+        assert_eq!(p.chunk_floats().len(), p.chunks.len() * CHUNK_FLOATS);
+    }
+}
+
+#[test]
+fn segments_are_on_the_sphere_and_run_forward_in_time() {
+    let p = plan(3);
+    for s in &p.segments {
+        assert!((len(s.a) - 1.0).abs() < 1e-3 && (len(s.b) - 1.0).abs() < 1e-3);
+        assert!(
+            s.ta.is_finite() && s.tb.is_finite() && s.ta <= s.tb,
+            "{s:?}"
+        );
+        assert!(s.ta >= 0.0 && s.ta < 64.0, "{s:?}");
+        assert!((0.0..=1.0).contains(&s.along[0]) && s.along[0] < s.along[1] && s.along[1] <= 1.0);
+        assert!(s.opening > 0.0 && s.opening < 0.1);
+        assert!(s.born <= s.ta + 1e-4);
+    }
+}
+
+#[test]
+fn every_chunk_cap_holds_its_segments() {
+    let p = plan(11);
+    for c in &p.chunks {
+        assert!(c.count >= 1 && c.count as usize <= CHUNK);
+        let segs = &p.segments[c.first as usize..(c.first + c.count) as usize];
+        assert_eq!(c.starts, segs[0].ta);
+        for s in segs {
+            assert!(dot(c.center, s.a) >= c.cos_reach && dot(c.center, s.b) >= c.cos_reach);
+        }
+    }
+}
+
+#[test]
+fn cracks_are_born_on_heartbeats_before_the_hush_then_burst_at_the_climax() {
+    let p = plan(5);
+    let first = p.events.first().expect("events").0;
+    assert!((first - beat_time(18.0)).abs() < 1e-3);
+    assert!(p.events.iter().all(|(t, _)| *t < 58.0));
+    let burst = p
+        .chunks
+        .iter()
+        .filter(|c| c.starts >= EYE_OPENS && c.starts < EYE_OPENS + 0.05)
+        .count();
+    assert!(burst >= 14, "{burst}");
+}
+
+#[test]
+fn the_flash_is_dark_before_the_first_crack_and_fades() {
+    let p = plan(5);
+    let first = p.events[0].0;
+    assert_eq!(p.flash(first - 0.5), 0.0);
+    assert!(p.flash(first) > 0.5);
+    assert!(p.flash(first + 0.9) < p.flash(first + 0.1));
+}

@@ -16,6 +16,19 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.2.0 (C1 and the Pale Realm, ADR-016)
+- **The sky breaks for real**: the old web of cracks around the moon is gone. Cracks are now fixed in the sky,
+  born on heartbeats at the moon's edge or off another crack, their tip running fast then slowing; a main fault
+  crosses the sky in stages; at the climax a burst of cracks shoots out all around the moon. Planned once per
+  night by the pure core (`fissures.rs`), sent to the sky pass in two storage buffers.
+- **The cracks open onto the Pale Realm**: their lips part into lenses, a little through the eclipse, wide at the
+  climax. Behind: bone-white fog, a black sun, floating black shards, the Spire far off on the left, a black
+  shadow with two bright eyes walking through the night, two far serpent dragons, ash.
+- **To look at**: whether the cracks run and open as in the preview; whether the Pale Realm reads through them;
+  the frame rate during the night (the fissure loop runs on every sky pixel); any GPU error in `latest.log`
+  (the pass now uses storage buffers in the fragment stage).
+- Not ported yet: C1's eye (strands, third eyelid), the god rays, the crack sounds and shake.
+
 ## New in 0.1.5
 - **Stars are small points again** (seen in 0.1.4: huge stretched streaks far from the moon). One size
   everywhere, a slight stretch toward the moon only close to it, a plain field elsewhere.

@@ -165,6 +165,18 @@ pub fn beats_at(progress: f32) -> f32 {
     ECLIPSE_SECONDS * (BEAT_START_HZ * p + (BEAT_END_HZ - BEAT_START_HZ) * p * p / 2.0)
 }
 
+/// When heartbeat `n` (counted from the eclipse's start, may be fractional)
+/// falls, in seconds since the eclipse began: the inverse of [`beats_at`],
+/// clamped to the eclipse.
+pub fn beat_time(n: f32) -> f32 {
+    let k = BEAT_END_HZ - BEAT_START_HZ;
+    let n = n.clamp(0.0, beats_at(1.0));
+    let p = (-BEAT_START_HZ
+        + (BEAT_START_HZ * BEAT_START_HZ + 2.0 * k * n / ECLIPSE_SECONDS).sqrt())
+        / k;
+    ECLIPSE_SECONDS * clamp01(p)
+}
+
 /// The camera shake at `seconds`, as pitch and yaw in degrees, for a shake of
 /// `degrees`: a quick wobble that never exceeds that size.
 pub fn shake_angles(seconds: f32, degrees: f32) -> [f32; 2] {
