@@ -28,7 +28,7 @@ fn values(f: &Frame) -> Vec<(&'static str, f32, f32, f32)> {
         ("fog g", f.fog_rgb[1], 0.0, 1.0),
         ("fog b", f.fog_rgb[2], 0.0, 1.0),
         ("fog_weight", f.fog_weight, 0.0, 0.9),
-        ("dark", f.dark, 0.04, 1.0),
+        ("dark", f.dark, 0.7, 1.0),
         ("flash", f.flash, 0.0, 1.1),
         ("shock_radius", f.shock_radius, 0.0, 2.0),
         ("shock_strength", f.shock_strength, 0.0, 1.0),
@@ -124,9 +124,13 @@ fn the_smooth_values_never_jump() {
 }
 
 #[test]
-fn the_climax_is_darkness_then_a_flash_and_the_eye() {
+fn the_climax_is_a_hush_then_a_flash_and_the_eye() {
     assert_eq!(frame(BLACKOUT_START - 0.1).dark, 1.0);
-    assert!(frame(60.0).dark < 0.05, "black just before the eye");
+    assert!((frame(60.0).dark - 0.7).abs() < 1e-4, "dimmer, never black");
+    assert!(
+        frame(60.0).corona < frame(58.0).corona * 0.2,
+        "the corona falls back into the moon"
+    );
     assert_eq!(frame(EYE_OPENS - 0.01).flash, 0.0);
     assert!(frame(EYE_OPENS).flash > 1.0);
     assert!(frame(EYE_OPENS + 0.5).dark == 1.0);

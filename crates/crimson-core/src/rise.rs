@@ -9,7 +9,7 @@
 pub const ECLIPSE_SECONDS: f32 = 60.0;
 /// The omens last a minute before it.
 pub const OMENS_SECONDS: f32 = 60.0;
-/// Everything goes dark just before the end of the eclipse.
+/// The hush before the eye starts here: the corona falls back, the light dips, the sound stops.
 pub const BLACKOUT_START: f32 = 58.3;
 /// The flash: the darkness lifts and the eye starts to open.
 pub const EYE_OPENS: f32 = 60.5;
@@ -55,7 +55,7 @@ pub struct Frame {
     /// The fog's colour to move toward, and how far to move.
     pub fog_rgb: [f32; 3],
     pub fog_weight: f32,
-    /// The whole picture's brightness: 1, down to 0.04 in the blackout.
+    /// The whole picture's brightness: 1, dipping to 0.7 in the hush before the eye.
     pub dark: f32,
     /// The flash when the eye opens: 0 to 1.1.
     pub flash: f32,
@@ -78,15 +78,20 @@ pub fn frame(seconds: f32) -> Frame {
 
     let open = smoothstep(EYE_OPENS, EYE_OPENS + EYE_OPENING_SECONDS, s);
     let after = s - EYE_OPENS;
-    let (dark, flash) = if s < BLACKOUT_START {
-        (1.0, 0.0)
+    // The hush before the eye: the corona falls back into the moon and the
+    // light dips, but nothing goes black (Bastien: the blackout felt wrong).
+    let hush = if s < BLACKOUT_START {
+        0.0
     } else if after < 0.0 {
-        (1.0 - 0.96 * smoothstep(BLACKOUT_START, 59.5, s), 0.0)
+        smoothstep(BLACKOUT_START, 59.5, s)
     } else {
-        (
-            mix(0.04, 1.0, clamp01(after / 0.35)),
-            1.1 * (-after * 1.6).exp(),
-        )
+        1.0 - clamp01(after / 0.35)
+    };
+    let dark = 1.0 - 0.3 * hush;
+    let flash = if after >= 0.0 {
+        1.1 * (-after * 1.6).exp()
+    } else {
+        0.0
     };
     let (shock_radius, shock_strength) = if (0.0..4.0).contains(&after) {
         (after * 0.5, 1.0 - after / 4.0)
@@ -112,7 +117,11 @@ pub fn frame(seconds: f32) -> Frame {
         void_radius: p * 1.35,
         crack_reach: 1.6 * p.powf(1.3),
         torn: (p * 0.3 - 0.04).max(0.0),
-        corona: smoothstep(0.03, 0.6, p) * (0.45 + 0.55 * p) * (1.0 + 0.09 * beat) + 0.25 * open,
+        corona: smoothstep(0.03, 0.6, p)
+            * (0.45 + 0.55 * p)
+            * (1.0 + 0.09 * beat)
+            * (1.0 - 0.85 * hush)
+            + 0.25 * open,
         blood: smoothstep(0.8, 1.0, p),
         stars_pull: p,
         grade: 0.7 * smoothstep(0.1, 0.9, p),

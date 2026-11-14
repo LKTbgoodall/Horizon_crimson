@@ -21,8 +21,8 @@ pub enum Cue {
     Crack,
 }
 
-/// The drone swells this often, in ticks.
-const DRONE_EVERY: i64 = 50;
+/// The drone swells this often, in ticks: its sound lasts eight seconds, so swells overlap.
+const DRONE_EVERY: i64 = 100;
 
 /// The cues that start between the ticks `last` (excluded) and `now`
 /// (included), both hours of a blood moon day. A clock that jumped (more

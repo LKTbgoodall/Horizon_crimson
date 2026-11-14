@@ -413,25 +413,25 @@ fn ss(a: f32, b: f32, x: f32) -> f32 {
     let t = clamp((x - a) / (b - a), 0.0, 1.0);
     return t * t * (3.0 - 2.0 * t);
 }
-// Hashes work on the bits of their input. A float hash (fract of a big
-// product) gave different values at two places of the shader for the same
-// cell on some GPUs, which filled whole Voronoi cells with white.
+// Hashes work on whole cells, as integers. Float hashes, and even float cell
+// coordinates, gave different values at two places of the shader on the GPU,
+// which filled Voronoi cells with white or amber shapes.
 fn hashu(x: u32) -> u32 {
     let s = x * 747796405u + 2891336453u;
     let w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
     return (w >> 22u) ^ w;
 }
-fn h21(p0: vec2<f32>) -> f32 {
-    // -0.0 and 0.0 are the same cell.
-    let p = select(p0, vec2<f32>(0.0), p0 == vec2<f32>(0.0));
-    let b = bitcast<vec2<u32>>(p);
+fn hi(c: vec2<i32>) -> f32 {
+    let b = bitcast<vec2<u32>>(c);
     return f32(hashu(b.x ^ hashu(b.y + 0x9e3779b9u)) >> 8u) / 16777216.0;
 }
-fn h11(n: f32) -> f32 { return h21(vec2<f32>(n, 0.5)); }
-fn h22(p: vec2<f32>) -> vec2<f32> {
-    let n = h21(p);
-    return vec2<f32>(n, h21(p + n + 17.1));
+fn hi2(c: vec2<i32>) -> vec2<f32> {
+    return vec2<f32>(hi(c), hi(c + vec2<i32>(57, 113)));
 }
+// For a cell given as floats: rounded, so a value a hair under 31 is still cell 31.
+fn h21(p: vec2<f32>) -> f32 { return hi(vec2<i32>(floor(p + 0.5))); }
+fn h22(p: vec2<f32>) -> vec2<f32> { return hi2(vec2<i32>(floor(p + 0.5))); }
+fn h11(n: f32) -> f32 { return h21(vec2<f32>(n, 0.0)); }
 fn vnoise(p: vec2<f32>) -> f32 {
     let i = floor(p);
     var f = fract(p);
@@ -459,32 +459,40 @@ fn rot(a: f32) -> mat2x2<f32> {
     let s = sin(a);
     return mat2x2<f32>(c, -s, s, c);
 }
-// x: distance to the nearest cell edge, y: the cell's hash, z: distance to its point.
+// One pass over the 5 x 5 cells around p. x: about the distance to the nearest
+// cell edge (half the gap between the two nearest points), y: the cell's
+// hash, z: the distance to its point. Nothing is computed twice, so nothing
+// can disagree with itself.
 fn voro(p: vec2<f32>) -> vec3<f32> {
-    let n = floor(p);
-    let f = fract(p);
-    var mg = vec2<f32>(0.0);
-    var mr = vec2<f32>(0.0);
-    var md = 8.0;
-    for (var j = -1; j <= 1; j++) {
-        for (var i = -1; i <= 1; i++) {
-            let g = vec2<f32>(f32(i), f32(j));
-            let r = g + h22(n + g) - f;
-            let d = dot(r, r);
-            if (d < md) { md = d; mr = r; mg = g; }
-        }
-    }
-    var ed = 8.0;
+    let n = vec2<i32>(floor(p));
+    let f = p - vec2<f32>(n);
+    var d1 = 64.0;
+    var d2 = 64.0;
+    var cell = n;
     for (var j = -2; j <= 2; j++) {
         for (var i = -2; i <= 2; i++) {
-            if (i != 0 || j != 0) {
-                let g = mg + vec2<f32>(f32(i), f32(j));
-                let r = g + h22(n + g) - f;
-                ed = min(ed, dot(0.5 * (mr + r), normalize(r - mr)));
+            let c = n + vec2<i32>(i, j);
+            let r = vec2<f32>(f32(i), f32(j)) + hi2(c) - f;
+            let d = dot(r, r);
+            if (d < d1) {
+                d2 = d1;
+                d1 = d;
+                cell = c;
+            } else if (d < d2) {
+                d2 = d;
             }
         }
     }
-    return vec3<f32>(max(ed, 0.0), h21(n + mg), sqrt(md));
+    return vec3<f32>(0.5 * (sqrt(d2) - sqrt(d1)), hi(cell), sqrt(d1));
+}
+
+// Far stars behind the torn sky: small round points.
+fn far_stars(p: vec2<f32>) -> f32 {
+    let id = floor(p);
+    let h = h21(id);
+    if (h < 0.9) { return 0.0; }
+    let at = fract(p) - 0.5 - (h22(id + 9.0) - 0.5) * 0.5;
+    return ss(0.2, 0.0, length(at)) * (0.4 + 0.6 * h21(id + 4.0));
 }
 
 // The spiral aurora around the moon. rgb: its light, a: how much sky it hides.
@@ -526,12 +534,14 @@ fn sky_cracks(ang: f32, a: f32) -> vec3<f32> {
     let da = (0.5 - abs(fract(k) - 0.5)) * (6.2832 / n) * ang;
     let lr = log(ang * 10.0 + 1.0) * 4.5 + 0.35 * h11(sid * 7.3);
     let cell = vec2<f32>(sid, floor(lr));
+    let torn = step(h21(cell + vec2<f32>(5.0, 5.0)), u.b.z - 0.0001);
+    // Rings are broken up, except around a torn piece: it shows its whole outline.
     var dr = (0.5 - abs(fract(lr) - 0.5)) * (ang * 10.0 + 1.0) / 45.0;
-    if (h21(cell) < 0.45) { dr = 1.0; }
+    if (h21(cell) < 0.45 && torn < 0.5) { dr = 1.0; }
     let e = min(da, dr);
-    let torn = step(h21(cell + 5.3), u.b.z - 0.0001);
     let w = mix(0.004, 0.0016, clamp(ang / max(reach, 0.01), 0.0, 1.0));
-    return vec3<f32>(ss(w, w * 0.3, e), exp(-e * 90.0), torn) * m;
+    // The edge of a torn piece burns from inside.
+    return vec3<f32>(ss(w, w * 0.3, e), exp(-e * 90.0) + torn * exp(-e * 30.0) * 0.8, torn) * m;
 }
 
 // The eye inside the lid: a reptile iris holding a nebula, a void for a pupil.
@@ -628,7 +638,7 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     if (ck.z > 0.0) {
         // Space behind the sky: a violet nebula and far stars.
         let space = vec3<f32>(0.03, 0.0, 0.06) + vec3<f32>(0.35, 0.02, 0.3) * pow(fbm(qa * 6.0 + t * 0.02), 2.0)
-            + vec3<f32>(1.0) * pow(h21(floor(qa * 220.0)), 60.0);
+            + vec3<f32>(1.0, 0.92, 0.95) * far_stars(qa * 70.0);
         col = mix(col, space, ck.z);
         weight = max(weight, ck.z);
     }

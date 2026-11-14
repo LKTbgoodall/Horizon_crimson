@@ -3,7 +3,7 @@
 - `crimson_eclipse/`: the native bundle (typed API). `api/src` holds only the hand-written glue
   (`glue.rs`, `server.rs`, `client.rs`, `sky_pass.rs`); the build adds the pure core (`crates/crimson-core/src`)
   and writes `lib.rs`.
-- `content/`: the content mod. Only its manifest for now (no block, item or texture yet).
+- `content/`: the content mod: its manifest and the sounds (no block, item or texture yet).
 - `compatibility.json`: the Horizon pin (Nightly `9f42064`, hooks 415).
 
 ## Build and install (Bastien runs it, game closed)
@@ -16,6 +16,16 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.1.4 (after Bastien's look at 0.1.3)
+- **Our own sounds** instead of nether portal and other vanilla noises: heartbeat, drone, omen, crack, the
+  eye. They are synthesised by `tools/make-sounds.py` into `content/assets/crimson_eclipse/sounds/` and
+  declared in `sounds.json`. Nobody has heard them yet: they were made without listening.
+- **No more amber shapes inside the moon**: the crack pattern is computed in one pass on integer cells, so
+  the GPU cannot disagree with itself any more.
+- **No blackout**: before the eye, the corona falls back into the moon and the light dips a little; nothing
+  goes black.
+- **Torn pieces of sky** show their whole outline, burning from inside, and their stars are round points.
+
 ## New in 0.1.3
 - **The vanilla moon no longer shows through ours** (seen in 0.1.2: ours was drawn half transparent during
   the omens). Ours is solid from the first instant and is drawn over the horizon haze, which flattened it
@@ -27,9 +37,8 @@ Claude checks the glue first with `tools/check-glue.sh` and the sky shader with 
   layer, 192 to 197 blocks up, in case their depth stays). Not seen in game yet.
 
 ## New in 0.1.1 (after the first look in game)
-- **Sound**: heartbeat, a drone that builds, a distant omen, the world muffled in the blackout, the crack
-  with echoes and a growl as the eye opens. These are the game's own sound events, pitched down:
-  stand-ins until the mod has its own files.
+- **Sound**: heartbeat, a drone that builds, a distant omen, the world muffled before the eye, the crack
+  with echoes and a growl as the eye opens (vanilla sound events in 0.1.1; the mod's own since 0.1.4).
 - **The moon is where the real one is** (the game eases the sky's turn; the mod assumed a steady one) and
   it is amber and cratered instead of a pale blur. The whole night starts 20 seconds later so the moon is
   10 degrees up when the eclipse starts.
@@ -66,12 +75,15 @@ Send screenshots (omens, mid eclipse, the eye) and the `latest.log` lines with `
 
 ### What to look for
 - **The moon**: is the square vanilla moon fully hidden behind ours now, and does the amber moon look right?
-- **White shapes** over the moon or the eye: gone?
+- **White or amber shapes** over the moon or the eye: gone?
 - **The horizon**: is the join between the sky and the land soft now?
-- **Sound**: too loud, too quiet, the right mood? Does the heartbeat follow the red pulse?
+- **Sound**: is each of the five right (heartbeat, drone, omen, crack, eye)? Too loud, too quiet? Any click
+  or cut when the drone repeats?
+- **The hush** before the eye: better than the blackout?
+- **Torn sky**: do the pieces look clean now?
 - **Clouds**: do they fade out during the omens and stay gone? Any cloud-shaped hole or dark shape left in the sky?
 
 ### Known for this first version
-- No bloom yet, no burgundy grass, no particles. Sounds are vanilla stand-ins.
+- No bloom yet, no burgundy grass, no particles.
 - Single player only: a remote client is not told about the blood moon yet.
 - A blood moon is not saved: leaving the world in the middle of a forced night ends it.

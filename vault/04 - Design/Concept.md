@@ -20,7 +20,7 @@ Some nights the moon rises red; during that blood moon, spectacular events happe
 - **Logical in Minecraft**.
 - **Don't get stuck on one shape**: explore truly different options before refining one.
 - **Preview first**: an animated page with candidates before coding a look.
-- **No ugly vanilla stand-ins** (a wooden sign for a tech display was turned down).
+- **No ugly vanilla stand-ins** (a wooden sign for a tech display was turned down; on 2026-11-14 the nether portal's noise as a drone too: sounds must be our own).
 
 ## The night
 1. **Rise**: the moon turns red and swells, sky gradient and fog go crimson, grass and leaves darken (live biome colours), a heartbeat starts.

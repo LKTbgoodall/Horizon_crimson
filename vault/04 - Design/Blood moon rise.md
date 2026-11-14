@@ -37,7 +37,7 @@ The rise is the first thing anyone sees of the mod, so it is **an event in its o
 - It opens in a crack across the moon, which stays whole otherwise: a lid, not a shatter.
 
 ## Sound
-(0.1.1 plays these with vanilla sound events pitched down, as stand-ins; cues in `crimson-core::sound`.)
+(Cues in `crimson-core::sound`. Bastien turned down vanilla noises (the nether portal's): since 0.1.4 the sounds are the mod's own, synthesised by `tools/make-sounds.py`.)
 - A heartbeat that starts slow and speeds up through the eclipse.
 - A low rumbling drone that builds.
 - A **huge crack** at the climax, echoing in the distance.
@@ -52,7 +52,7 @@ Bastien's words: C is extraordinary; he loves **the sky breaking and showing spa
 - Stars are **dragged toward the moon** and stretched before they go out.
 - Sky cracks are a **spider web** (radial lines and ring segments) centred on the moon; **cells of the web tear open on a void** with a violet nebula and stars.
 - Aurora in **spiral arms** around the moon; corona as a swirling accretion ring.
-- Climax: about **2 s of total darkness**, then a flash and a **giant eye**, mostly cosmic (nebula iris, void pupil), opening over 2.5 s.
+- Climax: ~~about 2 s of total darkness~~ **a hush** (Bastien, in game: the blackout is "chelou", not a fan): for about 2 s the corona falls back into the moon, the light dips to 70 %, the sound stops; then a flash and a **giant eye**, mostly cosmic (nebula iris, void pupil), opening over 2.5 s.
 - Reference for every number: version C in `preview/blood-moon-rise.html` (`VERS[2]`, the `uVer==2` branches).
 - A and B stay in the preview as a source of ideas (B's snap opening and shock wave), not as the plan.
 

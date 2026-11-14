@@ -1,0 +1,7 @@
+{
+  "rise.heartbeat": { "sounds": ["crimson_eclipse:heartbeat"] },
+  "rise.drone": { "sounds": ["crimson_eclipse:drone"] },
+  "rise.omen": { "sounds": ["crimson_eclipse:omen"] },
+  "rise.crack": { "sounds": ["crimson_eclipse:crack"] },
+  "rise.eye": { "sounds": ["crimson_eclipse:eye"] }
+}

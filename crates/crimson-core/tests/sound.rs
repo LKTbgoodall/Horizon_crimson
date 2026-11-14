@@ -130,7 +130,7 @@ fn the_night_keeps_a_slow_heart_and_a_low_drone() {
         .iter()
         .filter(|(_, c)| *c == Cue::Drone { volume: 0.3 })
         .count();
-    assert_eq!(drones, 24, "one swell every 50 ticks");
+    assert_eq!(drones, 12, "one swell every 100 ticks");
 }
 
 #[test]

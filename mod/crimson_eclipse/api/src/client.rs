@@ -25,8 +25,8 @@ fn now(shared: &Shared, host: &dyn Host, partial: f32) -> Option<(f32, Frame, f3
 }
 
 /// Once a client tick: the sounds that start now, played at the player so
-/// they are heard from anywhere, indoors too. They are the game's own sound
-/// events, named and pitched down: stand-ins until the mod has its own.
+/// they are heard from anywhere, indoors too. They are the mod's own sounds
+/// (`tools/make-sounds.py`, `assets/crimson_eclipse/sounds.json`).
 pub fn tick(shared: &Shared, host: &mut dyn Host) {
     if !host.window() {
         return;
@@ -51,21 +51,13 @@ pub fn tick(shared: &Shared, host: &mut dyn Host) {
     let mut silence = None;
     for cue in cues(last, now) {
         match cue {
-            Cue::Omen => play("minecraft:entity.warden.nearby_closer", 1.0, 0.5, 0),
-            Cue::Drone { volume } => {
-                play("minecraft:block.portal.ambient", 0.9 * volume, 0.5, 0);
-                play("minecraft:block.beacon.ambient", 1.2 * volume, 0.5, 0);
-            }
-            Cue::Heartbeat { volume, pitch } => play("minecraft:entity.warden.heartbeat", 2.0 * volume, pitch, 0),
+            Cue::Omen => play("crimson_eclipse:rise.omen", 1.0, 1.0, 0),
+            Cue::Drone { volume } => play("crimson_eclipse:rise.drone", volume, 1.0, 0),
+            Cue::Heartbeat { volume, pitch } => play("crimson_eclipse:rise.heartbeat", volume, pitch, 0),
             Cue::Silence { ticks } => silence = Some(ticks),
             Cue::Crack => {
-                play("minecraft:block.glass.break", 2.0, 0.5, 0);
-                play("minecraft:entity.lightning_bolt.thunder", 2.0, 0.6, 0);
-                play("minecraft:block.end_portal.spawn", 1.0, 0.7, 0);
-                // The echoes, then the eye.
-                play("minecraft:entity.lightning_bolt.thunder", 1.0, 0.5, 14);
-                play("minecraft:entity.lightning_bolt.thunder", 0.5, 0.5, 30);
-                play("minecraft:entity.ender_dragon.growl", 1.5, 0.5, 20);
+                play("crimson_eclipse:rise.crack", 1.0, 1.0, 0);
+                play("crimson_eclipse:rise.eye", 1.0, 1.0, 12);
             }
         }
     }

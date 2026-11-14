@@ -23,8 +23,10 @@ Back: [[00 - Home]]
 - [x] 0.1.2: vanilla clouds dissolve during the blood moon (2026-11-14)
 - [x] 0.1.2 seen in game (Bastien): moon position confirmed; the vanilla moon showed through ours
 - [x] 0.1.3: our moon solid from the omens, drawn over the haze (2026-11-14)
-- [ ] 0.1.3 seen in game (Bastien): moon, white shapes, horizon, sound, clouds
-- [ ] Our own sound files (needs an Ogg encoder: none on the dev PC)
+- [x] 0.1.3 seen in game (Bastien): amber shapes in the moon, portal noises disliked, blackout disliked, torn pieces look bugged
+- [x] 0.1.4: own sounds, one-pass cracks, hush instead of blackout, torn pieces outlined (2026-11-14)
+- [ ] 0.1.4 seen and heard in game (Bastien)
+- [x] Our own sound files: `tools/make-sounds.py` (numpy + soundfile in `build/audio-venv`) (2026-11-14)
 - [x] Sky pass written (`RenderHooks::world_drawn`, staging C, frame copy + land grade), type-checked, shader validated (2026-11-14); **not seen in game**
 - [ ] Bloom on top of it (from Cagebound's `fx.rs`)
 - [ ] The rise of the blood moon in game: red moon and sky, fog, grass colour, heartbeat
