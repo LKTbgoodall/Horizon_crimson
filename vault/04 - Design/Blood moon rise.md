@@ -78,6 +78,12 @@ Bastien: much better, but inside the breaks it is just light; he wants things pa
 - **Leviathans** swimming past: a near one crossing behind the moon through the eclipse and the night, a far hazy one going the other way. Dark silhouette lit from behind, spines on the back, fins below, rows of glowing spots, a glowing eye.
 - Hole edges are thin and hot now; the shell's thickness shows as shadow inside the edge. The corona and the flash stay on our side of the shell (they do not cover the holes). Blown shards vanish whole.
 
-## Next
+### One system: the fissures open (2026-11-14)
+Bastien on the previous version: messy; no leviathan visible; breaks next to things that are not breaks, hexagons; one crack unlike the others (the wide bands of the climax web); zones that are neither sky nor the other world (shaded cell edges). So C1 now has **one crack system only**:
+- The moon-centred cell web is gone from C1 (C2 and C3 keep theirs). No more hexagons: the land's lava is ridged noise, not Voronoi.
+- **The fissures themselves open**: the two lips part into a lens (widest in the middle of the crack, closed at the tips), a little through the eclipse, wide at the climax. The whole crack is one shape (union of its segments) so the lips are clean. Inside: the other world, with the lips' thickness in shadow; outside: a thin hot rim.
+- Openings: main fault 0.08 rad, climax cracks 0.014 to 0.03, moon-edge cracks 0.01, branches 0.006.
+- **The other world is anchored to the main fault**: its frame is the great circle through the fault's ends, and the fault's own line inside it (48 samples). So the upside-down land hangs over the rift, a glow runs along it, and the leviathan swims along it: it enters at the right around 1:20, its head reaches the moon around 1:32 and it passes behind. It is big (half the rift's height), dark against the glow, spots and a glowing eye.
+- Preview aid: `?dbg=1` shows the other world everywhere.
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.

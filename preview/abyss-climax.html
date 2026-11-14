@@ -149,19 +149,19 @@ function planFissures(seed) {
     s1 = Math.min(s1, (path.pts.length - 1) * ST); if (s1 <= s0) return;
     path.stages.push({ t0, s0, s1, v0 }); events.push([t0, k]);
   };
-  const fromMoon = (t, L, v0, k, th = R() * 6.2832, jit = .22, w = 1) => { const { P, H } = limb(t, th); stage(walk(P, H, L, jit, w), t, L, v0, k); };
-  const branch = (t, L, v0, k) => {
+  const fromMoon = (t, L, v0, k, th = R() * 6.2832, jit = .22, w = 1, om = .01) => { const { P, H } = limb(t, th); const p = walk(P, H, L, jit, w); p.om = om; stage(p, t, L, v0, k); };
+  const branch = (t, L, v0, k, om = .006) => {
     const cands = paths.filter(p => p.stages.length && ptTime(p, 3) < t - .3);
     if (!cands.length) return;
     const p = cands[Math.floor(R() * cands.length)];
     let n = 3; while (n + 1 < p.pts.length && ptTime(p, n + 1) < t - .2) n++;
     const j = 2 + Math.floor(R() * (n - 2)), P = p.pts[j], H0 = p.hs[j], a = (R() < .5 ? -1 : 1) * (.55 + .55 * R());
     const H = norm(add(mul3(H0, Math.cos(a)), mul3(cross(P, H0), Math.sin(a))));
-    stage(walk(P, H, L, .25, p.w * .7), t, L, v0, k);
+    const q = walk(P, H, L, .25, p.w * .7); q.om = om; stage(q, t, L, v0, k);
   };
   // the main fault: torn by the moon on both sides, then pushed further across the sky in stages
   const tf = beatTime(18), fl = limb(tf, Math.PI - .45), fr = limb(tf, .4);   // climbing into the sky on both sides
-  const left = walk(fl.P, fl.H, 1.3, .1, 2.2), right = walk(fr.P, fr.H, 1.3, .1, 2.2);
+  const left = walk(fl.P, fl.H, 1.3, .1, 2.2), right = walk(fr.P, fr.H, 1.3, .1, 2.2); left.om = right.om = .08;
   [[18, .2], [24, .38], [31, .56], [40, .76], [49, .98], [56, 1.3]].forEach(([n, s], i) => {
     stage(left, beatTime(n), s, .9, i ? .5 : .8); stage(right, beatTime(n + 1), s, .9, .5);
   });
@@ -171,24 +171,35 @@ function planFissures(seed) {
     if (R() < .45) fromMoon(beatTime(n), .2 + .35 * R(), 1.2, .35); else branch(beatTime(n), .12 + .3 * R(), .9, .22);
   }
   // the climax: the moon bursts the shell, cracks shoot out all around it
-  for (let i = 0; i < 14; i++) fromMoon(TC + .02 * R(), .5 + .8 * R(), 2.6, 0, i / 14 * 6.2832 + (R() - .5) * .35, .2, 1.3);
-  for (let i = 0; i < 10; i++) branch(TC + .35 + .5 * R(), .15 + .35 * R(), 1.4, 0);
+  for (let i = 0; i < 14; i++) fromMoon(TC + .02 * R(), .5 + .8 * R(), 2.6, 0, i / 14 * 6.2832 + (R() - .5) * .35, .2, 1.3, .014 + .016 * R());
+  for (let i = 0; i < 10; i++) branch(TC + .35 + .5 * R(), .15 + .35 * R(), 1.4, 0, .006);
   // segments, in chunks of 8 with a bounding cap
   const seg = [], chk = [];
   for (const p of paths) {
     if (!p.stages.length) continue;
-    const last = Math.round(p.stages[p.stages.length - 1].s1 / ST);
+    const last = Math.round(p.stages[p.stages.length - 1].s1 / ST), om = p.om || .006, born = p.stages[0].t0;
     for (let c = 0; c < last; c += 8) {
-      const n = Math.min(8, last - c), start = seg.length / 8;
+      const n = Math.min(8, last - c), start = seg.length / 12;
       let C = [0, 0, 0];
       for (let i = c; i <= c + n; i++) C = add(C, p.pts[i]);
       C = norm(C); let maxA = 0;
       for (let i = c; i <= c + n; i++) maxA = Math.max(maxA, Math.acos(clamp(dot(C, p.pts[i]), -1, 1)));
-      for (let i = c; i < c + n; i++) seg.push(...p.pts[i], ptTime(p, i), ...p.pts[i + 1], ptTime(p, i + 1));
-      chk.push(...C, Math.cos(maxA + .04), start, n, ptTime(p, c), p.w);
+      for (let i = c; i < c + n; i++) seg.push(...p.pts[i], ptTime(p, i), ...p.pts[i + 1], ptTime(p, i + 1), i / last, (i + 1) / last, born, om);
+      chk.push(...C, Math.cos(maxA + .04 + om * 1.3), start, n, ptTime(p, c), p.w);
     }
   }
-  return { seg: new Float32Array(seg), chk: new Float32Array(chk), events: events.filter(e => e[1] > 0) };
+  // the other world's frame: the great circle through the fault's two ends, and the fault's own line in it
+  const end = q => q.pts[Math.round(q.stages[q.stages.length - 1].s1 / ST)];
+  let a0 = end(left), a1 = end(right), N = norm(cross(a0, a1));
+  if (N[1] < 0) { [a0, a1] = [a1, a0]; N = mul3(N, -1); }
+  const E1 = a0, E2 = cross(N, E1), toX = P => [Math.atan2(dot(P, E2), dot(P, E1)), Math.asin(clamp(dot(P, N), -1, 1))];
+  const len = toX(a1)[0], line = [...left.pts, ...right.pts].map(toX).sort((m, n) => m[0] - n[0]);
+  const fy = new Float32Array(48);
+  for (let i = 0; i < 48; i++) {
+    const x = i / 47 * len; let k = line.findIndex(q => q[0] >= x); if (k < 1) k = k < 0 ? line.length - 1 : 1;
+    const [x0, y0] = line[k - 1], [x1, y1] = line[k]; fy[i] = x1 > x0 ? mix(y0, y1, clamp((x - x0) / (x1 - x0))) : y1;
+  }
+  return { seg: new Float32Array(seg), chk: new Float32Array(chk), events: events.filter(e => e[1] > 0), N, E1, E2, len, fy };
 }
 const FIS = planFissures(20261114);
 const evFlash = t => { let s = 0; for (const [te, k] of FIS.events) if (t >= te && t - te < 1) s += k * Math.exp(-(t - te) * 7); return s; };
@@ -340,52 +351,51 @@ vec3 deepSpace(vec3 d,vec2 qa,float ang,float a){
   c+=vec3(1.,.8,.7)*arms*pow(hi2(ivec2(floor(nq*300.))),40.)*3.;
   return c;
 }
-// C1: the other side of the sky. Its own abyss under a far red sun, and colossal things swimming past.
-// World-fixed coordinates (azimuth, elevation): it does not follow the moon or the camera.
+// C1: the other side of the sky, seen through the opened fissures. Its frame follows the main fault
+// (x along it, y above the fault's own line), so the land hangs over the rift and the creature swims in it.
+uniform vec3 uLvN,uLvE1,uLvE2;
+uniform float uLvLen;
+uniform float uFy[48];
+float faultY(float x){float k=clamp(x/uLvLen,0.,1.)*47.;int i=min(int(k),46);return mix(uFy[i],uFy[i+1],k-float(i));}
 vec3 levi(vec3 c,vec2 u,float sc,float hx,float dir,float y0,float haze,float seed){
-  float L=1.7*sc,x=(hx-u.x)*dir;                 // x: distance behind the head, along the body
-  if(x<-.12*sc||x>L) return c;
+  float L=1.1*sc,x=(hx-u.x)*dir;                   // x: distance behind the head, along the body
+  if(x<-.06*sc||x>L) return c;
   float s=clamp(x/L,0.,1.);
-  float y=y0+.07*sc*sin(u.x*3.5/sc+uT*.45+seed)+.03*sc*sin(u.x*9./sc-uT*.6+seed);
-  float dy=u.y-y;
-  float R=sc*.085*(.4+.6*smoothstep(0.,.14,s))*pow(1.-s,.7)*(1.+.12*sin(x*30./sc))+sc*.04*exp(-pow(x/(.06*sc),2.));
-  float spine=pow(abs(sin(u.x*26./sc+seed)),5.)*.03*sc*(.3+.7*fbm(vec2(u.x*12./sc,seed)))*(1.-s)*step(0.,dy);
-  float fin=pow(abs(sin(u.x*11./sc+seed*2.)),24.)*.07*sc*smoothstep(.1,.25,s)*(1.-s)*step(dy,0.);
+  float dy=u.y-(y0+.006*sin(u.x*14./sc+uT*1.2+seed)+.003*sin(u.x*40./sc-uT*1.7));
+  float R=sc*.05*(.45+.55*smoothstep(0.,.1,s))*pow(1.-s,.7)*(1.+.15*sin(x*120./sc))+sc*.009*exp(-pow(x/(.02*sc),2.));
+  float spine=pow(abs(sin(u.x*90./sc+seed)),5.)*.014*sc*(1.-s)*step(0.,dy);
+  float fin=pow(abs(sin(u.x*30./sc+seed*2.)),16.)*.03*sc*smoothstep(.1,.25,s)*(1.-s)*step(dy,0.);
   float sd=abs(dy)-R-spine-fin;
-  float body=smoothstep(.003,-.003,sd)*(1.-haze);
-  vec3 sil=vec3(.035,.004,.01)*(.6+.8*fbm(u*40./sc+seed));
-  c=mix(c,sil,body);
-  c+=vec3(1.,.28,.1)*exp(-abs(sd)*mix(160.,90.,haze))*(1.-haze)*.9;              // lit from behind
-  vec2 g=vec2(u.x*70./sc,(dy/max(R,1e-4))*2.5);                              // rows of glowing spots
-  float spot=pow(hi2(ivec2(floor(g))+ivec2(0,7)),6.)*smoothstep(.32,.05,length(fract(g)-.5))*step(sd,0.);
-  c+=vec3(1.,.5,.2)*spot*1.6*(1.-haze)*(1.-s);
-  vec2 e=vec2(x-.03*sc,dy-.012*sc);                                          // its eye
-  c+=vec3(1.,.7,.3)*exp(-length(e)/(.004*sc))*3.*(1.-haze);
+  float body=smoothstep(.0012,-.0012,sd)*(1.-haze);
+  c=mix(c,vec3(.03,.003,.008)*(.6+.8*fbm(u*300./sc+seed)),body);
+  c+=vec3(1.,.3,.12)*exp(-abs(sd)*mix(500.,250.,haze))*(1.-haze)*1.1;             // lit from behind
+  vec2 g=vec2(u.x*160./sc,dy/max(R,1e-4)*2.2);
+  c+=vec3(1.,.55,.2)*pow(hi2(ivec2(floor(g))+ivec2(0,7)),5.)*smoothstep(.3,.05,length(fract(g)-.5))*step(sd,0.)*3.*(1.-haze)*(1.-s);
+  c+=vec3(1.,.75,.35)*exp(-length(vec2(x-.012*sc,dy-.004*sc))/(.003*sc))*5.*(1.-haze);  // its eye
   return c;
 }
 vec3 otherSide(vec3 d){
-  vec2 u=vec2(atan(d.z,d.x),asin(clamp(d.y,-1.,1.)));
-  float n1=fbm(u*3.+vec2(uT*.01,0.)),n2=fbm(u*7.-3.);
-  vec3 c=vec3(.008,0.,.02)+vec3(.3,.01,.08)*pow(n1,3.)*1.6+vec3(.18,.03,.35)*pow(n2,3.)*1.2;
-  vec2 sp=u-vec2(.3,.72);
-  c+=vec3(1.,.22,.06)*exp(-length(sp)*3.5)*1.3+vec3(1.,.6,.3)*exp(-length(sp)*16.)*1.5;
-  c+=vec3(1.,.8,.7)*starLayer(d,90.,.06,.003)*.7;
-  // an upside-down land hangs over it: dark rock, hanging spires, lava rivers, lights
-  float ridge=.92-.26*fbm(vec2(u.x*2.2,1.))-.07*fbm(vec2(u.x*9.,5.));
-  ridge-=.22*pow(abs(sin(u.x*7.+2.*fbm(vec2(u.x*3.,8.)))),9.)+.1*pow(abs(sin(u.x*19.+1.3)),14.);
-  float haze=exp(-max(u.y-ridge,0.)*14.);
-  c+=vec3(.6,.1,.08)*exp(-abs(u.y-ridge)*9.)*.35;                                 // light under the land
+  float x=atan(dot(d,uLvE2),dot(d,uLvE1)),y=asin(clamp(dot(d,uLvN),-1.,1.));
+  vec2 u=vec2(x,y-faultY(x));
+  float n1=fbm(u*vec2(4.,9.)+vec2(uT*.01,0.)),n2=fbm(u*vec2(9.,18.)-3.);
+  vec3 c=vec3(.01,0.,.022)+vec3(.32,.02,.09)*pow(n1,3.)*1.6+vec3(.2,.04,.4)*pow(n2,3.)*1.3;
+  vec2 sp=u-vec2(uLvLen*.62,-.035);                                                // its red sun, low in the rift
+  c+=vec3(1.,.25,.07)*exp(-length(sp*vec2(1.,1.6))*14.)*1.4+vec3(1.,.65,.35)*exp(-length(sp)*60.)*1.5;
+  c+=vec3(1.,.85,.75)*starLayer(d,120.,.07,.0022);
+  c+=vec3(.9,.18,.22)*exp(-abs(u.y+.012)*22.)*(.55+.45*fbm(u*vec2(6.,30.)+uT*.05));   // the glow it swims in
+  // an upside-down land hangs over the rift: dark rock, hanging spires, lava streams, lights
+  float ridge=.055+.015*fbm(vec2(x*9.,1.))-.03*pow(abs(sin(x*21.+2.*fbm(vec2(x*6.,8.)))),7.)-.016*pow(abs(sin(x*57.+1.3)),12.);
+  c+=vec3(.7,.12,.08)*exp(-abs(u.y-ridge)*60.)*.35;
   if(u.y>ridge){
-    vec2 lq=u*vec2(14.,22.);
-    vec3 land=vec3(.03,.008,.012)*(.6+.8*fbm(u*30.));
-    land+=vec3(1.,.3,.05)*exp(-voro2(lq+.3*fbm(lq))*45.)*.9*smoothstep(.2,.6,fbm(u*5.+4.));   // lava rivers
-    land+=vec3(1.,.6,.25)*pow(hi2(ivec2(floor(u*vec2(300.,240.)))),60.)*2.;     // lights
-    land=mix(land,vec3(.25,.04,.05),haze*.6);
-    c=mix(c,land,smoothstep(0.,.004,u.y-ridge));
-    c+=vec3(1.,.35,.12)*exp(-(u.y-ridge)*120.)*.9;                                 // its edge, lit from below
+    vec3 land=vec3(.03,.008,.012)*(.6+.8*fbm(u*vec2(60.,90.)));
+    float lv=1.-abs(2.*fbm(u*vec2(18.,40.)+3.)-1.);
+    land+=vec3(1.,.32,.05)*pow(lv,14.)*1.2;                                       // lava streams
+    land+=vec3(1.,.6,.25)*pow(hi2(ivec2(floor(u*vec2(500.,600.)))),70.)*2.;       // lights
+    c=mix(c,land,smoothstep(0.,.0015,u.y-ridge));
+    c+=vec3(1.,.35,.12)*exp(-(u.y-ridge)*500.)*1.1;                              // its edge, lit from below
   }
-  c=levi(c,u,.55,1.6-(uT-66.)*.04,-1.,.68,.45,3.1);        // far, slow, going left
-  c=levi(c,u,.95,-1.5+(uT-50.)*.07,1.,.42,0.,0.);          // near, crossing past the moon
+  c=levi(c,u,1.,-.25+(uT-74.)*.075,1.,-.012,0.,0.);       // near: swims along the rift
+  c=levi(c,u,.6,uLvLen+.3-(uT-80.)*.05,-1.,-.03,.5,3.1);   // far, hazy, the other way
   return c;
 }
 // The eye, in iris units (iris radius 1). Mostly cosmic: nebula iris, slit pupil that is a void with stars.
@@ -467,13 +477,14 @@ vec3 moonEyeC1(vec3 c,vec2 q){
   return c;
 }
 // C1: real fissures fixed in the sky. Each is a jagged polyline of segments (A, tA) -> (B, tB) on the unit
-// sphere, written by the CPU (in game: the pure core) into a data texture; the tip runs from A to B between
-// tA and tB. Segments come in chunks of 8 with a bounding cap, so a pixel only tests the chunks near it.
+// sphere, with C = (position along the crack at A, at B, birth time, how far it opens). The tip runs from A to
+// B between tA and tB; then the two lips part into a lens, slowly through the eclipse, wide at the climax.
+// Segments come in chunks of 8 with a bounding cap, so a pixel only tests the chunks near it.
 uniform highp sampler2D uSeg,uChk;
 uniform int uNChk;
-uniform float uEv;
-vec4 fissures(vec3 d,out float inner){
-  float core=0.,glow=0.,heat=0.,tip=0.;inner=0.;
+uniform float uEv,uDbg;
+vec4 fissures(vec3 d,out float win,out float lip){
+  float tip=0.,emin=1.,hmin=0.,wmin=1.;win=0.;lip=0.;
   for(int c=0;c<1024;c++){
     if(c>=uNChk) break;
     vec4 k1=texelFetch(uChk,ivec2(c*2+1,0),0);
@@ -483,23 +494,27 @@ vec4 fissures(vec3 d,out float inner){
     int s0=int(k1.x),n=int(k1.y);
     for(int i=0;i<8;i++){
       if(i>=n) break;
-      vec4 A=texelFetch(uSeg,ivec2((s0+i)*2,0),0);
+      int si=(s0+i)*3;
+      vec4 A=texelFetch(uSeg,ivec2(si,0),0);
       if(uT<A.w) break;
-      vec4 B=texelFetch(uSeg,ivec2((s0+i)*2+1,0),0);
+      vec4 B=texelFetch(uSeg,ivec2(si+1,0),0),C=texelFetch(uSeg,ivec2(si+2,0),0);
       float f=clamp((uT-A.w)/max(B.w-A.w,1e-4),0.,1.);
       vec3 b=mix(A.xyz,B.xyz,f),ab=b-A.xyz;
       float h=clamp(dot(d-A.xyz,ab)/max(dot(ab,ab),1e-10),0.,1.);
       float dist=length(d-A.xyz-ab*h);
       float age=uT-mix(A.w,B.w,h*f);
-      float w=k1.w*(.0016+.0024*smoothstep(0.,8.,age)+.0004*uBurst);
-      core=max(core,smoothstep(w,w*.3,dist));
-      inner=max(inner,smoothstep(w*.62,w*.3,dist)*smoothstep(.5,4.,age));
-      glow=max(glow,exp(-dist/(.0025+.0025*smoothstep(0.,6.,age)))*min(k1.w,1.3));
-      heat=max(heat,smoothstep(w*2.2,0.,dist)*exp(-age*.9));
+      float sf=mix(C.x,C.y,h*f);
+      float op=C.w*(.22*smoothstep(C.z,C.z+18.,uT)+.78*smoothstep(0.,1.4,uTc))*pow(max(sin(3.14159*sf),0.),.45)
+              *(.7+.6*vnoise(vec2(sf*26.,C.z)))*smoothstep(0.,.4,age);
+      float e=dist-op;                              // one shape for the whole crack: the union of its segments
+      if(e<emin){emin=e;hmin=exp(-age*.9);wmin=k1.w;}
       if(f<1.) tip=max(tip,exp(-length(d-b)*300.));
     }
   }
-  return vec4(core,glow,heat,tip);
+  float w=wmin*.0013;
+  win=smoothstep(.0008,-.0008,emin);
+  lip=smoothstep(.006,0.,-emin)*step(emin,0.);
+  return vec4(smoothstep(w,w*.3,abs(emin)),exp(-max(emin,0.)/.0022)*min(wmin,1.3),smoothstep(w*2.2,0.,abs(emin))*hmin,tip);
 }
 float riftY(float x){return .06*(vnoise(vec2(x*5.,2.))-.5)+.024*(vnoise(vec2(x*22.,5.))-.5)+.008*(vnoise(vec2(x*80.,9.))-.5);}
 
@@ -519,7 +534,7 @@ void main(){
 
   // ── the shell of the sky ──
   float wall=0.,crack=0.,crk3r=0.,crk3b=0.,glow=0.,heat=0.,hole=0.,holeRim=0.,rim=0.,glint=0.,fine=0.;vec2 bend=vec2(0.);float shade=1.;
-  if(ang>uMoonRad*.92&&ang<2.2){
+  if(uVar!=0&&ang>uMoonRad*.92&&ang<2.2){
     ivec2 cell;vec3 nt=net(ang,a,24,cell);
     vec3 h=vec3(hi2(cell),hi2(cell+ivec2(5,3)),hi2(cell+ivec2(9,1)));
     float far=clamp(ang/1.6,0.,1.);
@@ -574,10 +589,12 @@ void main(){
   }
   col+=vec3(2.5,2.,1.8)*heat*crack*1.5*uAtt;
   if(uVar==0){
-    float inner;vec4 fs=fissures(d,inner)*(1.-hole);inner*=1.-hole;
-    vec3 lc=mix(vec3(1.,.2,.08),vec3(3.,2.2,1.7),fs.z);
-    col+=lc*(fs.x*1.6+fs.y*.45)*(.75+.25*uBeat+uFlash)*uAtt+vec3(4.,3.,2.4)*fs.w*2.5;
-    col=mix(col,otherSide(d)*1.3,inner*(1.-fs.z));      // an old, wide crack is a window onto the other side
+    float win,lip;vec4 fs=fissures(d,win,lip);
+    if(uDbg>0.) win=1.;                                 // ?dbg=1: the other world everywhere (checking only)
+    if(win>0.) col=mix(col,otherSide(d)*(1.-.55*lip),win);   // the lips' thickness, in shadow, then the other world
+    hole=max(hole,win);
+    vec3 lc=mix(vec3(1.,.25,.1),vec3(3.,2.2,1.7),fs.z);
+    col+=lc*(fs.x*1.7+fs.y*.4*(1.-win))*(.75+.25*uBeat+uFlash)*uAtt+vec3(4.,3.,2.4)*fs.w*2.5;
     col+=vec3(1.,.35,.25)*uEv*.12;
   }
   col+=vec3(1.,.4,.3)*exp(-abs(ang-uShock)*35.)*uShockK*2.;
@@ -721,6 +738,7 @@ function setU(pr, o) {
   for (const k in o) {
     const l = pr.loc(k), v = o[k]; if (l == null) continue;
     if (INTS.has(k)) gl.uniform1i(l, v);
+    else if (k === 'uFy') gl.uniform1fv(l, v);
     else if (typeof v === 'number') gl.uniform1f(l, v);
     else if (v.length === 2) gl.uniform2fv(l, v);
     else if (v.length === 3) gl.uniform3fv(l, v);
@@ -898,7 +916,7 @@ function render(dt) {
   gl.bindVertexArray(fullVAO);
   setU(P.sky, { uRes: [W, H], uF: F, uR: R, uU: U, uTan: tf, uAsp: asp, uT: time, uP: S.p, uVar: ver, uMoon: S.moon, uSun: S.sun, uHor: S.hor, uZen: S.zen,
     uFog: S.fog, uSunset: S.sunset, uBeat: S.beat, uOpen: Math.max(S.open, 0), uSeam: S.seam, uPupil: pupil, uGaze: gaze, uFlash: S.flash, uShock: S.shock, uShockK: S.shockK,
-    uMoonRad: S.moonRad, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uTc: S.u, uMem: S.mem, uBurst: S.burst, uRift: S.rift, uAtt: S.att, uSeg: 3, uChk: 4, uNChk: NCHK, uEv: S.ev });
+    uMoonRad: S.moonRad, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uTc: S.u, uMem: S.mem, uBurst: S.burst, uRift: S.rift, uAtt: S.att, uSeg: 3, uChk: 4, uNChk: NCHK, uEv: S.ev, uLvN: FIS.N, uLvE1: FIS.E1, uLvE2: FIS.E2, uLvLen: FIS.len, uFy: FIS.fy, uDbg: qs.get('dbg') === '1' ? 1 : 0 });
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.enable(gl.DEPTH_TEST); gl.bindVertexArray(worldVAO);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, hgtTex);
