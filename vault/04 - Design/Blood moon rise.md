@@ -17,8 +17,8 @@ The rise is the first thing anyone sees of the mod, so it is **an event in its o
 ## Timeline
 | Phase | When | What |
 |---|---|---|
-| **Omens** | sunset | the sunset is too red, animals get nervous, a low sound in the distance. No text: you feel it coming |
-| **Eclipse** | moonrise, **about 1 minute**, slow | an eclipse shadow eats the moon while it **cracks**; the sky reacts the whole time (see below) |
+| **Omens** | sunset (tick 12200) | the sunset is too red, animals get nervous, a low sound in the distance. No text: you feel it coming |
+| **Eclipse** | moonrise (ticks 13400 to 14600: the real moon is 10° up, then 30°), **about 1 minute**, slow | an eclipse shadow eats the moon while it **cracks**; the sky reacts the whole time (see below) |
 | **The eye** | end of the eclipse (climax) | the moon **splits open like an eyelid** and an eye appears in the slit |
 | **Night** | until dawn | the eye **follows the player**: it blinks now and then and its pupil shrinks when you stare at it |
 | **Dawn** | sunrise | the eye closes, the crack seals up, a golden wave burns the crimson away ([[Events]] #11) |
@@ -37,6 +37,7 @@ The rise is the first thing anyone sees of the mod, so it is **an event in its o
 - It opens in a crack across the moon, which stays whole otherwise: a lid, not a shatter.
 
 ## Sound
+(0.1.1 plays these with vanilla sound events pitched down, as stand-ins; cues in `crimson-core::sound`.)
 - A heartbeat that starts slow and speeds up through the eclipse.
 - A low rumbling drone that builds.
 - A **huge crack** at the climax, echoing in the distance.
