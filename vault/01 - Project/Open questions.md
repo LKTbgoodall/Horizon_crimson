@@ -20,4 +20,4 @@ updated: 2026-11-14
 
 - ❌ answered 2026-11-14, see [[Horizon hooks and API]] § Levels: no custom dimension at `9f42064`. (Was: Can a native mod add a custom dimension (the Pale Realm) and move a player into it, through catalog hooks only? If not, fallback: a far-away or high-altitude zone in the Overworld drawn as the Realm. See [[Events]] § Crossing to the Pale Realm.)
 
-- ❓ (2026-11-14) Pale Realm host: the End (proposed: pale end stone as the dunes, our own sky pass over its sky, `native_edit_blocks` for the structures, `native_run_command` `execute in minecraft:the_end run tp`) or a far zone of the Overworld? Bastien to confirm.
+- ⏳ (2026-11-14) Pale Realm host → [[ADR-018 The Pale Realm lives in the far End]], waiting for Bastien. (Was: the End (proposed: pale end stone as the dunes, our own sky pass over its sky, `native_edit_blocks` for the structures, `native_run_command` `execute in minecraft:the_end run tp`) or a far zone of the Overworld? Bastien to confirm.)

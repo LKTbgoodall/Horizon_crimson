@@ -16,5 +16,6 @@ updated: 2026-11-14
 | [[ADR-015 Rendering through our own GPU passes]] | Signature looks through `RenderHooks` passes and real models | accepted | 2026-11-14 |
 | [[ADR-016 C1 rise and the Pale Realm]] | Rise = C1 with real fissures opening onto the Pale Realm; its main structure is the Spire | accepted (its break replaced by ADR-017) | 2026-11-14 |
 | [[ADR-017 The sky is a thick shell]] | The break is B1: one fracture network of facets and slabs; slabs crack, come loose and fall | accepted | 2026-11-14 |
+| [[ADR-018 The Pale Realm lives in the far End]] | No custom dimension in Horizon: the Pale Realm is a mod-generated region of the End, reached by a real level change | proposed | 2026-11-14 |
 
 ADRs 001 to 013 come from Cagebound (numbers kept, the Cagebound-specific ones left out).
