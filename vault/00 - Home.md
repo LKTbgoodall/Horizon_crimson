@@ -16,7 +16,7 @@ updated: 2026-11-14
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-1. **Bastien**: build **0.2.4** (a window onto the Spire, clean big holes from falling shards, thin cracks opening big angular holes, crack sounds, hidden flying things, dawn sealing; `mod/README.md` § New in 0.2.4) and look at it in game. Build 0.1.5 was (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
+1. **Bastien**: build **0.2.5** (shards that really break and fall, a window onto the Spire, clean big holes from falling shards, thin cracks opening big angular holes, crack sounds, hidden flying things, dawn sealing; `mod/README.md` § New in 0.2.5) and look at it in game. Build 0.1.5 was (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
 2. **Claude**: fix what 0.2.0 shows in game; then port C1's eye, the god rays, crack sounds and shake (moon position, depth, colours), then bloom, burgundy foliage (`biome_colors`), embers, sound.
 
 ## 🗺️ Vault map

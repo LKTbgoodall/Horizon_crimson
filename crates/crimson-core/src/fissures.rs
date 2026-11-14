@@ -31,6 +31,8 @@ pub const MAX_CHUNKS: usize = 512;
 /// Floats per segment and per chunk, as the shader reads them.
 pub const SEGMENT_FLOATS: usize = 12;
 pub const CHUNK_FLOATS: usize = 8;
+/// A shard first cracks all around, this long before it falls (the shader draws it).
+pub const BREAK_LEAD: f32 = 1.2;
 /// The most shards a plan holds, and floats per shard as the shader reads them.
 pub const MAX_SHARDS: usize = 128;
 pub const SHARD_FLOATS: usize = 24;
@@ -100,6 +102,18 @@ impl Plan {
             .filter(|(t, _)| seconds >= *t && seconds - *t < 1.0)
             .map(|(t, k)| k * (-(seconds - t) * 7.0).exp())
             .sum()
+    }
+
+    /// What is heard after `after` and up to `until` (seconds), as strengths: cracks being born, and each
+    /// shard's break (the crack running round it 1.2 s before it falls, then its fall).
+    pub fn sounds_between(&self, after: f32, until: f32) -> impl Iterator<Item = f32> + '_ {
+        let breaks = self
+            .shards
+            .iter()
+            .flat_map(|s| [(s.falls - BREAK_LEAD, 0.3), (s.falls, 0.5)])
+            .filter(move |(t, _)| *t > after && *t <= until)
+            .map(|(_, k)| k);
+        self.events_between(after, until).chain(breaks)
     }
 
     /// The cracks born after `after` and up to `until` (seconds): the strength of each, for its sound.
@@ -606,7 +620,8 @@ fn window_at(
         falls,
         size: radius * 0.6,
         center,
-        cos_reach: (reach + 0.01).cos(),
+        // Room for the piece as it falls and for its debris.
+        cos_reach: (reach + 0.07).cos(),
     })
 }
 
@@ -657,7 +672,8 @@ fn shard_along(
         falls,
         size: depth * 0.45,
         center,
-        cos_reach: (reach + 0.01).cos(),
+        // Room for the piece as it falls and for its debris.
+        cos_reach: (reach + 0.07).cos(),
     })
 }
 

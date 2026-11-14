@@ -677,11 +677,14 @@ fn fissures(d: vec3<f32>, s: f32) -> Fis {
     return o;
 }
 
-// The holes left by fallen shards at `d`: x how much is a hole, y its burning rim. Each shard is a convex
-// pentagon; it is tested flat, on the plane touching the sky at its centre. A shard drops out over 0.3 s
-// (the hole grows from its middle), and closes again at dawn.
-fn shard_holes(d: vec3<f32>, s: f32) -> vec2<f32> {
-    // The union of the holes: the nearest edge, signed (negative inside), and how fresh that hole is.
+// A shard breaks out in three beats. First it cracks all around, the tip running along its outline and light
+// leaking through (1.2 s before it falls). Then the piece of sky itself falls away: down, turning, shrinking
+// toward the world behind, darkening, its edge lit from behind, while burning debris scatters. The hole is what
+// it leaves; only the outline of the union of holes burns, and it closes again at dawn. Each shard is a convex
+// pentagon, tested flat on the plane touching the sky at its centre.
+struct Brk { hole: f32, rim: f32, piece: f32, fall: f32, crack: f32, debris: f32, prim: f32 };
+fn shard_break(d: vec3<f32>, s: f32) -> Brk {
+    var o: Brk;
     var emin = 1.0;
     var fresh = 0.0;
     let n = u32(u.b.y);
@@ -690,34 +693,86 @@ fn shard_holes(d: vec3<f32>, s: f32) -> vec2<f32> {
         let cap = fis_shd[base + 5u];
         if (dot(d, cap.xyz) < cap.w) { continue; }
         let falls = fis_shd[base].w;
-        if (s < falls) { continue; }
+        let age = s - falls;
+        if (age < -1.2) { continue; }
         let size = fis_shd[base + 1u].w;
         let c = cap.xyz;
         var up = vec3<f32>(0.0, 1.0, 0.0);
         if (abs(c.y) > 0.99) { up = vec3<f32>(0.0, 0.0, 1.0); }
         let e1 = normalize(cross(up, c));
         let e2 = cross(c, e1);
-        let pd = d / dot(d, c);
-        let p = vec2<f32>(dot(pd, e1), dot(pd, e2));
-        var sd = -1e9;
+        let pd3 = d / dot(d, c);
+        let p = vec2<f32>(dot(pd3, e1), dot(pd3, e2));
+        var v: array<vec2<f32>, 5>;
+        var ln: array<f32, 5>;
+        var g = vec2<f32>(0.0);
         for (var i = 0u; i < 5u; i++) {
             let va = fis_shd[base + i].xyz;
-            let vb = fis_shd[base + (i + 1u) % 5u].xyz;
-            let a = vec2<f32>(dot(va, e1), dot(va, e2)) / dot(va, c);
-            let b = vec2<f32>(dot(vb, e1), dot(vb, e2)) / dot(vb, c);
-            let e = b - a;
-            sd = max(sd, dot(p - a, normalize(vec2<f32>(e.y, -e.x))));
+            v[i] = vec2<f32>(dot(va, e1), dot(va, e2)) / dot(va, c);
+            g += v[i] * 0.2;
         }
-        let age = s - falls;
-        let inset = (1.0 - ss(0.0, 0.3, age)) * size + (1.0 - u.g.w) * size * 1.2;
-        let edge = sd + inset;
+        var per = 0.0;
+        for (var i = 0u; i < 5u; i++) {
+            ln[i] = length(v[(i + 1u) % 5u] - v[i]);
+            per += ln[i];
+        }
+        var sd = -1e9;
+        var pd = 1e9;
+        var pp = 0.0;
+        var acc = 0.0;
+        for (var i = 0u; i < 5u; i++) {
+            let a = v[i];
+            let e = v[(i + 1u) % 5u] - a;
+            sd = max(sd, dot(p - a, normalize(vec2<f32>(e.y, -e.x))));
+            let h = clamp(dot(p - a, e) / dot(e, e), 0.0, 1.0);
+            let dd = length(p - a - e * h);
+            if (dd < pd) {
+                pd = dd;
+                pp = (acc + h * ln[i]) / per;
+            }
+            acc += ln[i];
+        }
+        if (age < 0.0) {
+            // It cracks all around, its tip running, light leaking through.
+            let on = step(pp, clamp((age + 1.2) / 0.8, 0.0, 1.0));
+            o.crack = max(o.crack, (ss(0.0016, 0.0005, pd) * (1.0 + 1.5 * ss(-0.4, 0.0, age)) + exp(-pd / 0.004) * 0.6 * ss(-0.5, 0.0, age)) * on);
+            continue;
+        }
+        let edge = sd + (1.0 - u.g.w) * size * 1.2;
         if (edge < emin) {
             emin = edge;
             fresh = exp(-age * 3.0);
         }
+        if (age < 1.4) {
+            // The piece falls away, and debris scatters.
+            let kf = ss(0.0, 1.4, age);
+            let sc = 1.0 - 0.75 * kf;
+            let gone = 1.0 - ss(1.0, 1.4, age);
+            let q = rot((hk(i32(k) + 300) - 0.5) * 2.4 * age) * (p - g + vec2<f32>(0.0, 0.06 * age * age)) / sc + g;
+            var sq = -1e9;
+            for (var i = 0u; i < 5u; i++) {
+                let a = v[i];
+                let e = v[(i + 1u) % 5u] - a;
+                sq = max(sq, dot(q - a, normalize(vec2<f32>(e.y, -e.x))));
+            }
+            let m = ss(0.0008, -0.0008, sq * sc) * gone;
+            if (m > o.piece) {
+                o.piece = m;
+                o.fall = kf;
+            }
+            o.prim = max(o.prim, exp(-abs(sq * sc) / 0.0012) * gone);
+            for (var j = 0u; j < 7u; j++) {
+                let hj = i32(k * 7u + j);
+                let st = mix(v[j % 5u], v[(j + 1u) % 5u], 0.3 + 0.4 * hk(hj));
+                let pos = st + normalize(st - g) * (0.03 + 0.03 * hk(hj + 50)) * age - vec2<f32>(0.0, 0.07 * age * age);
+                let sz = 0.0045 * (1.0 - kf);
+                o.debris = max(o.debris, ss(sz, sz * 0.3, length(p - pos)) * (1.0 - ss(0.9, 1.4, age)));
+            }
+        }
     }
-    // Only the outline of the union burns: no edge shows inside another hole.
-    return vec2<f32>(ss(0.0006, -0.0006, emin), exp(-abs(emin) / 0.0012) * (1.0 + 2.5 * fresh));
+    o.hole = ss(0.0006, -0.0006, emin);
+    o.rim = exp(-abs(emin) / 0.0012) * (1.0 + 2.5 * fresh);
+    return o;
 }
 
 fn sd_box(p: vec2<f32>, b: vec2<f32>) -> f32 {
@@ -992,24 +1047,29 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     let tc = s - 60.5;
     let present = u.g.z;
     let fs = fissures(d, s);
-    let sh = shard_holes(d, s);
-    let win = max(fs.win, sh.x) * present;
+    let br = shard_break(d, s);
+    // The hole shows only where the falling piece no longer covers it.
+    let hole_open = br.hole * (1.0 - br.piece);
+    let win = max(fs.win, hole_open) * present;
     let flash = fog_flash();
     if (win > 0.0) {
-        col = mix(col, other_side(d, flash) * (1.0 - 0.55 * fs.lip * (1.0 - sh.x)), win);
+        col = mix(col, other_side(d, flash) * (1.0 - 0.55 * fs.lip * (1.0 - br.hole)), win);
         weight = max(weight, win);
     }
     let hush = select(0.0, ss(58.3, 59.5, s), s < 60.5);
     let att = 1.0 - 0.6 * hush + select(0.0, 0.5 * exp(-tc * 0.8), tc >= 0.0);
     // Inside a hole there is only the other world: no crack line crosses it.
-    let clean = (1.0 - sh.x) * present;
+    let clean = (1.0 - hole_open) * present;
     let lc = mix(vec3<f32>(1.0, 0.25, 0.1), vec3<f32>(3.0, 2.2, 1.7), fs.heat);
     col += (lc * (fs.core * 1.7 + fs.glow * 0.4 * (1.0 - fs.win)) * (0.75 + 0.25 * u.a.z + u.d.y) * att
         + vec3<f32>(4.0, 3.0, 2.4) * fs.tip * 2.5) * clean;
     col += vec3<f32>(1.0, 0.35, 0.25) * u.g.x * 0.12 * present;
     // The broken edge of a hole burns, brighter just after the shard falls.
-    col += vec3<f32>(1.0, 0.42, 0.16) * sh.y * 1.4 * att * present;
-    weight = max(weight, clamp(sh.y, 0.0, 1.0) * present);
+    // The falling piece darkens as it goes; the broken edges burn; the crack running round a shard, the debris.
+    col *= 1.0 - 0.55 * br.fall * br.piece * present;
+    col += vec3<f32>(1.0, 0.42, 0.16) * (br.rim * (1.0 - br.piece) * 1.4 + br.prim * 1.2) * att * present;
+    col += vec3<f32>(1.0, 0.6, 0.3) * (br.crack * 1.8 + br.debris * 1.6) * att * present;
+    weight = max(weight, clamp(max(br.rim, max(br.crack, br.piece)), 0.0, 1.0) * present);
     // Sealing at dawn: a golden seam runs along each crack as its lips meet.
     col += vec3<f32>(1.0, 0.75, 0.3) * (fs.core * 2.0 + fs.glow * 0.5) * u.g.w * (1.0 - u.g.w) * 4.0 * clean;
     // A flash behind the sky leaks through the cracks near it.

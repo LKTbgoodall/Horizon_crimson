@@ -189,7 +189,7 @@ function planFissures(seed) {
     if (turn < 0) cs = cs.reverse();
     let reach = 0; for (const P of cs) reach = Math.max(reach, Math.acos(clamp(dot(C, P), -1, 1)));
     cs.forEach((P, k) => shd.push(...P, k === 0 ? falls : k === 1 ? depth * .45 : 0));
-    shd.push(...C, Math.cos(reach + .01));
+    shd.push(...C, Math.cos(reach + .07));
   };
   for (const f of [left, right]) {
     const last = lastOf(f);
@@ -219,7 +219,7 @@ function planFissures(seed) {
     const C = norm(cs.reduce((acc, P) => add(acc, P), [0, 0, 0]));
     let reach = 0; for (const P of cs) reach = Math.max(reach, Math.acos(clamp(dot(C, P), -1, 1)));
     cs.forEach((P, k) => shd.push(...P, k === 0 ? TC + 1 + .5 * R() : k === 1 ? rad * .6 : 0));
-    shd.push(...C, Math.cos(reach + .01));
+    shd.push(...C, Math.cos(reach + .07));
   }
   // segments, in chunks of 8 with a bounding cap
   const seg = [], chk = [];
@@ -735,27 +735,54 @@ vec3 moonEyeC1(vec3 c,vec2 q){
 uniform highp sampler2D uSeg,uChk,uShd;
 uniform int uNShd;
 // The holes left by fallen shards: x how much is a hole, y its burning rim (as sky_pass.rs's shard_holes).
-vec2 shardHoles(vec3 d){
-  float emin=1.,fresh=0.;                            // the union: nearest edge (negative inside), how fresh
+// A shard breaks out in three beats (as sky_pass.rs's shard_break). First it cracks all around, the tip running
+// along its outline, light leaking through. Then the piece of sky itself falls away: down, turning, shrinking
+// toward the world behind, darkening, its edge lit from behind, while burning debris scatters. The hole is
+// what it leaves. Returns x: the hole (union), y: its rim, z: the falling piece, w: how far it has fallen.
+vec4 shardBreak(vec3 d,out float crack,out float debris,out float pieceRim){
+  float emin=1.,fresh=0.,piece=0.,fall=0.;crack=0.;debris=0.;pieceRim=0.;
   for(int k=0;k<128;k++){
     if(k>=uNShd) break;
     vec4 cap=texelFetch(uShd,ivec2(k*6+5,0),0);
     if(dot(d,cap.xyz)<cap.w) continue;
-    float falls=texelFetch(uShd,ivec2(k*6,0),0).w;
-    if(uT<falls) continue;
-    float size=texelFetch(uShd,ivec2(k*6+1,0),0).w;
+    float falls=texelFetch(uShd,ivec2(k*6,0),0).w,age=uT-falls;
+    if(age<-1.2) continue;
     vec3 c=cap.xyz,up=abs(c.y)>.99?vec3(0,0,1):vec3(0,1,0),e1=normalize(cross(up,c)),e2=cross(c,e1);
-    vec3 pd=d/dot(d,c);vec2 p=vec2(dot(pd,e1),dot(pd,e2));
-    float sd=-1e9;
+    vec3 pd3=d/dot(d,c);vec2 p=vec2(dot(pd3,e1),dot(pd3,e2));
+    vec2 v[5];float L[5];float per=0.;vec2 g=vec2(0.);
+    for(int i=0;i<5;i++){vec3 va=texelFetch(uShd,ivec2(k*6+i,0),0).xyz;v[i]=vec2(dot(va,e1),dot(va,e2))/dot(va,c);g+=v[i]*.2;}
+    for(int i=0;i<5;i++){L[i]=length(v[(i+1)%5]-v[i]);per+=L[i];}
+    float sd=-1e9,pd=1e9,pp=0.,acc=0.;
     for(int i=0;i<5;i++){
-      vec3 va=texelFetch(uShd,ivec2(k*6+i,0),0).xyz,vb=texelFetch(uShd,ivec2(k*6+(i+1)%5,0),0).xyz;
-      vec2 a=vec2(dot(va,e1),dot(va,e2))/dot(va,c),b=vec2(dot(vb,e1),dot(vb,e2))/dot(vb,c),e=b-a;
+      vec2 a=v[i],e=v[(i+1)%5]-a;
       sd=max(sd,dot(p-a,normalize(vec2(e.y,-e.x))));
+      float h=clamp(dot(p-a,e)/dot(e,e),0.,1.),dd=length(p-a-e*h);
+      if(dd<pd){pd=dd;pp=(acc+h*L[i])/per;}
+      acc+=L[i];
     }
-    float age=uT-falls,edge=sd+(1.-smoothstep(0.,.3,age))*size;
-    if(edge<emin){emin=edge;fresh=exp(-age*3.);}
+    if(age<0.){                                        // it cracks all around, its tip running, light leaking
+      float reveal=clamp((age+1.2)/.8,0.,1.),on=step(pp,reveal);
+      crack=max(crack,(smoothstep(.0016,.0005,pd)*(1.+1.5*smoothstep(-.4,0.,age))+exp(-pd/.004)*.6*smoothstep(-.5,0.,age))*on);
+      continue;
+    }
+    if(sd<emin){emin=sd;fresh=exp(-age*3.);}
+    if(age<1.4){                                       // the piece falls away, and debris scatters
+      float kf=smoothstep(0.,1.4,age),sc=1.-.75*kf,th=(hi(k+300)-.5)*2.4*age,gone=1.-smoothstep(1.,1.4,age);
+      vec2 q=rot(th)*(p-g+vec2(0.,.06*age*age))/sc+g;
+      float sq=-1e9;
+      for(int i=0;i<5;i++){vec2 a=v[i],e=v[(i+1)%5]-a;sq=max(sq,dot(q-a,normalize(vec2(e.y,-e.x))));}
+      float m=smoothstep(.0008,-.0008,sq*sc)*gone;
+      if(m>piece){piece=m;fall=kf;}
+      pieceRim=max(pieceRim,exp(-abs(sq*sc)/.0012)*gone);
+      for(int j=0;j<7;j++){
+        vec2 st=mix(v[j%5],v[(j+1)%5],.3+.4*hi(k*7+j)),dir=normalize(st-g);
+        vec2 pos=st+dir*(.03+.03*hi(k*7+j+50))*age-vec2(0.,.07*age*age);
+        float sz=.0045*(1.-kf);
+        debris=max(debris,smoothstep(sz,sz*.3,length(p-pos))*(1.-smoothstep(.9,1.4,age)));
+      }
+    }
   }
-  return vec2(smoothstep(.0006,-.0006,emin),exp(-abs(emin)/.0012)*(1.+2.5*fresh));   // only the outline burns
+  return vec4(smoothstep(.0006,-.0006,emin),exp(-abs(emin)/.0012)*(1.+2.5*fresh),piece,fall);
 }
 uniform int uNChk;
 uniform float uEv,uDbg;
@@ -870,7 +897,9 @@ void main(){
   col+=vec3(2.5,2.,1.8)*heat*crack*1.5*uAtt;
   if(uVar==0){
     float win,lip;vec4 fs=fissures(d,win,lip);
-    vec2 sh=shardHoles(d);win=max(win,sh.x);lip*=1.-sh.x;   // no trace of a crack inside a hole
+    float scrk,sdeb,sprim;vec4 sb=shardBreak(d,scrk,sdeb,sprim);
+    vec2 sh=vec2(sb.x*(1.-sb.z),sb.y*(1.-sb.z));       // the hole shows only where the falling piece no longer covers it
+    win=max(win,sh.x);lip*=1.-sb.x;                      // no trace of a crack inside a hole
     if(uDbg>0.) win=1.;                                 // ?dbg=1: the other world everywhere (checking only)
     if(win>0.) col=mix(col,otherSide(d)*(1.-.55*lip),win);   // the lips' thickness, in shadow, then the other world
     hole=max(hole,win);
@@ -878,7 +907,9 @@ void main(){
     fs*=1.-sh.x;                                          // inside a hole there is only the other world
     col+=lc*(fs.x*1.7+fs.y*.4*(1.-win))*(.75+.25*uBeat+uFlash)*uAtt+vec3(4.,3.,2.4)*fs.w*2.5;
     col+=vec3(1.,.35,.25)*uEv*.12;
-    col+=vec3(1.,.42,.16)*sh.y*1.4*uAtt;                  // the broken edge of a hole burns
+    col*=1.-.55*sb.w*sb.z;                                // the falling piece darkens as it goes
+    col+=vec3(1.,.42,.16)*(sh.y*1.4+sprim*1.2)*uAtt;     // the broken edges burn
+    col+=vec3(1.,.6,.3)*(scrk*1.8+sdeb*1.6)*uAtt;        // the crack running round it, the debris
     vec2 fat;float ffl=fogFlash(fat);                    // a flash behind the sky leaks through the cracks near it
     float leak=ffl*exp(-length((vec2(atan(d.z,d.x)*.88,asin(clamp(d.y,-1.,1.)))-fat)*vec2(1.,1.3))/.35);
     col+=vec3(.9,.95,1.)*leak*(fs.x*2.5+fs.y*1.5);

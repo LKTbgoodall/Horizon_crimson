@@ -16,6 +16,12 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.2.5
+- **Shards really break** (Bastien: they just appeared from nowhere). In three beats: 1.2 s before, a crack runs
+  all around the piece, its tip racing along the outline, light leaking through (with a crack sound); then the
+  piece of sky itself falls away, sliding down, turning and shrinking toward the world behind, darkening, its edge
+  lit from behind (a second sound); burning debris scatters and falls. The hole is what the piece leaves.
+
 ## New in 0.2.4
 - **No trace of a crack inside a hole**: the shaded edges of the cracks are gone there too.
 - **A window onto the Spire**: a hole of its own on the left, where the Spire stands, opening just after the

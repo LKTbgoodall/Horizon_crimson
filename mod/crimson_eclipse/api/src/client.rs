@@ -62,10 +62,10 @@ pub fn tick(shared: &Shared, host: &mut dyn Host) {
             }
         }
     }
-    // A crack is born: its sound, a little higher or lower each time.
+    // A crack is born, or a shard breaks off: its sound, a little higher or lower each time.
     if now > last && now - last <= 2 * TICKS_PER_SECOND {
         let seconds = |tick: i64| (tick - ECLIPSE_START) as f32 / TICKS_PER_SECOND as f32;
-        for (i, k) in shared.fissures(day_time).events_between(seconds(last), seconds(now)).enumerate() {
+        for (i, k) in shared.fissures(day_time).sounds_between(seconds(last), seconds(now)).enumerate() {
             let pitch = 0.85 + 0.3 * crate::rng::unit_of(crate::rng::mix(now as u64 + i as u64));
             play("crimson_eclipse:rise.fissure", (0.35 + 0.65 * k).min(1.0), pitch, 0);
         }

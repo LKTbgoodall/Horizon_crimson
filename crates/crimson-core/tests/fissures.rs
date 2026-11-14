@@ -164,3 +164,14 @@ fn shards_break_off_along_the_cracks_mostly_at_the_climax() {
         }
     }
 }
+
+#[test]
+fn each_shard_is_heard_cracking_then_falling() {
+    use crimson_core::fissures::BREAK_LEAD;
+    let p = plan(4);
+    let all = p.sounds_between(-10.0, 1e4).count();
+    assert_eq!(all, p.events.len() + 2 * p.shards.len());
+    let s = p.shards[0];
+    let cracking = p.sounds_between(s.falls - BREAK_LEAD - 1e-3, s.falls - BREAK_LEAD);
+    assert!(cracking.filter(|k| *k == 0.3).count() >= 1);
+}
