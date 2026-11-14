@@ -16,6 +16,13 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.3.4 (Bastien's screenshot of the moon rising in 0.3.3)
+- **The pale rectangle under the rising moon** should be gone (to confirm in game). Reading of the screenshot,
+  not reproduced: it is the vanilla moon's square, under the horizon, seen through far water (not sky, so the
+  sky pass does not repaint it; our own moon stops at the water's edge). `unmoon` in the shader: a land pixel
+  inside the vanilla moon's square (0.075 rad each way round the moon) that is brighter than the picture just
+  left and right of the square takes the brighter of those two. Only with a frame copy (`fs_copy`).
+
 ## New in 0.3.3 (Bastien's look at 0.3.2)
 - **No pinwheel straight overhead**: through a hole at the zenith the Pale Realm's fog drew streaks meeting at
   one point (its noise was laid on azimuth and elevation, and every azimuth meets up there). High in the sky the

@@ -25,6 +25,7 @@ Back: [[00 - Home]]
   - [x] 0.3.2: the line fixed (a fractional power of 0 at the Spire's tip), slabs under the moon fall at the climax. Checked, not seen in game (2026-11-14)
   - [x] 0.3.2 seen in game (Bastien, 2026-11-14): a pinwheel at the zenith in a hole; the low sky looks poor from a mountain
   - [x] 0.3.3: zenith noise on a flat map, cracks fade into the haze near the horizon, graded haze below it. Shader and glue checked, not seen in game (2026-11-14)
+  - [x] 0.3.4: the vanilla moon's square hidden where it shows through far water under the horizon (`unmoon`). Shader and glue checked, not seen in game (2026-11-14)
   - [ ] Port the rest: C1's eye (strands, third eyelid, lock-on), the god-ray pass, crack sounds and shake
   - [ ] Check whether a native mod can add a dimension (travel into the Pale Realm)
   - [x] Bastien picked **C · The Abyss** (2026-11-14)

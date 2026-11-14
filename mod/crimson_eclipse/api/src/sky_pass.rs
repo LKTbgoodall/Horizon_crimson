@@ -1230,15 +1230,43 @@ fn flash_light(v: V) -> vec3<f32> {
     return u.d.y * vec3<f32>(1.0, 0.55, 0.45) * (0.3 + 0.7 * exp(-ang * 1.5));
 }
 
+// The vanilla moon is a small bright square. Our own moon covers it in the sky, but under the horizon it still
+// shows through whatever is not sky and lets the sky through: far water, at the edge of what is loaded (seen in
+// game, 0.3.3: a pale rectangle under the rising moon). There, a pixel inside the square that is brighter than
+// the picture just left and right of the square takes the brighter of those two instead. `q` is the pixel's
+// place around the moon (right, up; radians), `dq` how much its `x` changes per pixel across the screen.
+fn unmoon(v: V, scene: vec3<f32>, q: vec2<f32>, dq: f32, facing: f32) -> vec3<f32> {
+    let half = 0.075;
+    if (u.f.z < 0.5 || facing < 0.9 || abs(q.x) > half || abs(q.y) > half || abs(dq) < 0.0000001) { return scene; }
+    let last = vec2<i32>(u.size.xy) - vec2<i32>(1, 1);
+    let at = vec2<i32>(v.pos.xy);
+    let to_a = i32((half - q.x) / dq + 3.0 * sign(dq));
+    let to_b = i32((-half - q.x) / dq - 3.0 * sign(dq));
+    let a = textureLoad(scene_tex, clamp(at + vec2<i32>(to_a, 0), vec2<i32>(0, 0), last), 0).rgb;
+    let b = textureLoad(scene_tex, clamp(at + vec2<i32>(to_b, 0), vec2<i32>(0, 0), last), 0).rgb;
+    let w = vec3<f32>(0.3, 0.5, 0.2);
+    var side = a;
+    if (dot(b, w) > dot(a, w)) { side = b; }
+    if (dot(scene, w) > dot(side, w)) { return side; }
+    return scene;
+}
+
 // With a copy of the frame: the sky replaced, the land graded red.
 @fragment
 fn fs_copy(v: V) -> @location(0) vec4<f32> {
-    let scene = textureLoad(scene_tex, vec2<i32>(v.pos.xy), 0).rgb;
+    var scene = textureLoad(scene_tex, vec2<i32>(v.pos.xy), 0).rgb;
+    // Where the pixel is around the moon, and its slope across the screen (taken here: a derivative must not
+    // sit behind a branch).
+    let dir = normalize(v.ray);
+    let moon_r = normalize(cross(u.moon.xyz, vec3<f32>(0.0, 1.0, 0.0)));
+    let moon_q = vec2<f32>(dot(dir, moon_r), dot(dir, cross(moon_r, u.moon.xyz)));
+    let moon_dq = dpdx(moon_q.x);
     var col: vec3<f32>;
     if (is_sky(v)) {
         let s = sky(v.ray);
         col = mix(scene, to_target(s.rgb), s.a);
     } else {
+        scene = unmoon(v, scene, moon_q, moon_dq, dot(dir, u.moon.xyz));
         let lum = dot(scene, vec3<f32>(0.3, 0.5, 0.2));
         col = mix(scene, lum * to_target(vec3<f32>(1.5, 0.16, 0.12)), u.c.z);
     }
