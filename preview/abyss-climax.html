@@ -477,7 +477,7 @@ vec3 pale(vec2 u,out vec3 fogC){
     c=mix(c,mix(vec3(.03),fogC,.1+.35*hi(k+11)),smoothstep(1.02,.98,sd));
     c+=vec3(1.)*exp(-abs(sd-1.)*30.)*.12;
   }
-  {                                                                            // one presence: a giant mob walking far off
+  {                                                                            // one presence: a giant shadow walking far off
     float D=110.,X=30.+(uT-76.)*2.1;                                          // its feet are far below, lost in the fog
     vec2 lp=vec2(u.x*D-X,(u.y-(H0-.12))*D);
     float wk=uT*1.3,sw=.3*sin(wk);lp.y-=abs(cos(wk))*.6;                        // stride and bob
@@ -487,8 +487,8 @@ vec3 pale(vec2 u,out vec3 fogC){
     dd=min(dd,sdBox(lp-vec2(.3,40.),vec2(3.6,3.6)));
     dd=min(dd,min(sdBox(rot(-sw*.8)*(lp-sh)-vec2(-5.2,-8.),vec2(1.2,9.)),sdBox(rot(sw*.8)*(lp-sh)-vec2(5.2,-8.),vec2(1.2,9.))));
     float rise=smoothstep(H0+.02,H0+.22,u.y);
-    c=mix(c,mix(vec3(.1,.095,.1),fogC,.5),smoothstep(.9,-.9,dd)*rise);         // soft edges: far and hazy, hard to make out
-    c+=vec3(.75,.6,1.)*(exp(-length(lp-vec2(-1.2,40.6))*1.4)+exp(-length(lp-vec2(1.8,40.6))*1.4))*.35*rise;   // two faint eyes
+    float veil=.7+.3*fbm(lp*.08+vec2(uT*.15,-uT*.05));                          // the fog thins and thickens over it
+    c=mix(c,mix(vec3(.1,.095,.1),fogC,.3),smoothstep(5.,-3.5,dd)*rise*veil);   // a shadow: no edges, no blocks to read
   }
   c=mix(c,fogC*1.04,smoothstep(H0+.12,H0-.25,u.y));                           // no ground: thick fog far below
   gLc=vec3(.95,.93,.9);gBack=vec3(.12,.11,.1);gBelly=vec3(.62,.6,.55);gFrill=vec3(.28,.25,.25);gDap=0.;

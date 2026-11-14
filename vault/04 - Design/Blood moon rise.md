@@ -107,6 +107,7 @@ Bastien turned the ocean down ("trouvons autre chose"). Rather than guess again,
   - The big arched shapes behind (he reads them as a Stranger Things-like demon form): keep. The colossus stays too.
   - No ground: we are looking at the sky, so it is the other world's sky. Far below, thick fog; the ribs and the colossus rise out of it, as if the ground were much lower (later: tops of structures are fine, a ground is not).
 - **Next pass (Bastien: "on commence à tenir un truc")**: the arched demon shapes are too big and on both sides, too much: removed. The stick-figure colossus showing its feet: no. Now **one supernatural presence**: a giant **Minecraft-like mob** (blocky: cube head, box torso and limbs; probably a mob Bastien will add), **far and hazy** so it cannot be made out well and can be modelled freely later, but clearly something walking, and imposing. Its feet are far below, lost in the fog (the ground is much lower); only its upper body shows, striding and bobbing, with two faint eyes. It walks through the big right-hand window during the night (from about 1:18 to the end).
+- Bastien: you can still read the cubes; it must be **a shadow that walks**. Now: no edges (very wide soft falloff), no eyes, a darker blur whose opacity breathes with the fog. The blocky proportions stay underneath, only as a hint.
 - Default world is now W2 (`?w=1` for Storm). Ground objects use local units at their own distance, so they can later become real places in a dimension.
 
 ## Next
