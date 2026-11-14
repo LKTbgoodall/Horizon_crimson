@@ -11,7 +11,7 @@
 //! version C plus `preview/abyss-climax.html`'s C1 (W2, S1), in WGSL.
 
 use crate::eye::Eye;
-use crate::fissures::{seed_for_day, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS};
+use crate::fissures::{seal, seed_for_day, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS};
 use crate::moon::{day_of, time_of_day};
 use crate::night::{eclipse_seconds, presence};
 use crate::rise::frame;
@@ -173,7 +173,9 @@ impl RenderHooks for Sky {
         u.extend_from_slice(&[colors.horizon[0], colors.horizon[1], colors.horizon[2], 0.0]);
         u.extend_from_slice(&[colors.zenith[0], colors.zenith[1], colors.zenith[2], 0.0]);
         u.extend_from_slice(&[frame.fog_rgb[0], frame.fog_rgb[1], frame.fog_rgb[2], 0.0]);
-        u.extend_from_slice(&[crack_flash, chunk_count as f32, presence, 0.0]);
+        // At dawn the lips close, then the lines fade.
+        let (open, lines) = seal(seconds);
+        u.extend_from_slice(&[crack_flash, chunk_count as f32, presence * lines, open]);
         debug_assert_eq!(u.len(), UNIFORM_FLOATS);
         let bytes: Vec<u8> = u.iter().flat_map(|f| f.to_le_bytes()).collect();
         w.queue.write_buffer(&gpu.uniform, 0, &bytes);
@@ -442,7 +444,7 @@ struct U {
     hor: vec4<f32>,
     zen: vec4<f32>,
     fog: vec4<f32>,     // the colour the land's fog goes to
-    g: vec4<f32>,       // the flicker of new cracks, the fissures' chunk count, presence
+    g: vec4<f32>,       // the flicker of new cracks, the fissures' chunk count, how much of them shows, how open they are
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var depth_tex: texture_depth_2d;
@@ -638,7 +640,7 @@ fn fissures(d: vec3<f32>, s: f32) -> Fis {
             let age = s - mix(pa.w, pb.w, h * f);
             let sf = mix(pc.x, pc.y, h * f);
             let op = pc.w * (0.22 * ss(pc.z, pc.z + 18.0, s) + 0.78 * ss(0.0, 1.4, tc))
-                * pow(max(sin(3.14159 * sf), 0.0), 0.7) * jag(sf, pc.z) * ss(0.0, 0.4, age);
+                * pow(max(sin(3.14159 * sf), 0.0), 0.7) * jag(sf, pc.z) * ss(0.0, 0.4, age) * u.g.w;
             let e = dist - op;
             if (e < emin) {
                 emin = e;
@@ -943,6 +945,8 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     col += (lc * (fs.core * 1.7 + fs.glow * 0.4 * (1.0 - fs.win)) * (0.75 + 0.25 * u.a.z + u.d.y) * att
         + vec3<f32>(4.0, 3.0, 2.4) * fs.tip * 2.5) * present;
     col += vec3<f32>(1.0, 0.35, 0.25) * u.g.x * 0.12 * present;
+    // Sealing at dawn: a golden seam runs along each crack as its lips meet.
+    col += vec3<f32>(1.0, 0.75, 0.3) * (fs.core * 2.0 + fs.glow * 0.5) * u.g.w * (1.0 - u.g.w) * 4.0 * present;
     // A flash behind the sky leaks through the cracks near it.
     let duv = vec2<f32>(atan2(d.z, d.x) * 0.88, asin(clamp(d.y, -1.0, 1.0)));
     let leak = flash.z * exp(-length((duv - flash.xy) * vec2<f32>(1.0, 1.3)) / 0.35);

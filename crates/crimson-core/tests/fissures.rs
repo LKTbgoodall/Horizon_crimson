@@ -115,3 +115,16 @@ fn each_crack_birth_is_heard_once() {
     );
     assert_ne!(seed_for_day(9), seed_for_day(10));
 }
+
+#[test]
+fn the_fissures_seal_at_dawn_before_sunrise() {
+    use crimson_core::fissures::seal;
+    use crimson_core::night::{DAWN_END, DAWN_START, ECLIPSE_START};
+    let at = |tick: i64| (tick - ECLIPSE_START) as f32 / 20.0;
+    assert_eq!(seal(at(DAWN_START) - 1.0), (1.0, 1.0));
+    let (open, lines) = seal(at(DAWN_START) + 10.0);
+    assert!(open > 0.0 && open < 1.0 && lines == 1.0);
+    let (open, lines) = seal(at(DAWN_START) + 25.0);
+    assert!(open == 0.0 && lines > 0.0 && lines < 1.0);
+    assert_eq!(seal(at(DAWN_END) - 10.0), (0.0, 0.0));
+}

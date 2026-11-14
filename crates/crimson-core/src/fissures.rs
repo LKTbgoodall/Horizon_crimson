@@ -16,7 +16,7 @@
 //! since the eclipse began. The numbers are `preview/abyss-climax.html`'s.
 
 use crate::moon::TICKS_PER_SECOND;
-use crate::night::ECLIPSE_START;
+use crate::night::{DAWN_START, ECLIPSE_START};
 use crate::rise::{beat_time, frame, EYE_OPENS};
 use crate::rng::Rng;
 use crate::sky::{moon_direction, MOON_RADIUS};
@@ -288,6 +288,18 @@ impl Planner {
         let i = self.walk(p, h, len, 0.25, width * 0.7, opening);
         self.stage(i, t, len, v0, flicker);
     }
+}
+
+/// How the fissures seal at dawn, `seconds` after the eclipse began: how open their lips still are
+/// (1 all night, 0 once closed) and how much of their lines is left (they fade once closed). The lips
+/// close over the first 20 seconds of dawn, the lines are gone 15 seconds later, before sunrise.
+pub fn seal(seconds: f32) -> (f32, f32) {
+    let dawn = (DAWN_START - ECLIPSE_START) as f32 / TICKS_PER_SECOND as f32;
+    let ramp = |a: f32, b: f32| {
+        let t = ((seconds - a) / (b - a)).clamp(0.0, 1.0);
+        1.0 - t * t * (3.0 - 2.0 * t)
+    };
+    (ramp(dawn, dawn + 20.0), ramp(dawn + 18.0, dawn + 33.0))
 }
 
 /// The seed of the fissures of the blood moon on `day`: every client of a world sees the same sky.

@@ -26,6 +26,8 @@ Claude checks the glue first with `tools/check-glue.sh` and the sky shader with 
 - **The tall shadow is gone**, and so are the serpents. Instead, things fly in the Pale Realm's fog all night,
   unseen, until a flash lights the fog behind one: for a second and a half, a black winged shape. The flash also
   leaks through the cracks near it.
+- **The sky heals at dawn**: when dawn comes, the cracks' lips close over 20 seconds with a golden seam running
+  along them, then the lines fade, all before sunrise (Bastien's request, seen in 0.2.0 still open at sunrise).
 
 ## New in 0.2.0 (C1 and the Pale Realm, ADR-016)
 - **The sky breaks for real**: the old web of cracks around the moon is gone. Cracks are now fixed in the sky,
