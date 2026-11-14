@@ -188,18 +188,7 @@ function planFissures(seed) {
       chk.push(...C, Math.cos(maxA + .04 + om * 1.3), start, n, ptTime(p, c), p.w);
     }
   }
-  // the other world's frame: the great circle through the fault's two ends, and the fault's own line in it
-  const end = q => q.pts[Math.round(q.stages[q.stages.length - 1].s1 / ST)];
-  let a0 = end(left), a1 = end(right), N = norm(cross(a0, a1));
-  if (N[1] < 0) { [a0, a1] = [a1, a0]; N = mul3(N, -1); }
-  const E1 = a0, E2 = cross(N, E1), toX = P => [Math.atan2(dot(P, E2), dot(P, E1)), Math.asin(clamp(dot(P, N), -1, 1))];
-  const len = toX(a1)[0], line = [...left.pts, ...right.pts].map(toX).sort((m, n) => m[0] - n[0]);
-  const fy = new Float32Array(48);
-  for (let i = 0; i < 48; i++) {
-    const x = i / 47 * len; let k = line.findIndex(q => q[0] >= x); if (k < 1) k = k < 0 ? line.length - 1 : 1;
-    const [x0, y0] = line[k - 1], [x1, y1] = line[k]; fy[i] = x1 > x0 ? mix(y0, y1, clamp((x - x0) / (x1 - x0))) : y1;
-  }
-  return { seg: new Float32Array(seg), chk: new Float32Array(chk), events: events.filter(e => e[1] > 0), N, E1, E2, len, fy };
+  return { seg: new Float32Array(seg), chk: new Float32Array(chk), events: events.filter(e => e[1] > 0) };
 }
 const FIS = planFissures(20261114);
 const evFlash = t => { let s = 0; for (const [te, k] of FIS.events) if (t >= te && t - te < 1) s += k * Math.exp(-(t - te) * 7); return s; };
@@ -351,63 +340,108 @@ vec3 deepSpace(vec3 d,vec2 qa,float ang,float a){
   c+=vec3(1.,.8,.7)*arms*pow(hi2(ivec2(floor(nq*300.))),40.)*3.;
   return c;
 }
-// C1: the other side of the sky, seen through the opened fissures. Its frame follows the main fault
-// (x along it, y above the fault's own line), so the land hangs over the rift and the creature swims in it.
-uniform vec3 uLvN,uLvE1,uLvE2;
-uniform float uLvLen;
-uniform float uFy[48];
-float faultY(float x){float k=clamp(x/uLvLen,0.,1.)*47.;int i=min(int(k),46);return mix(uFy[i],uFy[i+1],k-float(i));}
-vec3 levi(vec3 c,vec2 u,float sc,float hx,float dir,float y0,float haze,float seed){
-  float L=1.1*sc,x=(hx-u.x)*dir;                   // x: distance behind the head, along the body
-  if(x<-.06*sc||x>L) return c;
-  float s=clamp(x/L,0.,1.);
-  float dy=u.y-(y0+.006*sin(u.x*14./sc+uT*1.2+seed)+.003*sin(u.x*40./sc-uT*1.7));
-  float R=sc*.05*(.45+.55*smoothstep(0.,.1,s))*pow(1.-s,.7)*(1.+.15*sin(x*120./sc))+sc*.009*exp(-pow(x/(.02*sc),2.));
-  float spine=pow(abs(sin(u.x*90./sc+seed)),5.)*.014*sc*(1.-s)*step(0.,dy);
-  float fin=pow(abs(sin(u.x*30./sc+seed*2.)),16.)*.03*sc*smoothstep(.1,.25,s)*(1.-s)*step(dy,0.);
-  float sd=abs(dy)-R-spine-fin;
-  float body=smoothstep(.0012,-.0012,sd)*(1.-haze);
-  c=mix(c,vec3(.03,.003,.008)*(.6+.8*fbm(u*300./sc+seed)),body);
-  c+=vec3(1.,.3,.12)*exp(-abs(sd)*mix(500.,250.,haze))*(1.-haze)*1.1;             // lit from behind
-  vec2 g=vec2(u.x*160./sc,dy/max(R,1e-4)*2.2);
-  c+=vec3(1.,.55,.2)*pow(hi2(ivec2(floor(g))+ivec2(0,7)),5.)*smoothstep(.3,.05,length(fract(g)-.5))*step(sd,0.)*3.*(1.-haze)*(1.-s);
-  c+=vec3(1.,.75,.35)*exp(-length(vec2(x-.012*sc,dy-.004*sc))/(.003*sc))*5.*(1.-haze);  // its eye
-  return c;
+// C1: the other side of the sky, seen through the opened fissures: a cold, deep ocean lit from a surface far
+// above, and what lives in it. World-fixed (azimuth, elevation): it is a place of its own, it follows neither
+// the cracks nor the moon; the creature swims its own path and is only seen when it passes behind an opening.
+float caustic(vec2 p){                              // light rippling through the water (iterated warp, no cells)
+  vec2 i=p;float c=0.;
+  for(int n=0;n<4;n++){
+    float t=uT*.35*(1.-3.5/float(n+1));
+    i=p+vec2(cos(t-i.x)+sin(t+i.y),sin(t-i.y)+cos(t+i.x));
+    c+=1./length(vec2(p.x/(sin(i.x+t)/.005),p.y/(cos(i.y+t)/.005)));
+  }
+  c=1.17-pow(c/4.,1.4);
+  return clamp(pow(abs(c),8.),0.,1.);
+}
+float snow(vec2 u,float sc,float sp){               // drifting particles, soft round points
+  vec2 g=u*sc+vec2(0.,uT*sp),fl=floor(g);ivec2 id=ivec2(fl);vec2 f=g-fl-.5;
+  float h=hi2(id);if(h>.22) return 0.;
+  vec2 o=(h22(id+ivec2(5,9))-.5)*.6+.15*vec2(sin(uT*.6+h*40.),0.);
+  return smoothstep(.13,0.,length(f-o))*(.4+2.7*h);
+}
+// A sea serpent seen side-on: a shaded tube (light from the surface above), scales, a translucent dorsal frill,
+// two pairs of flippers, a tail fin, a head with a jaw and an eye. x runs from the snout back along the body.
+vec3 serpent(vec3 c,vec2 u,vec3 fogC,float hx,float y0,float sc,float fog,float dir,float seed){
+  float x=(u.x-hx)*dir,xs=x/sc;
+  if(xs<-.1||xs>1.58) return c;
+  float ph=xs*7.-uT*1.6+seed;                      // the swimming wave runs down the body
+  float amp=sc*(.006+.045*clamp(xs/1.5,0.,1.));
+  float dy=u.y-(y0+amp*sin(ph));
+  float R=sc*(.044*exp(-pow((xs-.035)/.045,2.))+.022*smoothstep(-.085,-.01,xs)*(1.-smoothstep(-.01,.04,xs))+.013*smoothstep(-.06,.03,xs)*(1.-smoothstep(.02,.12,xs))
+             +.04*pow(sin(3.14159*clamp((xs-.05)/1.45,0.,1.)),.9));
+  vec3 Ld=normalize(vec3(.2,.85,.5)),lc=vec3(.55,.95,1.);
+  vec3 col=vec3(0.);float a=0.;
+  // flippers: paddles under the body, rowing
+  for(int k=0;k<2;k++){
+    float fp=k==0?.3:.78,st=.45*sin(uT*1.6+fp*6.+seed);
+    vec2 fq=rot(-.9-st)*vec2(xs-fp,(dy+R*.4)/sc);
+    float t=clamp(-fq.y/.075,0.,1.),hw=.018*sin(3.14159*pow(t,.7))*(1.-.3*t);       // a pointed paddle
+    if(fq.y<0.&&fq.y>-.075&&abs(fq.x-.012*t*t)<hw){
+      float e=abs(fq.x-.012*t*t)/max(hw,1e-4);
+      col=mix(vec3(.16,.13,.08),vec3(.45,.16,.08),t*.7)*(.55+.6*(1.-e))+lc*.08;
+      col*=.8+.3*smoothstep(.1,0.,abs(fract(e*3.+t*2.)-.5));                     // bony rays in the fin
+      a=1.;}
+  }
+  // tail fin
+  if(xs>1.36&&xs<1.56){float tf=sc*.055*smoothstep(1.36,1.54,xs)*(1.-smoothstep(1.53,1.56,xs));
+    if(abs(dy)<tf){col=vec3(.5,.14,.08)*(.5+.5*abs(dy)/tf)+lc*.1;a=.85;}}
+  for(int k=0;k<2;k++){
+    float hb=k==0?.055:.075,hl=k==0?.09:.07;
+    vec2 hq=vec2(xs-hb,(dy-R*.7)/sc);
+    float t=clamp((hq.x)/hl,0.,1.);
+    float hy=.035*t*(1.-.35*t)+(k==0?0.:-.004),hw=.009*(1.-t);
+    if(hq.x>0.&&hq.x<hl&&abs(hq.y-hy)<hw){col=mix(vec3(.55,.48,.36),vec3(.18,.14,.1),t)*(.6+.6*smoothstep(-hw,hw,hq.y-hy))*(.5+.5*lc);a=1.;}
+  }
+  // dorsal frill: membrane between spines, lit from above and behind
+  float fh=sc*.04*smoothstep(.06,.16,xs)*(1.-smoothstep(1.05,1.4,xs));
+  float spn=x*28./(sc*3.14159);
+  float top=R+fh*(.5+.5*pow(abs(cos(spn*3.14159)),3.));
+  if(dy>R*.9&&dy<top){
+    float m=smoothstep(R,top,dy);
+    col=mix(vec3(.75,.22,.1),vec3(1.,.45,.2),m)*(.45+.6*m)*(.85+.3*fbm(vec2(x*80./sc,dy*200./sc)));
+    col=mix(col,vec3(.12,.06,.05),smoothstep(.14,0.,abs(fract(spn)-.5)));       // the spines
+    a=.8;
+  }
+  // the body
+  float v=dy/max(R,1e-5);
+  if(abs(v)<1.){
+    vec3 n=vec3(0.,v,sqrt(1.-v*v));
+    float diff=max(dot(n,Ld),0.);
+    vec3 alb=mix(vec3(.62,.56,.44),vec3(.09,.15,.14),smoothstep(-.35,.25,v));     // pale belly, dark back
+    alb=mix(alb,vec3(.16,.12,.06),.45*smoothstep(-.1,.6,v)*fbm(vec2(x*25./sc,v*2.)+seed+7.));  // olive-brown patches
+    alb*=.55+.8*fbm(vec2(x*40./sc,v*3.)+seed);                                    // mottling
+    if(v<-.3) alb*=.75+.25*smoothstep(.0,.25,abs(fract(x*90./sc)-.5));            // ventral plates
+    vec2 g=vec2(x*110./sc,asin(v)*5.);g.x+=.5*mod(floor(g.y),2.);
+    alb*=.8+.2*smoothstep(.48,.3,length(fract(g)-vec2(.5,.2)));                   // overlapping scales
+    col=alb*(.12+1.25*diff*lc);
+    col+=vec3(.7,1.,1.)*pow(max(dot(n,normalize(Ld+vec3(0.,0.,1.))),0.),60.)*.25*fbm(vec2(x*120./sc,v*6.)); // wet, broken sheen
+    float knob=smoothstep(.35,.0,length(vec2(fract(x*45./sc)-.5,(v-.82)*3.)))*smoothstep(.05,.15,xs);
+    col=mix(col,vec3(.05,.06,.04),knob*.5)+lc*knob*diff*.15;                     // bony knobs along the back
+    col+=vec3(.35,.12,.05)*pow(1.-n.z,2.)*smoothstep(0.,-.8,v)*.4;               // warm light through the thin belly edge
+    col*=.8+.6*caustic(u*vec2(28.,40.))*max(v,0.);                                // caustics on its back
+    col+=vec3(.25,.55,.6)*pow(1.-n.z,3.)*.5;                                       // rim from the water around
+    if(xs<.07&&abs(v+.12+.25*smoothstep(.07,-.08,xs)*0.)<.05&&xs>-.08) col*=.3;   // the jaw line
+    if(xs<-.06&&v>.2&&v<.45) col*=.6;                                             // nostril
+    float ex=(xs-.03)*48.,ey=(v-.4)*4.5;                                          // the eye
+    if(ex*ex+ey*ey<1.){col=mix(vec3(1.,.62,.12),vec3(.25,.05,0.),smoothstep(.2,1.,ex*ex+ey*ey));
+      col*=smoothstep(.12,.3,abs(ex));col+=vec3(1.,.7,.3)*.25;}
+    if(xs>.0&&xs<.07) col*=1.-.4*smoothstep(.6,.9,v)*smoothstep(.15,.5,abs(ex)/8.);  // brow ridge over the eye
+    a=1.;
+  }
+  return mix(c,mix(col,fogC,fog),a);
 }
 vec3 otherSide(vec3 d){
-  float x=atan(dot(d,uLvE2),dot(d,uLvE1)),y=asin(clamp(dot(d,uLvN),-1.,1.));
-  vec2 u=vec2(x,y-faultY(x));
-  float n1=fbm(u*vec2(4.,9.)+vec2(uT*.01,0.)),n2=fbm(u*vec2(9.,18.)-3.);
-  vec3 c=vec3(.01,0.,.022)+vec3(.32,.02,.09)*pow(n1,3.)*1.6+vec3(.2,.04,.4)*pow(n2,3.)*1.3;
-  vec2 sp=u-vec2(uLvLen*.62,-.035);                                                // its red sun, low in the rift
-  c+=vec3(1.,.25,.07)*exp(-length(sp*vec2(1.,1.6))*14.)*1.4+vec3(1.,.65,.35)*exp(-length(sp)*60.)*1.5;
-  c+=vec3(1.,.85,.75)*starLayer(d,120.,.07,.0022);
-  c+=vec3(.9,.18,.22)*exp(-abs(u.y+.012)*22.)*(.55+.45*fbm(u*vec2(6.,30.)+uT*.05));   // the glow it swims in
-  // an upside-down land hangs over the rift: dark rock, hanging spires, lava streams, lights
-  float ridge=.055+.015*fbm(vec2(x*9.,1.))-.03*pow(abs(sin(x*21.+2.*fbm(vec2(x*6.,8.)))),7.)-.016*pow(abs(sin(x*57.+1.3)),12.);
-  c+=vec3(.7,.12,.08)*exp(-abs(u.y-ridge)*60.)*.35;
-  // far floating islands, upside-down mountains, hazy in the violet
-  vec2 ig=vec2(u.x*5.,u.y*7.);ivec2 ic=ivec2(floor(ig));vec2 iv=fract(ig)-.5;
-  if(u.y>.1&&hi2(ic+ivec2(31,7))<.35){
-    float ih=hi2(ic+ivec2(3,11)),iw=.18+.18*ih;
-    float top=.12+.04*vnoise(vec2(ig.x*6.,float(ic.y)));                          // flat top
-    float bot=-.25*(1.-pow(abs(iv.x)/iw,1.5))-.12*pow(abs(sin(iv.x*40.+ih*9.)),6.); // hanging spikes
-    float isl=step(abs(iv.x),iw)*step(bot,iv.y)*step(iv.y,top);
-    vec3 ir=mix(vec3(.05,.01,.04),vec3(.22,.05,.22),.55);                          // far: violet haze over the rock
-    ir+=vec3(1.,.35,.1)*exp(-(iv.y-bot)*40.)*.6;                                   // lava glow under it
-    c=mix(c,ir,isl);
-  }
-  float thick=.07+.05*fbm(vec2(x*5.,3.));                                          // the land is a band over the rift, not a lid
-  if(u.y>ridge&&u.y<ridge+thick){
-    vec3 land=vec3(.03,.008,.012)*(.6+.8*fbm(u*vec2(60.,90.)));
-    float lv=1.-abs(2.*fbm(u*vec2(18.,40.)+3.)-1.);
-    land+=vec3(1.,.32,.05)*pow(lv,14.)*1.2;                                       // lava streams
-    land+=vec3(1.,.6,.25)*pow(hi2(ivec2(floor(u*vec2(500.,600.)))),70.)*2.;       // lights
-    c=mix(c,land,smoothstep(0.,.0015,u.y-ridge)*smoothstep(0.,.004,ridge+thick-u.y));
-    c+=vec3(1.,.35,.12)*exp(-(u.y-ridge)*500.)*1.1;                              // its edge, lit from below
-  }
-  c=levi(c,u,1.,-.25+(uT-74.)*.075,1.,-.012,0.,0.);       // near: swims along the rift
-  c=levi(c,u,.6,uLvLen+.3-(uT-80.)*.05,-1.,-.03,.5,3.1);   // far, hazy, the other way
+  float az=atan(d.z,d.x),el=asin(clamp(d.y,-1.,1.));
+  vec2 u=vec2(az*.88,el);
+  float up=smoothstep(-.3,1.35,el);
+  vec3 deep=vec3(.005,.05,.07),shal=vec3(.09,.45,.48);
+  vec3 c=mix(deep,shal,up*up);
+  c+=vec3(.25,.6,.6)*pow(vnoise(vec2(az*9.+uT*.04,uT*.05)),3.)*smoothstep(-.2,1.,el)*.55;   // shafts from the surface
+  c+=vec3(.5,.95,.9)*caustic(u*vec2(6.,9.))*smoothstep(.45,1.3,el)*.55;                    // the surface's ripples
+  vec3 fogC=mix(deep,shal,up*up*.85);
+  c=serpent(c,u,fogC,-1.4+(uT-70.)*.04,.78,.55,.68,-1.,2.3);                // far, in the haze, going right
+  c=serpent(c,u,fogC,1.6-(uT-60.)*.075,.45+.07*sin(uT*.09),1.6,.18,1.,0.);   // near, crossing behind the moon
+  c+=vec3(.6,.9,.85)*(snow(u,150.,.35)*.35+snow(u,60.,.6)*.6)*(.35+.65*up);
   return c;
 }
 // The eye, in iris units (iris radius 1). Mostly cosmic: nebula iris, slit pupil that is a void with stars.
@@ -750,7 +784,6 @@ function setU(pr, o) {
   for (const k in o) {
     const l = pr.loc(k), v = o[k]; if (l == null) continue;
     if (INTS.has(k)) gl.uniform1i(l, v);
-    else if (k === 'uFy') gl.uniform1fv(l, v);
     else if (typeof v === 'number') gl.uniform1f(l, v);
     else if (v.length === 2) gl.uniform2fv(l, v);
     else if (v.length === 3) gl.uniform3fv(l, v);
@@ -928,7 +961,7 @@ function render(dt) {
   gl.bindVertexArray(fullVAO);
   setU(P.sky, { uRes: [W, H], uF: F, uR: R, uU: U, uTan: tf, uAsp: asp, uT: time, uP: S.p, uVar: ver, uMoon: S.moon, uSun: S.sun, uHor: S.hor, uZen: S.zen,
     uFog: S.fog, uSunset: S.sunset, uBeat: S.beat, uOpen: Math.max(S.open, 0), uSeam: S.seam, uPupil: pupil, uGaze: gaze, uFlash: S.flash, uShock: S.shock, uShockK: S.shockK,
-    uMoonRad: S.moonRad, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uTc: S.u, uMem: S.mem, uBurst: S.burst, uRift: S.rift, uAtt: S.att, uSeg: 3, uChk: 4, uNChk: NCHK, uEv: S.ev, uLvN: FIS.N, uLvE1: FIS.E1, uLvE2: FIS.E2, uLvLen: FIS.len, uFy: FIS.fy, uDbg: qs.get('dbg') === '1' ? 1 : 0 });
+    uMoonRad: S.moonRad, uEyeRot: V.rot, uStars: S.stars, uCorona: S.corona, uRev: S.rev, uBlood: S.blood, uTc: S.u, uMem: S.mem, uBurst: S.burst, uRift: S.rift, uAtt: S.att, uSeg: 3, uChk: 4, uNChk: NCHK, uEv: S.ev, uDbg: qs.get('dbg') === '1' ? 1 : 0 });
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   gl.enable(gl.DEPTH_TEST); gl.bindVertexArray(worldVAO);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, hgtTex);
