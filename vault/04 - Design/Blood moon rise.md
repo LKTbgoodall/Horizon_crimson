@@ -85,6 +85,14 @@ Bastien on the previous version: messy; no leviathan visible; breaks next to thi
 - Openings: main fault 0.08 rad, climax cracks 0.014 to 0.03, moon-edge cracks 0.01, branches 0.006.
 - **The other world is anchored to the main fault**: its frame is the great circle through the fault's ends, and the fault's own line inside it (48 samples). So the upside-down land hangs over the rift, a glow runs along it, and the leviathan swims along it: it enters at the right around 1:20, its head reaches the moon around 1:32 and it passes behind. It is big (half the rift's height), dark against the glow, spots and a glowing eye.
 - Preview aid: `?dbg=1` shows the other world everywhere.
-- The upside-down land is only a band (0.07 to 0.12 rad thick) hanging over the rift, not a lid over everything above it (Bastien saw the upper windows full of black and orange rock instead of the violet). Higher up: the violet abyss, with far floating islands (upside-down mountains, hazy).
+- The upside-down land is only a band (0.07 to 0.12 rad thick) hanging over the rift, not a lid over everything above it (Bastien saw the upper windows full of black and orange rock instead of the violet). Higher up: the violet abyss, with far floating islands (upside-down mountains, hazy). *(Superseded by the ocean, below.)*
+
+### The other world is an ocean (2026-11-14)
+Bastien: the leviathan is just a black shape; he wants something almost realistic, a dragon or a sea monster like the Loch Ness one, living in its own world (not glued to the rift, passing behind it); drop the black and orange rock; no stars, no cosmos look: a real other universe.
+- **Art direction**: a cold, deep **ocean** in teal and blue-green, lit from a surface far above: light shafts, rippling caustics near the top, drifting particles, depth haze. Teal through red cracks is the strongest "other universe" contrast we have. No rock, no stars, no red sun; the fault-anchored frame is gone (world-fixed azimuth / elevation).
+- **The creature**: a sea serpent seen side-on, drawn as a shaded tube lit from above. Dark olive-brown back with mottling and overlapping scales, pale belly with ventral plates, bony knobs along the back, broken wet sheen, caustics on its back. It has a translucent red-orange dorsal frill on spines, two pairs of rowing fins with bony rays, a tail fin, and a dragon skull (snout, nostril, jaw line, brow, amber slit eye, two swept-back horns). The swimming wave runs down its body.
+- **Its own path**: the near one (1.6 times bigger) crosses from right to left from 1:00 to 1:44 and passes behind the moon around 1:30; a far one, smaller and hazy, goes the other way higher up. Seen only through the openings.
+
+## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.
