@@ -636,7 +636,7 @@ fn spire(lp: vec2<f32>, glow: ptr<function, f32>) -> f32 {
     return d;
 }
 
-fn pale(uv: vec2<f32>) -> vec3<f32> {
+fn pale(uv: vec2<f32>, nuv: vec2<f32>) -> vec3<f32> {
     let t = u.a.x;
     var c = mix(vec3<f32>(0.85, 0.83, 0.79), vec3<f32>(0.6, 0.6, 0.64), ss(PALE_H0, 1.1, uv.y));
     // The black sun, its thin bright ring and fine rays.
@@ -647,7 +647,7 @@ fn pale(uv: vec2<f32>) -> vec3<f32> {
     c += vec3<f32>(1.0) * pow(max(0.0, sin(sa * 14.0 + 3.0 * fbm(vec2<f32>(sa * 3.0, t * 0.1)))), 20.0) * exp(-sr * 5.0) * 0.3 * step(0.088, sr);
     c = mix(c, vec3<f32>(0.01), ss(0.088, 0.084, sr));
     c += vec3<f32>(1.0) * exp(-abs(sr - 0.087) * 220.0) * 0.8;
-    c = mix(c, PALE_FOG * 1.02, ss(0.45, 0.75, fbm(uv * vec2<f32>(2.0, 6.0) + vec2<f32>(t * 0.02, 0.0))) * 0.35);
+    c = mix(c, PALE_FOG * 1.02, ss(0.45, 0.75, fbm(nuv * vec2<f32>(2.0, 6.0) + vec2<f32>(t * 0.02, 0.0))) * 0.35);
     // Floating black shards.
     for (var k = 0; k < 6; k++) {
         let fk = f32(k);
@@ -748,8 +748,12 @@ fn fog_flash() -> vec3<f32> {
 fn other_side(d: vec3<f32>, flash: vec3<f32>) -> vec3<f32> {
     let t = u.a.x;
     let uv = vec2<f32>(atan2(d.z, d.x) * 0.88, asin(clamp(d.y, -1.0, 1.0)));
-    var c = pale(uv);
-    c = mix(c, PALE_FOG, 0.45 * ss(0.3, 0.8, fbm(uv * vec2<f32>(3.0, 7.0) + vec2<f32>(t * 0.03, t * 0.01))));
+    // The fog and the ash are noise laid on (azimuth, elevation); straight overhead every azimuth meets, which
+    // drew a pinwheel at the zenith (seen in game, 0.3.2). High up the noise moves onto a flat map of the top of
+    // the sky instead.
+    let nuv = mix(uv, vec2<f32>(d.x, d.z) * 1.5 + vec2<f32>(0.3, 1.4), ss(0.8, 1.2, uv.y));
+    var c = pale(uv, nuv);
+    c = mix(c, PALE_FOG, 0.45 * ss(0.3, 0.8, fbm(nuv * vec2<f32>(3.0, 7.0) + vec2<f32>(t * 0.03, t * 0.01))));
     let light = flash.z * exp(-length((uv - flash.xy) * vec2<f32>(1.0, 1.3)) / 0.3);
     c += vec3<f32>(0.95, 0.97, 1.0) * light * 0.9;
     for (var m = 0; m < 3; m++) {
@@ -759,7 +763,7 @@ fn other_side(d: vec3<f32>, flash: vec3<f32>) -> vec3<f32> {
         let shape = ss(1.0, -1.0, monster(lp, t, f32(m) * 2.1));
         c = mix(c, vec3<f32>(0.03, 0.03, 0.035), shape * clamp(light * 3.0, 0.0, 1.0) * 0.95);
     }
-    let ag = uv * 70.0 + vec2<f32>(t * 0.5, -t * 0.2);
+    let ag = nuv * 70.0 + vec2<f32>(t * 0.5, -t * 0.2);
     let ai = vec2<i32>(floor(ag));
     let af = fract(ag) - 0.5 - (hi2(ai) - 0.5) * 0.5;
     c = mix(c, vec3<f32>(0.12, 0.11, 0.1), step(hi(ai + vec2<i32>(4, 4)), 0.12) * ss(0.09, 0.03, length(af * vec2<f32>(1.0, 1.8))));
@@ -1183,14 +1187,18 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     // Without bloom the bright parts would clip to white: compress them.
     col = vec3<f32>(1.0) - exp(-col * 1.2);
     // The sky sinks into the land's fog near the horizon and below it.
-    let haze = max(exp(-max(d.y, 0.0) * 14.0) * 0.65, ss(0.0, -0.1, d.y));
-    col = mix(col, u.fog.rgb, haze);
+    // The cracks and slabs fade into it little by little over the last degrees, and are gone at the horizon:
+    // seen from a mountain they used to stop on a hard line with a flat band under it (seen in game, 0.3.2).
+    // Under the horizon the fog goes darker with depth instead of one flat colour.
+    let haze = max(max(exp(-max(d.y, 0.0) * 14.0) * 0.65, ss(0.16, 0.0, d.y) * 0.92), ss(0.02, -0.05, d.y));
+    let haze_col = u.fog.rgb * mix(1.12, 0.5, ss(0.02, -0.4, d.y));
+    col = mix(col, haze_col, haze);
     // The moon goes over the haze, solid, so the vanilla moon behind it never
     // shows; the haze only tints it a little, and it sinks under the horizon.
     if (r < 1.03) {
         let disc = ss(1.0, 0.985, r);
         var mc = vec3<f32>(1.0) - exp(-moon_col(q, r, a) * 1.2);
-        mc = mix(mc, u.fog.rgb, max(haze * 0.3, ss(-0.02, -0.12, d.y)));
+        mc = mix(mc, haze_col, max(haze * 0.3, ss(-0.02, -0.12, d.y)));
         col = mix(col, mc, disc);
         weight = max(weight, disc * u.f.z);
     }

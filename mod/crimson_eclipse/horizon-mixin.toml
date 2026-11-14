@@ -3,7 +3,7 @@
 # crates/crimson-core into api/src first and writes api/src/lib.rs.
 [mod]
 id = "crimson_eclipse"
-version = "0.3.2"
+version = "0.3.3"
 
 # Nightly 2026-11-13 (the first one with native .hmod content).
 [compatibility]

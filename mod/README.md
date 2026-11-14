@@ -16,6 +16,14 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.3.3 (Bastien's look at 0.3.2)
+- **No pinwheel straight overhead**: through a hole at the zenith the Pale Realm's fog drew streaks meeting at
+  one point (its noise was laid on azimuth and elevation, and every azimuth meets up there). High in the sky the
+  fog and the ash now use a flat map of the top of the sky.
+- **The low sky, seen from a mountain**: the cracks and slabs used to stop on a hard line with a flat band under
+  it. They now fade into the haze over the last 9 degrees above the horizon and are gone at the horizon; under
+  it the haze darkens with depth instead of being one flat colour.
+
 ## New in 0.3.2 (Bastien's look at 0.3.1)
 - **The thin dark line across the Pale Realm is gone** (to confirm in game). It sat at the height of the Spire's
   tip, all round the sky, only in holes. Cause, deduced from the screenshots, not reproduced: above the tip the
