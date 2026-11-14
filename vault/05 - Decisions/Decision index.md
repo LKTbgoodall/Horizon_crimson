@@ -14,5 +14,6 @@ updated: 2026-11-14
 | [[ADR-013 One combined hmod]] | Ship one `.hmod` with code and content | accepted | 2026-11-13 |
 | [[ADR-014 Fresh start as Crimson Eclipse]] | New folder and name, blood moon as the stage | proposed | 2026-11-14 |
 | [[ADR-015 Rendering through our own GPU passes]] | Signature looks through `RenderHooks` passes and real models | accepted | 2026-11-14 |
+| [[ADR-016 C1 rise and the Pale Realm]] | Rise = C1 with real fissures opening onto the Pale Realm; its main structure is the Spire | accepted | 2026-11-14 |
 
 ADRs 001 to 013 come from Cagebound (numbers kept, the Cagebound-specific ones left out).

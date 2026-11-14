@@ -16,8 +16,8 @@ updated: 2026-11-14
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-1. **Bastien**: look at C1 with its new real fissures in `preview/abyss-climax.html` and validate it. Build 0.1.5 (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
-2. **Claude**: fix what the first in-game look shows (moon position, depth, colours), then bloom, burgundy foliage (`biome_colors`), embers, sound.
+1. **Bastien**: C1 + Pale Realm + Spire is chosen ([[ADR-016 C1 rise and the Pale Realm]]); say when to port it. Build 0.1.5 (`tools\build-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
+2. **Claude**: port C1 and the Pale Realm into the sky pass step by step (fissure planner in `crimson-core`, segment buffer, lenses, the world, god rays); fix what the first in-game look shows (moon position, depth, colours), then bloom, burgundy foliage (`biome_colors`), embers, sound.
 
 ## 🗺️ Vault map
 ### 01 · Project

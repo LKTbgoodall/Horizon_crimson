@@ -114,6 +114,7 @@ Bastien turned the ocean down ("trouvons autre chose"). Rather than guess again,
   - **S2 · Gate**: a giant arch on two pillars with capitals and a spiked crown; inside, a swirling black void with specks (a way through, fits the travel idea).
   - **S3 · Floating citadel**: an upside-down mountain floating over the fog, towers with pointed roofs on top, chains hanging down into the fog, slowly bobbing.
   - **S4 · Dead tree**: a colossal black tree, branches spreading across the white sky, swaying a little.
+  - **Bastien picked S1 · Spire** (2026-11-14) → [[ADR-016 C1 rise and the Pale Realm]]. The other candidates stay in the preview for reference.
 - Default world is now W2 (`?w=1` for Storm). Ground objects use local units at their own distance, so they can later become real places in a dimension.
 
 ## Next

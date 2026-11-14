@@ -16,7 +16,9 @@ Back: [[00 - Home]]
   - [x] Rise preview page, 3 stagings: `preview/blood-moon-rise.html` (2026-11-14)
   - [x] Climax push of C, 3 candidates (C1 Shell of Light, C2 Glass Abyss, C3 The Sky Opens): `preview/abyss-climax.html` (2026-11-14)
   - [x] Bastien picks a climax candidate: **C1**, with real fissures fixed in the sky instead of the moon-centred web (2026-11-14)
-  - [ ] Bastien validates the new fissures, then port them (pure-core planner + segment buffer) and the god-ray pass to the mod
+  - [x] C1 reshaped with Bastien: real fissures opening onto the Pale Realm, far serpents, a black shadow walker, the Spire (2026-11-14, [[ADR-016 C1 rise and the Pale Realm]])
+  - [ ] Port to the mod, step by step: fissure planner in the pure core + segment buffer, opening lenses, the Pale Realm (sky, sun, shards, Spire, shadow, serpents), the god-ray pass
+  - [ ] Check whether a native mod can add a dimension (travel into the Pale Realm)
   - [x] Bastien picked **C · The Abyss** (2026-11-14)
 - [x] Repo skeleton: workspace, pure crate `crimson-core`, bundle `mod/crimson_eclipse` (typed API), content mod (manifest only) (2026-11-14)
 - [x] Pure core: when a blood moon happens, its phases, the rise's timeline (staging C), the eye, the event scheduler; 31 tests (2026-11-14)
