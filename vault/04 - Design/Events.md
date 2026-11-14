@@ -24,3 +24,17 @@ Proposals for what can happen during a blood moon. Nothing picked yet. Each name
 | 11 | **Dawn's cleansing** (always) | a golden light wave sweeps from the horizon and burns the crimson to ash | GPU pass, block changes, particles |
 
 Possible chain for a night: rise → cracked sky → meteors → corruption and monoliths → (rifts or red lightning) → dawn's cleansing.
+
+## Crossing to the Pale Realm (proposals, 2026-11-14)
+Bastien's goal: the player can go to the other world (the Pale Realm, seen through the broken sky). Six candidates, none picked yet:
+
+| # | Name | Trigger | What the player sees |
+|---|---|---|---|
+| P1 | **The Upfall** | a sky shard (dropped by falling shards) used under a hole in the sky | gravity flips, the player falls up toward the hole, the Overworld spins away below, crossing the thick shell, landing upside down on the dunes |
+| P2 | **The Blood Fault** | an eclipse blade struck into the ground | a glowing red fault zigzags 30 blocks, the ground splits and blocks fall into a void; below, the Pale Realm's sky, upside down; the player jumps, the camera flips mid-fall |
+| P3 | **The Moon Beam** | four crimson crystals placed in a ritual circle at the peak | beams rise to the moon, the moon answers with a pillar of red light, the player is lifted up the beam through a hole in the sky |
+| P4 | **The Swallowing Eye** | looking at the watcher's eye too long (or an offering) | the pupil dilates, the moon comes down and fills the screen, the player is swallowed through the pupil |
+| P5 | **The Blood Mirror** | a pool of blood (crimson rain) reflecting the moon | the reflection shows the Pale Realm instead of the sky; the player sinks into it, the camera goes under, the world flips and they rise out of the Realm's own pool |
+| P6 | **The Tear** | a crimson gauntlet, hold and drag | the air rips like fabric and glass along the drag, burning edges, the Pale Realm behind it with its own light and wind; the player steps through |
+
+Technical question: can Horizon host a real custom dimension, and teleport into it? → [[Open questions]].

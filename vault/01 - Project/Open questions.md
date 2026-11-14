@@ -17,3 +17,5 @@ updated: 2026-11-14
 10. **Saving**: a forced blood moon and the roll's salt are not saved yet (`world_saved`, `host.world_dir()`); the salt is 0 for every world for now.
 
 - **The other world as a destination** (2026-11-14): Bastien wants players to be able to go into the world seen behind the sky (Pale Realm or Storm Realm). To check in Horizon: can a native mod add a dimension (level, generator, sky)? What it means for the look: the preview's landmarks (monoliths, ribs, colossus, black sun) should become real things there.
+
+- ❓ (2026-11-14) Can a native mod add a custom dimension (the Pale Realm) and move a player into it, through catalog hooks only? If not, fallback: a far-away or high-altitude zone in the Overworld drawn as the Realm. See [[Events]] § Crossing to the Pale Realm.
