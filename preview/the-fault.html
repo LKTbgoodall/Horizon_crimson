@@ -593,7 +593,7 @@ function draw(t) {
   const vp = mul(proj, view), ivp = invert(vp);
   const glow = ss(TRIG, TRIG+3, t);
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbS); gl.viewport(0, 0, W, H);
-  gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.depthMask(true); gl.clearColor(0,0,0,1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   // background
   gl.disable(gl.DEPTH_TEST); gl.disable(gl.BLEND); gl.depthMask(false);
   gl.useProgram(P_BG.p); gl.bindVertexArray(vaoE);
