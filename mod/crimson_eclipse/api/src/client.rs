@@ -2,7 +2,8 @@
 //! file only hands them to Horizon. The sky itself (moon, cracks, the eye) is
 //! `sky_pass.rs`; this file also tells it the time, as the render thread has no host.
 
-use crate::moon::time_of_day;
+use crate::moon::{time_of_day, TICKS_PER_SECOND};
+use crate::night::ECLIPSE_START;
 use crate::night::{eclipse_seconds, presence};
 use crate::rise::{frame, shake_angles, Frame};
 use crate::sky::clouds;
@@ -61,6 +62,14 @@ pub fn tick(shared: &Shared, host: &mut dyn Host) {
             }
         }
     }
+    // A crack is born: its sound, a little higher or lower each time.
+    if now > last && now - last <= 2 * TICKS_PER_SECOND {
+        let seconds = |tick: i64| (tick - ECLIPSE_START) as f32 / TICKS_PER_SECOND as f32;
+        for (i, k) in shared.fissures(day_time).events_between(seconds(last), seconds(now)).enumerate() {
+            let pitch = 0.85 + 0.3 * crate::rng::unit_of(crate::rng::mix(now as u64 + i as u64));
+            play("crimson_eclipse:rise.fissure", (0.35 + 0.65 * k).min(1.0), pitch, 0);
+        }
+    }
     if let Some(ticks) = silence {
         host.muffle_sounds(0.95, 1.0, ticks, &[]);
     }
@@ -101,10 +110,12 @@ pub fn camera_shake(shared: &Shared, host: &dyn Host, event: &mut CameraShakeEve
     let Some((seconds, frame, _)) = now(shared, host, event.partial) else {
         return;
     };
-    if frame.shake_degrees <= 0.0 {
+    // Each new crack jolts the ground a little.
+    let degrees = frame.shake_degrees + 0.4 * shared.fissures(host.day_time()).flash(seconds);
+    if degrees <= 0.0 {
         return;
     }
-    let [pitch, yaw] = shake_angles(seconds, frame.shake_degrees);
+    let [pitch, yaw] = shake_angles(seconds, degrees);
     event.shake.pitch += pitch;
     event.shake.yaw += yaw;
 }

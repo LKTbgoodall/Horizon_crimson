@@ -125,7 +125,7 @@ function planFissures(seed) {
   const R = rng32(seed), ST = .03, paths = [], events = [];
   const limb = (t, th) => {
     const { M, rad } = moonAt(t), mr = norm(cross(M, [0, 1, 0])), mu = cross(mr, M);
-    const T = add(mul3(mr, Math.cos(th)), mul3(mu, Math.sin(th))), r = rad * .97;
+    const T = add(mul3(mr, Math.cos(th)), mul3(mu, Math.sin(th))), r = rad * .3;   // from under the moon: once it moves on, no empty disc
     return { P: add(mul3(M, Math.cos(r)), mul3(T, Math.sin(r))), H: add(mul3(M, -Math.sin(r)), mul3(T, Math.cos(r))) };
   };
   const walk = (P, H, L, jit, w) => {
@@ -151,8 +151,8 @@ function planFissures(seed) {
     s1 = Math.min(s1, (path.pts.length - 1) * ST); if (s1 <= s0) return;
     path.stages.push({ t0, s0, s1, v0 }); events.push([t0, k]);
   };
-  const fromMoon = (t, L, v0, k, th = R() * 6.2832, jit = .22, w = 1, om = .01) => { const { P, H } = limb(t, th); const p = walk(P, H, L, jit, w); p.om = om; stage(p, t, L, v0, k); };
-  const branch = (t, L, v0, k, om = .006) => {
+  const fromMoon = (t, L, v0, k, th = R() * 6.2832, jit = .22, w = 1, om = .004) => { const { P, H } = limb(t, th); const p = walk(P, H, L, jit, w); p.om = om; stage(p, t, L, v0, k); };
+  const branch = (t, L, v0, k, om = .0025) => {
     const cands = paths.filter(p => p.stages.length && ptTime(p, 3) < t - .3);
     if (!cands.length) return;
     const p = cands[Math.floor(R() * cands.length)];
@@ -163,7 +163,7 @@ function planFissures(seed) {
   };
   // the main fault: torn by the moon on both sides, then pushed further across the sky in stages
   const tf = beatTime(18), fl = limb(tf, Math.PI - .45), fr = limb(tf, .4);   // climbing into the sky on both sides
-  const left = walk(fl.P, fl.H, 1.3, .1, 2.2), right = walk(fr.P, fr.H, 1.3, .1, 2.2); left.om = right.om = .08;
+  const left = walk(fl.P, fl.H, 1.3, .1, 2.2), right = walk(fr.P, fr.H, 1.3, .1, 2.2); left.om = right.om = .028;
   [[18, .2], [24, .38], [31, .56], [40, .76], [49, .98], [56, 1.3]].forEach(([n, s], i) => {
     stage(left, beatTime(n), s, .9, i ? .5 : .8); stage(right, beatTime(n + 1), s, .9, .5);
   });
@@ -173,8 +173,8 @@ function planFissures(seed) {
     if (R() < .45) fromMoon(beatTime(n), .2 + .35 * R(), 1.2, .35); else branch(beatTime(n), .12 + .3 * R(), .9, .22);
   }
   // the climax: the moon bursts the shell, cracks shoot out all around it
-  for (let i = 0; i < 14; i++) fromMoon(TC + .02 * R(), .5 + .8 * R(), 2.6, 0, i / 14 * 6.2832 + (R() - .5) * .35, .2, 1.3, .014 + .016 * R());
-  for (let i = 0; i < 10; i++) branch(TC + .35 + .5 * R(), .15 + .35 * R(), 1.4, 0, .006);
+  for (let i = 0; i < 14; i++) fromMoon(TC + .02 * R(), .5 + .8 * R(), 2.6, 0, i / 14 * 6.2832 + (R() - .5) * .35, .2, 1.3, .006 + .006 * R());
+  for (let i = 0; i < 10; i++) branch(TC + .35 + .5 * R(), .15 + .35 * R(), 1.4, 0, .003);
   // segments, in chunks of 8 with a bounding cap
   const seg = [], chk = [];
   for (const p of paths) {
@@ -537,27 +537,48 @@ vec3 pale(vec2 u,out vec3 fogC){
     }else c+=vec3(.95,.95,1.)*glow*rise*.9;
     c=mix(c,mix(vec3(.025,.022,.03),fogC,hz),smoothstep(.7,-.7,sd)*rise);
   }
-  {                                                                            // one presence: a black shadow walking far off
-    float D=85.,X=22.+(uT-76.)*1.7;                                            // its feet are far below, lost in the fog
-    vec2 lp=vec2(u.x*D-X,(u.y-(H0-.26))*D);
-    float wk=uT*1.3,sw=.25*sin(wk);lp.y-=abs(cos(wk))*.5;lp.x-=.6*sin(wk*.5);   // stride, bob, sway
-    float dd=length((lp-vec2(0.,40.))/vec2(1.,1.15))-3.4;                       // a round head
-    dd=smin(dd,length((lp-vec2(0.,27.))/vec2(1.,2.3))-5.,3.);                    // a tall body
-    dd=smin(dd,sdSeg(lp,vec2(-4.5,33.),vec2(-5.5+3.*sin(sw),14.))-1.,2.5);       // long thin arms
-    dd=smin(dd,sdSeg(lp,vec2(4.5,33.),vec2(5.5-3.*sin(sw),14.))-1.,2.5);
-    dd=smin(dd,sdSeg(lp,vec2(0.,22.),vec2(0.,0.))-4.,4.);                        // dissolving into the fog
-    dd+=2.2*(fbm(lp*.12+vec2(0.,-uT*.6))-.5)*smoothstep(32.,8.,lp.y)+1.2*(fbm(lp*.3+uT*.2)-.5);   // smoky edges
-    float rise=smoothstep(H0-.1,H0+.1,u.y);
-    c=mix(c,vec3(.006,.005,.008),smoothstep(1.,-2.5,dd)*rise);
-    float blink=step(.12,fract(uT*.19+.3));                                     // it blinks now and then
-    vec2 e1=(lp-vec2(-1.4,40.6))*vec2(1.,2.2),e2=(lp-vec2(1.4,40.6))*vec2(1.,2.2);
-    float eye=exp(-length(e1)*2.6)+exp(-length(e2)*2.6);
-    float halo=exp(-length(e1)*1.2)+exp(-length(e2)*1.2);
-    c+=(vec3(1.,.97,.92)*eye*3.5+vec3(.75,.7,1.)*halo*.5)*rise*blink;          // two eyes you notice
-  }
   c=mix(c,fogC*1.04,smoothstep(H0+.12,H0-.25,u.y));                           // no ground: thick fog far below
   gLc=vec3(.95,.93,.9);gBack=vec3(.12,.11,.1);gBelly=vec3(.62,.6,.55);gFrill=vec3(.28,.25,.25);gDap=0.;
   return c;
+}
+// Things that fly in the Pale Realm's fog all night. Unseen, until a flash lights the fog behind one: then, for a
+// second and a half, a black shape. Abstract: a body, a long neck, a tail, wings beating.
+float sdTri(vec2 p,vec2 p0,vec2 p1,vec2 p2){
+  vec2 e0=p1-p0,e1=p2-p1,e2=p0-p2,v0=p-p0,v1=p-p1,v2=p-p2;
+  vec2 q0=v0-e0*clamp(dot(v0,e0)/dot(e0,e0),0.,1.),q1=v1-e1*clamp(dot(v1,e1)/dot(e1,e1),0.,1.),q2=v2-e2*clamp(dot(v2,e2)/dot(e2,e2),0.,1.);
+  float sg=sign(e0.x*e2.y-e0.y*e2.x);
+  vec2 dd=min(min(vec2(dot(q0,q0),sg*(v0.x*e0.y-v0.y*e0.x)),vec2(dot(q1,q1),sg*(v1.x*e1.y-v1.y*e1.x))),vec2(dot(q2,q2),sg*(v2.x*e2.y-v2.y*e2.x)));
+  return -sqrt(dd.x)*sign(dd.y);
+}
+vec2 monsterAt(int m,float t){                       // where monster m flies at t: it never stops, it wraps around
+  float fm=float(m),dir=m==1?-1.:1.,range=3.4;
+  float x=mod(t*(.05+.015*fm)*dir+fm*1.3,range)-range*.5;
+  return vec2(x,.42+.14*fm-.1*float(m==2)+.06*sin(t*.21+fm*2.));
+}
+float monster(vec2 lp,float t,float sd){            // its silhouette, in local units (heading +x)
+  float fl=sin(t*2.3+sd),fl2=sin(t*2.3+sd+.5);
+  float d=sdSeg(lp,vec2(-6.,0.),vec2(6.,.6))-2.4;
+  d=smin(d,sdSeg(lp,vec2(6.,.6),vec2(12.,3.6))-1.1,1.5);
+  d=smin(d,length((lp-vec2(14.2,4.))/vec2(2.3,1.1))-1.,1.);
+  vec2 te=vec2(-25.,-1.5+3.*sin(t*1.3+sd));
+  d=smin(d,sdSeg(lp,vec2(-6.,0.),te)-.5-.06*clamp(lp.x+25.,0.,19.),1.5);
+  for(int k=0;k<2;k++){                              // two wings, the far one a little behind
+    float f=k==0?fl:fl2,sc=k==0?1.:.85;vec2 o=vec2(k==0?0.:-1.5,0.);
+    vec2 sh=vec2(3.,1.5)+o,tip=vec2(-9.,1.5+21.*f)*sc+o,rear=vec2(-8.,.5)+o;
+    float w=sdTri(lp,sh,tip,rear);
+    vec2 en=normalize(vec2(tip.y-rear.y,rear.x-tip.x));
+    for(int i=0;i<3;i++){vec2 cc=mix(rear,tip,(float(i)+.5)/3.)-en*1.6*sign(f+.001);w=max(w,-(length(lp-cc)-2.2));}  // scalloped edge
+    d=min(d,w);
+  }
+  return d;
+}
+float fogFlash(out vec2 at){                         // a flash in the fog, right behind one of them
+  float P=6.5,k=floor(uT/P),t0=k*P+2.*hi(int(k)+101),dt=uT-t0;
+  int m=0;float best=9.;                             // behind the one nearest the moon
+  for(int i=0;i<3;i++){float ax=abs(monsterAt(i,t0).x);if(ax<best){best=ax;m=i;}}
+  at=monsterAt(m,t0)+vec2(.04,.03);
+  if(dt<0.||dt>1.8||uT<50.) return 0.;
+  return (exp(-dt*1.5)*(.8+.2*sin(dt*47.))+.9*exp(-(dt-.22)*(dt-.22)*300.))*(1.-smoothstep(1.3,1.8,dt));
 }
 uniform int uWorld;
 vec3 otherSide(vec3 d){
@@ -565,8 +586,17 @@ vec3 otherSide(vec3 d){
   vec2 u=vec2(az*.88,el);
   vec3 c,fogC;
   if(uWorld==0) c=storm(u,fogC); else c=pale(u,fogC);
-  c=serpent(c,u,fogC,-1.4+(uT-70.)*.04,.78,.55,.68,-1.,2.3);           // far, high, going right
-  c=serpent(c,u,fogC,1.3-(uT-62.)*.035,.52+.04*sin(uT*.07),.45,.74,1.,5.1);         // farther still, going left
+  c=mix(c,fogC,.45*smoothstep(.3,.8,fbm(u*vec2(3.,7.)+vec2(uT*.03,uT*.01))));     // the fog they hide in
+  vec2 at;float fl=fogFlash(at);
+  float light=fl*exp(-length((u-at)*vec2(1.,1.3))/.3);
+  c+=vec3(.95,.97,1.)*light*.9;                                                  // the fog lit from inside
+  for(int m=0;m<3;m++){
+    vec2 mp=monsterAt(m,uT);float dir=m==1?-1.:1.;
+    vec2 lp=vec2((u.x-mp.x)*dir,u.y-mp.y)*70.;
+    if(abs(lp.x)>32.||abs(lp.y)>26.) continue;
+    float sh=smoothstep(1.,-1.,monster(lp,uT,float(m)*2.1));
+    c=mix(c,vec3(.03,.03,.035),sh*clamp(light*3.,0.,1.)*.95);                   // seen only against the light
+  }
   if(uWorld==0){vec2 rg=vec2(u.x*90.+u.y*25.,u.y*14.+uT*7.);                       // rain in front
     c+=vec3(.3,.35,.45)*step(.9,hi2(ivec2(floor(rg))))*smoothstep(.5,0.,abs(fract(rg.x)-.5)*5.)*.3;}
   if(uWorld==1){vec2 ag=u*vec2(70.,70.)+vec2(uT*.5,-uT*.2);                        // ash drifting
@@ -659,6 +689,10 @@ vec3 moonEyeC1(vec3 c,vec2 q){
 uniform highp sampler2D uSeg,uChk;
 uniform int uNChk;
 uniform float uEv,uDbg;
+// Broken, not melted: the lips' width jumps from one random value to the next in straight lines (no smoothing),
+// so the edges are facets with corners, like broken glass.
+float jag(float x,float sd){float k=x*22.,i=floor(k);int row=int(sd*13.);
+  return .45+1.1*mix(hi2(ivec2(int(i),row)),hi2(ivec2(int(i)+1,row)),k-i);}
 vec4 fissures(vec3 d,out float win,out float lip){
   float tip=0.,emin=1.,hmin=0.,wmin=1.;win=0.;lip=0.;
   for(int c=0;c<1024;c++){
@@ -680,8 +714,8 @@ vec4 fissures(vec3 d,out float win,out float lip){
       float dist=length(d-A.xyz-ab*h);
       float age=uT-mix(A.w,B.w,h*f);
       float sf=mix(C.x,C.y,h*f);
-      float op=C.w*(.22*smoothstep(C.z,C.z+18.,uT)+.78*smoothstep(0.,1.4,uTc))*pow(max(sin(3.14159*sf),0.),.45)
-              *(.7+.6*vnoise(vec2(sf*26.,C.z)))*smoothstep(0.,.4,age);
+      float op=C.w*(.22*smoothstep(C.z,C.z+18.,uT)+.78*smoothstep(0.,1.4,uTc))*pow(max(sin(3.14159*sf),0.),.7)
+              *jag(sf,C.z)*smoothstep(0.,.4,age);
       float e=dist-op;                              // one shape for the whole crack: the union of its segments
       if(e<emin){emin=e;hmin=exp(-age*.9);wmin=k1.w;}
       if(f<1.) tip=max(tip,exp(-length(d-b)*300.));
@@ -772,6 +806,9 @@ void main(){
     vec3 lc=mix(vec3(1.,.25,.1),vec3(3.,2.2,1.7),fs.z);
     col+=lc*(fs.x*1.7+fs.y*.4*(1.-win))*(.75+.25*uBeat+uFlash)*uAtt+vec3(4.,3.,2.4)*fs.w*2.5;
     col+=vec3(1.,.35,.25)*uEv*.12;
+    vec2 fat;float ffl=fogFlash(fat);                    // a flash behind the sky leaks through the cracks near it
+    float leak=ffl*exp(-length((vec2(atan(d.z,d.x)*.88,asin(clamp(d.y,-1.,1.)))-fat)*vec2(1.,1.3))/.35);
+    col+=vec3(.9,.95,1.)*leak*(fs.x*2.5+fs.y*1.5);
   }
   col+=vec3(1.,.4,.3)*exp(-abs(ang-uShock)*35.)*uShockK*2.;
 

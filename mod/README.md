@@ -16,6 +16,17 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.2.1 (Bastien's look at 0.2.0)
+- **Each crack is heard**: a new sound (`fissure.ogg`, a snap like ice and ticks running away) when a crack is
+  born, a little higher or lower each time, and a small jolt of the camera.
+- **Broken, not melted**: the cracks open far less (the main fault 0.028 rad instead of 0.08) and their lips are
+  faceted, straight edges with corners, like broken glass, instead of round blobs.
+- **No empty disc where the moon was**: cracks now start under the moon, so once it has risen on, they cross
+  the place it left.
+- **The tall shadow is gone**, and so are the serpents. Instead, things fly in the Pale Realm's fog all night,
+  unseen, until a flash lights the fog behind one: for a second and a half, a black winged shape. The flash also
+  leaks through the cracks near it.
+
 ## New in 0.2.0 (C1 and the Pale Realm, ADR-016)
 - **The sky breaks for real**: the old web of cracks around the moon is gone. Cracks are now fixed in the sky,
   born on heartbeats at the moon's edge or off another crack, their tip running fast then slowing; a main fault

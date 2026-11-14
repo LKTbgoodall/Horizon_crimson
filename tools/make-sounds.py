@@ -156,9 +156,25 @@ def eye():
     return fade(echo(lowpass(voice * rough + breath, 700) * swell, 0.3, 0.35, 3, 1200), 0.25, 1.0)
 
 
+def fissure():
+    """One crack in the sky: a sharp snap like ice, ticks running away as its tip runs, a soft low knock."""
+    snap = bandpass(rng.standard_normal(int(SR * 0.12)), 1800, 12000) * np.exp(-t(0.12) * 45)
+    pieces = [(0.0, snap, 1.0)]
+    for i in range(22):
+        start = 0.02 + i * 0.028 * (1 + i * 0.06) + rng.uniform(0, 0.01)
+        length = rng.uniform(0.01, 0.035)
+        n = rng.standard_normal(int(SR * length)) * np.exp(-t(length) * rng.uniform(60, 140))
+        pieces.append((start, bandpass(n, rng.uniform(1500, 3000), rng.uniform(6000, 12000)), 0.5 * np.exp(-i * 0.12)))
+    x = t(0.6)
+    knock = sweep(0.6, 140, 55, 9) * np.exp(-x * 8) * 0.6
+    pieces.append((0.0, knock, 1.0))
+    return fade(echo(place(1.4, pieces), 0.21, 0.3, 2, 3500), 0.0, 0.3)
+
+
 if __name__ == "__main__":
     save("heartbeat", heartbeat())
     save("drone", drone(), peak=0.7)
     save("omen", omen(), peak=0.8)
     save("crack", crack())
     save("eye", eye(), peak=0.85)
+    save("fissure", fissure(), peak=0.8)

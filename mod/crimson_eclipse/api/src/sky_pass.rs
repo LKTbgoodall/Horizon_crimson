@@ -11,9 +11,8 @@
 //! version C plus `preview/abyss-climax.html`'s C1 (W2, S1), in WGSL.
 
 use crate::eye::Eye;
-use crate::fissures::{plan, Plan, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS};
+use crate::fissures::{seed_for_day, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS};
 use crate::moon::{day_of, time_of_day};
-use crate::rng::mix;
 use crate::night::{eclipse_seconds, presence};
 use crate::rise::frame;
 use crate::server::{Shared, TARGET};
@@ -36,8 +35,6 @@ pub struct Sky {
     gpu: Mutex<Option<Gpu>>,
     /// The eye, and when it was last moved.
     eye: Mutex<(Eye, Option<Instant>)>,
-    /// Tonight's fissures and the seed they were planned with.
-    fissures: Mutex<Option<(u64, Arc<Plan>)>>,
     told: AtomicBool,
 }
 
@@ -47,7 +44,6 @@ impl Sky {
             shared,
             gpu: Mutex::new(None),
             eye: Mutex::new((Eye::default(), None)),
-            fissures: Mutex::new(None),
             told: AtomicBool::new(false),
         }
     }
@@ -93,15 +89,9 @@ impl RenderHooks for Sky {
         let presence = presence(tod);
         let colors = colors(&frame, presence);
         let moon = moon_direction(tod as f32 + partial);
-        // Tonight's fissures: planned once per night, from the day.
-        let seed = mix(day_of(day_time) as u64 ^ 0xC1E5_0F15_5E5E_u64);
-        let fissures = {
-            let mut guard = lock(&self.fissures);
-            if guard.as_ref().is_none_or(|(s, _)| *s != seed) {
-                *guard = Some((seed, Arc::new(plan(seed))));
-            }
-            guard.as_ref().map(|(_, p)| Arc::clone(p))
-        };
+        // Tonight's fissures, planned once per night (shared with the sounds and the shake).
+        let seed = seed_for_day(day_of(day_time));
+        let fissures = Some(self.shared.fissures(day_time));
 
         // The camera: where it looks, for the eye.
         let inverse = w.view_proj.inverse().to_cols_array();
@@ -612,6 +602,14 @@ fn stars(d: vec3<f32>, ang: f32, a: f32) -> f32 {
 // lips part into a lens (widest mid-crack), a little through the eclipse, wide at the climax. The whole crack is
 // one shape (the union of its segments), so its rim is clean. Only the chunks whose cap holds `d` are tested.
 struct Fis { core: f32, glow: f32, heat: f32, tip: f32, win: f32, lip: f32 };
+// Broken, not melted: the lips' width jumps from one random value to the next in straight lines (no
+// smoothing), so the edges are facets with corners, like broken glass.
+fn jag(x: f32, sd: f32) -> f32 {
+    let k = x * 22.0;
+    let i = floor(k);
+    let row = i32(sd * 13.0);
+    return 0.45 + 1.1 * mix(hi(vec2<i32>(i32(i), row)), hi(vec2<i32>(i32(i) + 1, row)), k - i);
+}
 fn fissures(d: vec3<f32>, s: f32) -> Fis {
     let tc = s - 60.5;
     var tip = 0.0;
@@ -640,8 +638,7 @@ fn fissures(d: vec3<f32>, s: f32) -> Fis {
             let age = s - mix(pa.w, pb.w, h * f);
             let sf = mix(pc.x, pc.y, h * f);
             let op = pc.w * (0.22 * ss(pc.z, pc.z + 18.0, s) + 0.78 * ss(0.0, 1.4, tc))
-                * pow(max(sin(3.14159 * sf), 0.0), 0.45) * (0.7 + 0.6 * vnoise(vec2<f32>(sf * 26.0, pc.z)))
-                * ss(0.0, 0.4, age);
+                * pow(max(sin(3.14159 * sf), 0.0), 0.7) * jag(sf, pc.z) * ss(0.0, 0.4, age);
             let e = dist - op;
             if (e < emin) {
                 emin = e;
@@ -742,133 +739,96 @@ fn pale(uv: vec2<f32>) -> vec3<f32> {
         c += vec3<f32>(0.95, 0.95, 1.0) * glow * rise * 0.9;
         c = mix(c, mix(vec3<f32>(0.025, 0.022, 0.03), PALE_FOG, hz), ss(0.7, -0.7, sd) * rise);
     }
-    // A black shadow walking far off, two eyes you notice; its feet are far below in the fog.
-    {
-        let dist = 85.0;
-        var lp = vec2<f32>(uv.x * dist - (22.0 + (t - 76.0) * 1.7), (uv.y - (PALE_H0 - 0.26)) * dist);
-        let wk = t * 1.3;
-        let sw = 0.25 * sin(wk);
-        lp.y -= abs(cos(wk)) * 0.5;
-        lp.x -= 0.6 * sin(wk * 0.5);
-        var dd = length((lp - vec2<f32>(0.0, 40.0)) / vec2<f32>(1.0, 1.15)) - 3.4;
-        dd = smin(dd, length((lp - vec2<f32>(0.0, 27.0)) / vec2<f32>(1.0, 2.3)) - 5.0, 3.0);
-        dd = smin(dd, sd_seg(lp, vec2<f32>(-4.5, 33.0), vec2<f32>(-5.5 + 3.0 * sin(sw), 14.0)) - 1.0, 2.5);
-        dd = smin(dd, sd_seg(lp, vec2<f32>(4.5, 33.0), vec2<f32>(5.5 - 3.0 * sin(sw), 14.0)) - 1.0, 2.5);
-        dd = smin(dd, sd_seg(lp, vec2<f32>(0.0, 22.0), vec2<f32>(0.0, 0.0)) - 4.0, 4.0);
-        dd += 2.2 * (fbm(lp * 0.12 + vec2<f32>(0.0, -t * 0.6)) - 0.5) * ss(32.0, 8.0, lp.y) + 1.2 * (fbm(lp * 0.3 + t * 0.2) - 0.5);
-        let rise = ss(PALE_H0 - 0.1, PALE_H0 + 0.1, uv.y);
-        c = mix(c, vec3<f32>(0.006, 0.005, 0.008), ss(1.0, -2.5, dd) * rise);
-        let blink = step(0.12, fract(t * 0.19 + 0.3));
-        let e1 = (lp - vec2<f32>(-1.4, 40.6)) * vec2<f32>(1.0, 2.2);
-        let e2 = (lp - vec2<f32>(1.4, 40.6)) * vec2<f32>(1.0, 2.2);
-        let eye = exp(-length(e1) * 2.6) + exp(-length(e2) * 2.6);
-        let halo = exp(-length(e1) * 1.2) + exp(-length(e2) * 1.2);
-        c += (vec3<f32>(1.0, 0.97, 0.92) * eye * 3.5 + vec3<f32>(0.75, 0.7, 1.0) * halo * 0.5) * rise * blink;
-    }
     return mix(c, PALE_FOG * 1.04, ss(PALE_H0 + 0.12, PALE_H0 - 0.25, uv.y));
 }
 
-// A serpent dragon seen side-on, far off in the Pale Realm's haze: a shaded tube lit from above, scales, a
-// dorsal frill on spines, fins, a tail fin, a dragon skull with horns and an amber eye. x runs from the snout back.
-fn serpent(c: vec3<f32>, uv: vec2<f32>, hx: f32, y0: f32, sc: f32, fog: f32, dir: f32, seed: f32) -> vec3<f32> {
+// Things that fly in the Pale Realm's fog all night. Unseen, until a flash lights the fog behind one: then, for
+// a second and a half, a black shape. Abstract on purpose: a body, a long neck, a tail, wings beating.
+fn sd_tri(p: vec2<f32>, p0: vec2<f32>, p1: vec2<f32>, p2: vec2<f32>) -> f32 {
+    let e0 = p1 - p0;
+    let e1 = p2 - p1;
+    let e2 = p0 - p2;
+    let v0 = p - p0;
+    let v1 = p - p1;
+    let v2 = p - p2;
+    let q0 = v0 - e0 * clamp(dot(v0, e0) / dot(e0, e0), 0.0, 1.0);
+    let q1 = v1 - e1 * clamp(dot(v1, e1) / dot(e1, e1), 0.0, 1.0);
+    let q2 = v2 - e2 * clamp(dot(v2, e2) / dot(e2, e2), 0.0, 1.0);
+    let sg = sign(e0.x * e2.y - e0.y * e2.x);
+    let dd = min(min(vec2<f32>(dot(q0, q0), sg * (v0.x * e0.y - v0.y * e0.x)), vec2<f32>(dot(q1, q1), sg * (v1.x * e1.y - v1.y * e1.x))),
+        vec2<f32>(dot(q2, q2), sg * (v2.x * e2.y - v2.y * e2.x)));
+    return -sqrt(dd.x) * sign(dd.y);
+}
+// Where flying thing `m` is at `t`: it never stops, it wraps around the sky.
+fn monster_at(m: i32, t: f32) -> vec2<f32> {
+    let fm = f32(m);
+    let dir = select(1.0, -1.0, m == 1);
+    let range = 3.4;
+    let v = t * (0.05 + 0.015 * fm) * dir + fm * 1.3;
+    let x = v - range * floor(v / range) - range * 0.5;
+    return vec2<f32>(x, 0.42 + 0.14 * fm - select(0.0, 0.1, m == 2) + 0.06 * sin(t * 0.21 + fm * 2.0));
+}
+// Its silhouette, in local units, heading +x.
+fn monster(lp: vec2<f32>, t: f32, sd: f32) -> f32 {
+    var d = sd_seg(lp, vec2<f32>(-6.0, 0.0), vec2<f32>(6.0, 0.6)) - 2.4;
+    d = smin(d, sd_seg(lp, vec2<f32>(6.0, 0.6), vec2<f32>(12.0, 3.6)) - 1.1, 1.5);
+    d = smin(d, length((lp - vec2<f32>(14.2, 4.0)) / vec2<f32>(2.3, 1.1)) - 1.0, 1.0);
+    let te = vec2<f32>(-25.0, -1.5 + 3.0 * sin(t * 1.3 + sd));
+    d = smin(d, sd_seg(lp, vec2<f32>(-6.0, 0.0), te) - 0.5 - 0.06 * clamp(lp.x + 25.0, 0.0, 19.0), 1.5);
+    for (var k = 0; k < 2; k++) {
+        let f = sin(t * 2.3 + sd + select(0.5, 0.0, k == 0));
+        let sc = select(0.85, 1.0, k == 0);
+        let o = vec2<f32>(select(-1.5, 0.0, k == 0), 0.0);
+        let sh = vec2<f32>(3.0, 1.5) + o;
+        let tip = vec2<f32>(-9.0, 1.5 + 21.0 * f) * sc + o;
+        let rear = vec2<f32>(-8.0, 0.5) + o;
+        var w = sd_tri(lp, sh, tip, rear);
+        let en = normalize(vec2<f32>(tip.y - rear.y, rear.x - tip.x));
+        for (var i = 0; i < 3; i++) {
+            let cc = mix(rear, tip, (f32(i) + 0.5) / 3.0) - en * 1.6 * sign(f + 0.001);
+            w = max(w, -(length(lp - cc) - 2.2));
+        }
+        d = min(d, w);
+    }
+    return d;
+}
+// A flash in the fog, right behind the flying thing nearest the moon: xy where, z how bright.
+fn fog_flash() -> vec3<f32> {
     let t = u.a.x;
-    let x = (uv.x - hx) * dir;
-    let xs = x / sc;
-    if (xs < -0.1 || xs > 1.58) { return c; }
-    let lc = vec3<f32>(0.95, 0.93, 0.9);
-    let back = vec3<f32>(0.12, 0.11, 0.1);
-    let belly = vec3<f32>(0.62, 0.6, 0.55);
-    let frill = vec3<f32>(0.28, 0.25, 0.25);
-    let ph = xs * 7.0 - t * 1.6 + seed;
-    let amp = sc * (0.006 + 0.045 * clamp(xs / 1.5, 0.0, 1.0));
-    let dy = uv.y - (y0 + amp * sin(ph));
-    let g0 = (xs - 0.035) / 0.045;
-    let r = sc * (0.044 * exp(-g0 * g0) + 0.022 * ss(-0.085, -0.01, xs) * (1.0 - ss(-0.01, 0.04, xs))
-        + 0.013 * ss(-0.06, 0.03, xs) * (1.0 - ss(0.02, 0.12, xs))
-        + 0.04 * pow(max(sin(3.14159 * clamp((xs - 0.05) / 1.45, 0.0, 1.0)), 0.0), 0.9));
-    let ld = normalize(vec3<f32>(0.2, 0.85, 0.5));
-    var col = vec3<f32>(0.0);
-    var a = 0.0;
-    for (var k = 0; k < 2; k++) {
-        let fp = select(0.78, 0.3, k == 0);
-        let st = 0.45 * sin(t * 1.6 + fp * 6.0 + seed);
-        let fq = rot(-0.9 - st) * vec2<f32>(xs - fp, (dy + r * 0.4) / sc);
-        let ft = clamp(-fq.y / 0.075, 0.0, 1.0);
-        let hw = 0.018 * sin(3.14159 * pow(ft, 0.7)) * (1.0 - 0.3 * ft);
-        if (fq.y < 0.0 && fq.y > -0.075 && abs(fq.x - 0.012 * ft * ft) < hw) {
-            let e = abs(fq.x - 0.012 * ft * ft) / max(hw, 0.0001);
-            col = mix(vec3<f32>(0.16, 0.13, 0.08), vec3<f32>(0.45, 0.16, 0.08), ft * 0.7) * (0.55 + 0.6 * (1.0 - e)) + lc * 0.08;
-            col *= 0.8 + 0.3 * ss(0.1, 0.0, abs(fract(e * 3.0 + ft * 2.0) - 0.5));
-            a = 1.0;
+    let period = 6.5;
+    let k = floor(t / period);
+    let t0 = k * period + 2.0 * hk(i32(k) + 101);
+    let dt = t - t0;
+    var m = 0;
+    var best = 9.0;
+    for (var i = 0; i < 3; i++) {
+        let ax = abs(monster_at(i, t0).x);
+        if (ax < best) {
+            best = ax;
+            m = i;
         }
     }
-    if (xs > 1.36 && xs < 1.56) {
-        let tf = sc * 0.055 * ss(1.36, 1.54, xs) * (1.0 - ss(1.53, 1.56, xs));
-        if (abs(dy) < tf) {
-            col = frill * 0.6 * (0.5 + 0.5 * abs(dy) / tf) + lc * 0.1;
-            a = 0.85;
-        }
-    }
-    for (var k = 0; k < 2; k++) {
-        let hb = select(0.075, 0.055, k == 0);
-        let hl = select(0.07, 0.09, k == 0);
-        let hq = vec2<f32>(xs - hb, (dy - r * 0.7) / sc);
-        let ht = clamp(hq.x / hl, 0.0, 1.0);
-        let hy = 0.035 * ht * (1.0 - 0.35 * ht) + select(-0.004, 0.0, k == 0);
-        let hw = 0.009 * (1.0 - ht);
-        if (hq.x > 0.0 && hq.x < hl && abs(hq.y - hy) < hw) {
-            col = mix(vec3<f32>(0.55, 0.48, 0.36), vec3<f32>(0.18, 0.14, 0.1), ht) * (0.6 + 0.6 * ss(-hw, hw, hq.y - hy)) * (0.5 + 0.5 * lc);
-            a = 1.0;
-        }
-    }
-    let fh = sc * 0.04 * ss(0.06, 0.16, xs) * (1.0 - ss(1.05, 1.4, xs));
-    let spn = x * 28.0 / (sc * 3.14159);
-    let top = r + fh * (0.5 + 0.5 * pow(abs(cos(spn * 3.14159)), 3.0));
-    if (dy > r * 0.9 && dy < top) {
-        let m = ss(r, top, dy);
-        col = mix(frill * 0.75, frill, m) * (0.45 + 0.6 * m) * (0.6 + 0.5 * lc) * (0.85 + 0.3 * fbm(vec2<f32>(x * 80.0 / sc, dy * 200.0 / sc)));
-        col = mix(col, vec3<f32>(0.12, 0.06, 0.05), ss(0.14, 0.0, abs(fract(spn) - 0.5)));
-        a = 0.8;
-    }
-    let v = dy / max(r, 0.00001);
-    if (abs(v) < 1.0) {
-        let n = vec3<f32>(0.0, v, sqrt(1.0 - v * v));
-        let diff = max(dot(n, ld), 0.0);
-        var alb = mix(belly, back, ss(-0.35, 0.25, v));
-        alb = mix(alb, back * 0.7, 0.45 * ss(-0.1, 0.6, v) * fbm(vec2<f32>(x * 25.0 / sc, v * 2.0) + seed + 7.0));
-        alb *= 0.55 + 0.8 * fbm(vec2<f32>(x * 40.0 / sc, v * 3.0) + seed);
-        if (v < -0.3) { alb *= 0.75 + 0.25 * ss(0.0, 0.25, abs(fract(x * 90.0 / sc) - 0.5)); }
-        var g = vec2<f32>(x * 110.0 / sc, asin(v) * 5.0);
-        g.x += 0.5 * fract(floor(g.y) * 0.5) * 2.0;
-        alb *= 0.8 + 0.2 * ss(0.48, 0.3, length(fract(g) - vec2<f32>(0.5, 0.2)));
-        col = alb * (0.12 + 1.25 * diff * lc);
-        col += lc * 1.2 * pow(max(dot(n, normalize(ld + vec3<f32>(0.0, 0.0, 1.0))), 0.0), 60.0) * 0.25 * fbm(vec2<f32>(x * 120.0 / sc, v * 6.0));
-        let knob = ss(0.35, 0.0, length(vec2<f32>(fract(x * 45.0 / sc) - 0.5, (v - 0.82) * 3.0))) * ss(0.05, 0.15, xs);
-        col = mix(col, vec3<f32>(0.05, 0.06, 0.04), knob * 0.5) + lc * knob * diff * 0.15;
-        col += vec3<f32>(0.35, 0.12, 0.05) * pow(1.0 - n.z, 2.0) * ss(0.0, -0.8, v) * 0.4;
-        col += lc * 0.45 * pow(1.0 - n.z, 3.0);
-        if (xs < 0.07 && xs > -0.08 && abs(v + 0.12) < 0.05) { col *= 0.3; }
-        if (xs < -0.06 && v > 0.2 && v < 0.45) { col *= 0.6; }
-        let ex = (xs - 0.03) * 48.0;
-        let ey = (v - 0.4) * 4.5;
-        if (ex * ex + ey * ey < 1.0) {
-            col = mix(vec3<f32>(1.0, 0.62, 0.12), vec3<f32>(0.25, 0.05, 0.0), ss(0.2, 1.0, ex * ex + ey * ey));
-            col *= ss(0.12, 0.3, abs(ex));
-            col += vec3<f32>(1.0, 0.7, 0.3) * 0.25;
-        }
-        if (xs > 0.0 && xs < 0.07) { col *= 1.0 - 0.4 * ss(0.6, 0.9, v) * ss(0.15, 0.5, abs(ex) / 8.0); }
-        a = 1.0;
-    }
-    return mix(c, mix(col, PALE_FOG, fog), a);
+    let at = monster_at(m, t0) + vec2<f32>(0.04, 0.03);
+    if (dt < 0.0 || dt > 1.8 || t < 50.0) { return vec3<f32>(at, 0.0); }
+    let e = (exp(-dt * 1.5) * (0.8 + 0.2 * sin(dt * 47.0)) + 0.9 * exp(-(dt - 0.22) * (dt - 0.22) * 300.0)) * (1.0 - ss(1.3, 1.8, dt));
+    return vec3<f32>(at, e);
 }
 
-// What is behind the sky along `d`: the Pale Realm, two far serpents, drifting ash.
-fn other_side(d: vec3<f32>) -> vec3<f32> {
+// What is behind the sky along `d`: the Pale Realm, its fog, the things flying in it (seen only in a flash), ash.
+fn other_side(d: vec3<f32>, flash: vec3<f32>) -> vec3<f32> {
     let t = u.a.x;
     let uv = vec2<f32>(atan2(d.z, d.x) * 0.88, asin(clamp(d.y, -1.0, 1.0)));
     var c = pale(uv);
-    c = serpent(c, uv, -1.4 + (t - 70.0) * 0.04, 0.78, 0.55, 0.68, -1.0, 2.3);
-    c = serpent(c, uv, 1.3 - (t - 62.0) * 0.035, 0.52 + 0.04 * sin(t * 0.07), 0.45, 0.74, 1.0, 5.1);
+    c = mix(c, PALE_FOG, 0.45 * ss(0.3, 0.8, fbm(uv * vec2<f32>(3.0, 7.0) + vec2<f32>(t * 0.03, t * 0.01))));
+    let light = flash.z * exp(-length((uv - flash.xy) * vec2<f32>(1.0, 1.3)) / 0.3);
+    c += vec3<f32>(0.95, 0.97, 1.0) * light * 0.9;
+    for (var m = 0; m < 3; m++) {
+        let mp = monster_at(m, t);
+        let lp = vec2<f32>((uv.x - mp.x) * select(1.0, -1.0, m == 1), uv.y - mp.y) * 70.0;
+        if (abs(lp.x) > 32.0 || abs(lp.y) > 26.0) { continue; }
+        let shape = ss(1.0, -1.0, monster(lp, t, f32(m) * 2.1));
+        c = mix(c, vec3<f32>(0.03, 0.03, 0.035), shape * clamp(light * 3.0, 0.0, 1.0) * 0.95);
+    }
     let ag = uv * 70.0 + vec2<f32>(t * 0.5, -t * 0.2);
     let ai = vec2<i32>(floor(ag));
     let af = fract(ag) - 0.5 - (hi2(ai) - 0.5) * 0.5;
@@ -972,8 +932,9 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     let present = u.g.z;
     let fs = fissures(d, s);
     let win = fs.win * present;
+    let flash = fog_flash();
     if (win > 0.0) {
-        col = mix(col, other_side(d) * (1.0 - 0.55 * fs.lip), win);
+        col = mix(col, other_side(d, flash) * (1.0 - 0.55 * fs.lip), win);
         weight = max(weight, win);
     }
     let hush = select(0.0, ss(58.3, 59.5, s), s < 60.5);
@@ -982,6 +943,10 @@ fn sky(dir: vec3<f32>) -> vec4<f32> {
     col += (lc * (fs.core * 1.7 + fs.glow * 0.4 * (1.0 - fs.win)) * (0.75 + 0.25 * u.a.z + u.d.y) * att
         + vec3<f32>(4.0, 3.0, 2.4) * fs.tip * 2.5) * present;
     col += vec3<f32>(1.0, 0.35, 0.25) * u.g.x * 0.12 * present;
+    // A flash behind the sky leaks through the cracks near it.
+    let duv = vec2<f32>(atan2(d.z, d.x) * 0.88, asin(clamp(d.y, -1.0, 1.0)));
+    let leak = flash.z * exp(-length((duv - flash.xy) * vec2<f32>(1.0, 1.3)) / 0.35);
+    col += vec3<f32>(0.9, 0.95, 1.0) * leak * (fs.core * 2.5 + fs.glow * 1.5) * present;
     weight = max(weight, max(fs.core, max(fs.glow * 0.6, fs.tip)) * present);
     col += vec3<f32>(1.0, 0.4, 0.3) * exp(-abs(ang - u.d.z) * 35.0) * u.d.w * 2.0;
     if (ang < 1.7) {

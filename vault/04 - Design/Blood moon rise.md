@@ -117,6 +117,12 @@ Bastien turned the ocean down ("trouvons autre chose"). Rather than guess again,
   - **Bastien picked S1 · Spire** (2026-11-14) → [[ADR-016 C1 rise and the Pale Realm]]. The other candidates stay in the preview for reference.
 - Default world is now W2 (`?w=1` for Storm). Ground objects use local units at their own distance, so they can later become real places in a dimension.
 
+### First look in game, 0.2.0 → 0.2.1 (2026-11-14)
+Bastien's screenshots of 0.2.0: the openings looked like blobs ("des pâtés"), not breaks; a big hole where the moon had been (crack roots ringing its old place); no sound on new cracks; remove the tall shadow; and the monsters were too visible: people must not know what awaits them.
+- **Cracks**: openings cut to about a third, lips faceted (piecewise straight width, no smoothing), cracks start under the moon (no empty disc). A sound per crack (`fissure.ogg`) and a small jolt.
+- **What flies there**: three winged things roam the Pale Realm's fog all night, on wrapping paths, never stopping. They are invisible except when a flash lights the fog right behind one (every 6.5 s or so, behind the one nearest the moon): for about 1.5 s, an abstract black winged shape against the light. Like seeing a shape in a cloud in a lightning flash. The flash leaks through the cracks near it.
+- Removed: the black shadow walker, the far serpents (the Spire stays).
+
 ## Next
 - Preview page with **3 truly different stagings** of the full minute: done, `preview/blood-moon-rise.html` (A · The Wound, B · Shattered Sky, C · The Abyss; see the journal of 2026-11-14). Bastien picked **C**.
 - In the preview the eye's pupil drifts toward where the player looks and narrows when the crosshair is on the moon: a proposal for "follows the player", to confirm.

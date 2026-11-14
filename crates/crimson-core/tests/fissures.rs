@@ -1,4 +1,6 @@
-use crimson_core::fissures::{plan, CHUNK, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS};
+use crimson_core::fissures::{
+    plan, seed_for_day, CHUNK, CHUNK_FLOATS, MAX_CHUNKS, MAX_SEGMENTS, SEGMENT_FLOATS,
+};
 use crimson_core::rise::{beat_time, beats_at, EYE_OPENS};
 
 fn len(v: [f32; 3]) -> f32 {
@@ -90,4 +92,26 @@ fn the_flash_is_dark_before_the_first_crack_and_fades() {
     assert_eq!(p.flash(first - 0.5), 0.0);
     assert!(p.flash(first) > 0.5);
     assert!(p.flash(first + 0.9) < p.flash(first + 0.1));
+}
+
+#[test]
+fn each_crack_birth_is_heard_once() {
+    let p = plan(seed_for_day(9));
+    let all: usize = p.events_between(-1.0, 70.0).count();
+    assert_eq!(all, p.events.len());
+    // Tick by tick, nothing is heard twice and nothing is missed.
+    let mut heard = 0;
+    for tick in 0..1400 {
+        heard += p
+            .events_between(tick as f32 / 20.0, (tick + 1) as f32 / 20.0)
+            .count();
+    }
+    assert_eq!(
+        heard,
+        p.events
+            .iter()
+            .filter(|(t, _)| *t > 0.0 && *t <= 70.0)
+            .count()
+    );
+    assert_ne!(seed_for_day(9), seed_for_day(10));
 }

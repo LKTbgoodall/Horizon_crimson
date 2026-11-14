@@ -1,13 +1,14 @@
 //! Server side: ticks the night with the overworld clock and runs the test
 //! command. The rules are `crate::night`'s; this file only talks to Horizon.
 
+use crate::fissures::{plan, seed_for_day, Plan};
 use crate::moon::{day_of, time_of_day};
 use crate::night::{Night, Phase};
 use horizon_client::mod_api::{
     Flow, Host, NativeCommand, PerformCommandEvent, RegisterCommandsEvent, Text,
 };
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 /// `info` only passes for targets under `horizon`.
@@ -28,6 +29,8 @@ pub struct Shared {
     clock: Mutex<Option<(i64, f32, Instant)>>,
     /// The hour of the last client tick that asked for sounds, or [`NO_DAY`].
     sound_tick: AtomicI64,
+    /// Tonight's fissures and the day they were planned for.
+    fissures: Mutex<Option<(i64, Arc<Plan>)>>,
 }
 
 impl Default for Shared {
@@ -37,6 +40,7 @@ impl Default for Shared {
             showing: AtomicI64::new(NO_DAY),
             clock: Mutex::new(None),
             sound_tick: AtomicI64::new(NO_DAY),
+            fissures: Mutex::new(None),
         }
     }
 }
@@ -67,6 +71,20 @@ impl Shared {
     pub fn swap_sound_tick(&self, now: Option<i64>) -> Option<i64> {
         let last = self.sound_tick.swap(now.unwrap_or(NO_DAY), Ordering::Relaxed);
         (last != NO_DAY).then_some(last)
+    }
+
+    /// The fissures of the blood moon of `day_time`'s day, planned once.
+    pub fn fissures(&self, day_time: i64) -> Arc<Plan> {
+        let day = day_of(day_time);
+        let mut guard = self.fissures.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if let Some((d, p)) = guard.as_ref() {
+            if *d == day {
+                return Arc::clone(p);
+            }
+        }
+        let p = Arc::new(plan(seed_for_day(day)));
+        *guard = Some((day, Arc::clone(&p)));
+        p
     }
 
     fn clock(&self) -> MutexGuard<'_, Option<(i64, f32, Instant)>> {

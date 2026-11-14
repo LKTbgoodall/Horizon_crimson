@@ -84,6 +84,14 @@ impl Plan {
             .sum()
     }
 
+    /// The cracks born after `after` and up to `until` (seconds): the strength of each, for its sound.
+    pub fn events_between(&self, after: f32, until: f32) -> impl Iterator<Item = f32> + '_ {
+        self.events
+            .iter()
+            .filter(move |(t, _)| *t > after && *t <= until)
+            .map(|(_, k)| *k)
+    }
+
     /// The segments as the shader reads them: per segment `a, ta, b, tb, along, born, opening`.
     pub fn segment_floats(&self) -> Vec<f32> {
         let mut out = Vec::with_capacity(self.segments.len() * SEGMENT_FLOATS);
@@ -187,7 +195,8 @@ impl Planner {
         let right = norm(cross(m, [0.0, 1.0, 0.0]));
         let up = cross(right, m);
         let t = add(scale(right, th.cos()), scale(up, th.sin()));
-        let r = radius * 0.97;
+        // From under the moon: once it has moved on, no empty disc is left where it was.
+        let r = radius * 0.3;
         (
             norm(add(scale(m, r.cos()), scale(t, r.sin()))),
             norm(add(scale(m, -r.sin()), scale(t, r.cos()))),
@@ -281,6 +290,11 @@ impl Planner {
     }
 }
 
+/// The seed of the fissures of the blood moon on `day`: every client of a world sees the same sky.
+pub fn seed_for_day(day: i64) -> u64 {
+    crate::rng::mix(day as u64 ^ 0xC1E5_0F15_5E5E)
+}
+
 /// The fissures of the night with `seed`. The same seed gives the same plan.
 pub fn plan(seed: u64) -> Plan {
     let mut pl = Planner {
@@ -294,8 +308,8 @@ pub fn plan(seed: u64) -> Plan {
     let tf = beat_time(18.0);
     let (lp, lh) = pl.limb(tf, std::f32::consts::PI - 0.45);
     let (rp, rh) = pl.limb(tf, 0.4);
-    let left = pl.walk(lp, lh, 1.3, 0.1, 2.2, 0.08);
-    let right = pl.walk(rp, rh, 1.3, 0.1, 2.2, 0.08);
+    let left = pl.walk(lp, lh, 1.3, 0.1, 2.2, 0.028);
+    let right = pl.walk(rp, rh, 1.3, 0.1, 2.2, 0.028);
     for (k, (n, s)) in [
         (18.0, 0.2),
         (24.0, 0.38),
@@ -321,13 +335,13 @@ pub fn plan(seed: u64) -> Plan {
                 flicker: 0.4,
                 jitter: 0.22,
                 width: 1.0,
-                opening: 0.01,
+                opening: 0.004,
             },
         );
     }
     for n in [34.0, 43.0, 45.0, 51.0] {
         let len = 0.15 + 0.3 * pl.unit();
-        pl.branch(beat_time(n), len, 0.8, 0.25, 0.006);
+        pl.branch(beat_time(n), len, 0.8, 0.25, 0.0025);
     }
     // Faster and faster toward the climax.
     let mut n = 58.0;
@@ -343,12 +357,12 @@ pub fn plan(seed: u64) -> Plan {
                     flicker: 0.35,
                     jitter: 0.22,
                     width: 1.0,
-                    opening: 0.01,
+                    opening: 0.004,
                 },
             );
         } else {
             let len = 0.12 + 0.3 * pl.unit();
-            pl.branch(beat_time(n), len, 0.9, 0.22, 0.006);
+            pl.branch(beat_time(n), len, 0.9, 0.22, 0.0025);
         }
         n += if n < 72.0 { 2.0 } else { 1.0 };
     }
@@ -357,7 +371,7 @@ pub fn plan(seed: u64) -> Plan {
         let t = EYE_OPENS + 0.02 * pl.unit();
         let len = 0.5 + 0.8 * pl.unit();
         let th = i as f32 / 14.0 * tau + (pl.unit() - 0.5) * 0.35;
-        let opening = 0.014 + 0.016 * pl.unit();
+        let opening = 0.006 + 0.006 * pl.unit();
         pl.moon_crack(
             t,
             th,
@@ -374,7 +388,7 @@ pub fn plan(seed: u64) -> Plan {
     for _ in 0..10 {
         let t = EYE_OPENS + 0.35 + 0.5 * pl.unit();
         let len = 0.15 + 0.35 * pl.unit();
-        pl.branch(t, len, 1.4, 0.0, 0.006);
+        pl.branch(t, len, 1.4, 0.0, 0.003);
     }
 
     // Segments, in chunks with a bounding cap.
