@@ -454,8 +454,8 @@ vec3 storm(vec2 u,out vec3 fogC){
   fogC=vec3(.05,.055,.075)+vec3(.2,.25,.4)*fl*.3;
   return c;
 }
-// W2 · Pale Realm: a real place with its own horizon. Pale dunes running to it in perspective, black monoliths,
-// the ribs of something huge half buried, a colossus walking far off in the fog; in its sky a black sun,
+// W2 · Pale Realm: the sky of a real place. No ground in sight: far below, thick fog, and out of it rise the ribs
+// of something huge and a colossus wading far off; in its sky a black sun,
 // floating black shards, drifting fog banks. Things on the ground use local units at their own distance D.
 float sdSeg(vec2 p,vec2 a,vec2 b){vec2 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h);}
 vec3 pale(vec2 u,out vec3 fogC){
@@ -476,35 +476,24 @@ vec3 pale(vec2 u,out vec3 fogC){
     c=mix(c,mix(vec3(.03),fogC,.1+.35*hi(k+11)),smoothstep(1.02,.98,sd));
     c+=vec3(1.)*exp(-abs(sd-1.)*30.)*.12;
   }
-  if(u.y<H0){                                                                  // its ground: pale dunes
-    float a=H0-u.y,D=1./tan(max(a,.002));vec2 gp=vec2(u.x*D,D);
-    float du=.5+.5*sin(gp.y*.35+gp.x*.08+3.*fbm(gp*.05));
-    vec3 g=vec3(.9,.88,.83)*(.84+.16*du)-vec3(.06)*pow(1.-du,4.);
-    c=mix(g,fogC,1.-exp(-D*.025));
-  }
-  {                                                                            // a colossus walking, far off
+  float rise=smoothstep(H0-.06,H0+.16,u.y);                                   // things rise out of the fog below
+  {                                                                            // a colossus wading far off in the fog
     float D=85.,X=-60.+(uT-60.)*.6;vec2 lp=vec2(u.x*D-X,(u.y-H0)*D+1.);
     float sw=.38*sin(uT*.55);vec2 hip=vec2(0.,22.);
     float dd=min(sdSeg(lp,hip,vec2(7.*sin(sw),0.)),sdSeg(lp,hip,vec2(-7.*sin(sw),0.)))-.55;
     dd=min(dd,sdSeg(lp,hip,vec2(.6,32.))-1.5);
     dd=min(dd,length(lp-vec2(1.,35.5))-1.5);
     dd=min(dd,min(sdSeg(lp,vec2(.6,31.),vec2(-2.+4.*sin(sw),12.)),sdSeg(lp,vec2(.6,31.),vec2(3.-4.*sin(sw),12.)))-.35);
-    c=mix(c,mix(vec3(.08,.075,.075),fogC,.38),smoothstep(.25,-.25,dd));
+    c=mix(c,mix(vec3(.08,.075,.075),fogC,.38),smoothstep(.25,-.25,dd)*rise);
   }
   for(int k=0;k<6;k++){                                                        // ribs of something buried
     float fk=float(k),D=42.;
     vec2 lp=vec2(u.x*D-(-18.+fk*6.5),(u.y-H0)*D+1.);
     vec2 q=lp-vec2(7.,0.);float ra=atan(q.y,q.x),R=13.-fk*.6;
     float rib=smoothstep(.9,.5,abs(length(q)-R))*step(0.,lp.y)*smoothstep(2.9,2.6,ra)*smoothstep(.2,.45,ra);
-    c=mix(c,mix(vec3(.3,.29,.28),fogC,.42),rib);
+    c=mix(c,mix(vec3(.3,.29,.28),fogC,.42),rib*rise);
   }
-  for(int k=0;k<7;k++){                                                        // black monoliths, far to near
-    float fk=float(k),D=110.-fk*11.,Hm=5.+7.*hi(k+21),W=.8+1.*hi(k+31);
-    vec2 lp=vec2(u.x*D-(hi(k+41)-.5)*D*1.6,(u.y-H0)*D+1.);
-    float top=Hm-1.5*hi(k+51)*smoothstep(-W,W,lp.x);                           // a broken, slanted top
-    float m=step(abs(lp.x),W*(1.-.12*lp.y/Hm))*step(0.,lp.y)*step(lp.y,top);
-    c=mix(c,mix(vec3(.02),fogC,.75*(1.-exp(-D*.012))),m);
-  }
+  c=mix(c,fogC*1.04,smoothstep(H0+.12,H0-.25,u.y));                           // no ground: thick fog far below
   gLc=vec3(.95,.93,.9);gBack=vec3(.12,.11,.1);gBelly=vec3(.62,.6,.55);gFrill=vec3(.28,.25,.25);gDap=0.;
   return c;
 }
@@ -514,8 +503,8 @@ vec3 otherSide(vec3 d){
   vec2 u=vec2(az*.88,el);
   vec3 c,fogC;
   if(uWorld==0) c=storm(u,fogC); else c=pale(u,fogC);
-  c=serpent(c,u,fogC,-1.4+(uT-70.)*.04,.78,.55,.68,-1.,2.3);           // far, in the haze
-  c=serpent(c,u,fogC,1.6-(uT-60.)*.075,.45+.07*sin(uT*.09),1.6,.15,1.,0.);          // near, crossing behind the moon
+  c=serpent(c,u,fogC,-1.4+(uT-70.)*.04,.78,.55,.68,-1.,2.3);           // far, high, going right
+  c=serpent(c,u,fogC,1.3-(uT-62.)*.035,.52+.04*sin(uT*.07),.45,.74,1.,5.1);         // farther still, going left
   if(uWorld==0){vec2 rg=vec2(u.x*90.+u.y*25.,u.y*14.+uT*7.);                       // rain in front
     c+=vec3(.3,.35,.45)*step(.9,hi2(ivec2(floor(rg))))*smoothstep(.5,0.,abs(fract(rg.x)-.5)*5.)*.3;}
   if(uWorld==1){vec2 ag=u*vec2(70.,70.)+vec2(uT*.5,-uT*.2);                        // ash drifting

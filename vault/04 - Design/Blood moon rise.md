@@ -101,6 +101,11 @@ Bastien turned the ocean down ("trouvons autre chose"). Rather than guess again,
 
 **Bastien's verdict (2026-11-14)**: no to the upside-down overworld (removed). Yes to Storm. Pale is the most interesting (a truly white world, to push), but you could not see anything: it must show that a real world is there, not a white backdrop. And the long-term goal: **players will be able to go into this other world later**, so it must be a real place.
 - **Pale Realm, now a place**: its own horizon (0.24 rad up in our sky) and ground, pale dunes running to it in perspective in the fog. Black monoliths with broken tops stand at distances from 44 to 110, and the ribs of something huge are half buried at 42. A **colossus** walks slowly far off (distance 85, about 37 units tall): long legs striding, long arms, head in the fog; it crosses behind the moon area during the night. In its sky: a bigger black sun with a thin bright ring and fine rays, floating black shards, drifting fog banks, ash; the dragon turns dark so it stands out on the white.
+- **Bastien loves it** ("c'est ce que je recherchais"). His notes, applied:
+  - The near serpent passing right in front: too close, removed. The far one, high and hazy, is "masterclass" because it is far: we are just there, watching. Now two far ones on different paths.
+  - The block monoliths: useless, removed.
+  - The big arched shapes behind (he reads them as a Stranger Things-like demon form): keep. The colossus stays too.
+  - No ground: we are looking at the sky, so it is the other world's sky. Far below, thick fog; the ribs and the colossus rise out of it, as if the ground were much lower (later: tops of structures are fine, a ground is not).
 - Default world is now W2 (`?w=1` for Storm). Ground objects use local units at their own distance, so they can later become real places in a dimension.
 
 ## Next
