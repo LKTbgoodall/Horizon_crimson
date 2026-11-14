@@ -10,14 +10,14 @@ updated: 2026-11-14
 ## 📍 Where we are
 | | |
 |---|---|
-| **Phase** | **Phase 1, preview step** (2026-11-14). The blood moon rise preview page is ready with 3 stagings (`preview/blood-moon-rise.html`); Bastien picked **C · The Abyss** (the sky tearing open on space). No mod code yet |
+| **Phase** | **Phase 1** (2026-11-14). Bastien picked staging **C · The Abyss** from the preview (`preview/blood-moon-rise.html`). The repo skeleton, the pure core `crimson-core` (31 tests) and a first glue (0.1.0: night logic, `/crimson` test command, red fog, camera shake) are written and type-check against the pin. **Not built or run in game yet; no sky pass yet** |
 | **Proven before** | On Cagebound (same author, same Horizon pin `9f42064`): a typed-API native mod built and ran in game; block entity drawing, hologram text, coloured lights, glue checked against the pin before any build → [[From Cagebound]] |
 | **Key choices** | Blood moon as the trigger for events ([[ADR-014 Fresh start as Crimson Eclipse]]); rendering through our own GPU passes ([[ADR-015 Rendering through our own GPU passes]]) |
 | **Blocking** | Nothing |
 
 ## ➡️ Next step
-1. **Claude**: repo skeleton and the pure core ([[Roadmap]] phase 1), then the sky pass for staging C of the [[Blood moon rise]].
-2. **Bastien**: confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
+1. **Bastien**: build 0.1.0 (`toolsuild-mod.ps1 -Instance cagebound-dev`) and run the test in `mod/README.md`; confirm the name; still to tell: how the preview runs (frame rate), the sound direction, the eye's gaze rule.
+2. **Claude**: the sky pass for staging C (`RenderHooks::world_drawn`, from Cagebound's `fx.rs` and the preview's shader), fed by `crimson-core`'s `rise::frame`.
 
 ## 🗺️ Vault map
 ### 01 · Project

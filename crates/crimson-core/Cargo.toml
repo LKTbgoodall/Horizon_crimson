@@ -1,0 +1,9 @@
+[package]
+name = "crimson-core"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.90"
+description = "Pure rules of the Crimson Eclipse mod: when a blood moon happens, the night's phases, the rise's timeline, the eye, the event schedule."
+publish = false
+
+[dependencies]

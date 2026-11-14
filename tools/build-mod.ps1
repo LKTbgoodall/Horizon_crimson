@@ -27,7 +27,7 @@
   powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance crimson_eclipse-dev -Update
 #>
 param(
-    [string]$Instance = "mon-horizon",
+    [string]$Instance = "cagebound-dev",
     [switch]$NoInstall,
     [switch]$NoBuild,
     [switch]$Uninstall,
@@ -41,7 +41,7 @@ $ModId = "crimson_eclipse"
 $Root = Split-Path -Parent $PSScriptRoot
 $Bundle = Join-Path $Root "mod\$ModId"
 $Core = Join-Path $Root "crates\crimson-core\src"
-$Handwritten = @("draw.rs", "glue.rs", "machine.rs", "nbt.rs", "net.rs")
+$Handwritten = @("client.rs", "glue.rs", "server.rs")
 $Content = Join-Path $Root "mod\content"
 # The version is the bundle manifest's, so the two never disagree.
 $Version = (Select-String -Path (Join-Path $Bundle "horizon-mixin.toml") -Pattern '^version = "([^"]+)"' | Select-Object -First 1).Matches[0].Groups[1].Value
@@ -104,7 +104,7 @@ Get-ChildItem $Core -Filter *.rs | Where-Object { $_.Name -ne "lib.rs" } | ForEa
 foreach ($name in $Handwritten) { [void]$apiSrc.Add(@($name, (Join-Path $Bundle "api\src\$name"), $null)) }
 $coreLib = [IO.File]::ReadAllText((Join-Path $Core "lib.rs")).Replace("`r`n", "`n")
 $lib = "// Written by tools/build-mod.ps1 from crates/crimson-core/src/lib.rs: do not edit.`n" + $coreLib +
-    "`nmod draw;`nmod glue;`nmod machine;`nmod nbt;`nmod net;`n`npub use glue::hooks;`n"
+    "`n" + (($Handwritten | ForEach-Object { "mod " + $_.Replace(".rs", "") + ";`n" }) -join "") + "`npub use glue::hooks;`n"
 [void]$apiSrc.Add(@("lib.rs", $null, $lib))
 foreach ($e in ($apiSrc | Sort-Object { $_[0] })) {
     [void]$nativeEntries.Add(@("mixins/$ModId/api/src/$($e[0])", $e[1], $e[2]))

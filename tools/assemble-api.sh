@@ -7,7 +7,7 @@ root="$(cd "$(dirname "$0")/.." && pwd)"
 dest="$1"
 core="$root/crates/crimson-core/src"
 glue="$root/mod/crimson_eclipse/api/src"
-handwritten="draw.rs glue.rs machine.rs nbt.rs net.rs"
+handwritten="client.rs glue.rs server.rs"
 mkdir -p "$dest"
 for f in "$core"/*.rs; do
   name="$(basename "$f")"
@@ -20,11 +20,7 @@ for name in $handwritten; do cp "$glue/$name" "$dest/$name"; done
   echo "// Written by tools/assemble-api.sh from crates/crimson-core/src/lib.rs: do not edit."
   cat "$core/lib.rs"
   echo
-  echo "mod draw;"
-  echo "mod glue;"
-  echo "mod machine;"
-  echo "mod nbt;"
-  echo "mod net;"
+  for name in $handwritten; do echo "mod ${name%.rs};"; done
   echo
   echo "pub use glue::hooks;"
 } > "$dest/lib.rs"

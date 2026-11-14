@@ -1,0 +1,13 @@
+# Crimson Eclipse: a typed-API native mod (docs/native-mods.md, "Trait mods").
+# Don't run native-build on this folder directly: tools/build-mod.ps1 copies
+# crates/crimson-core into api/src first and writes api/src/lib.rs.
+[mod]
+id = "crimson_eclipse"
+version = "0.1.0"
+
+# Nightly 2026-11-13 (the first one with native .hmod content).
+[compatibility]
+horizon_revision = "9f42064c11efe7ef3e5ed2baad7ddc2a3b36eea0"
+
+[api]
+path = "api"
