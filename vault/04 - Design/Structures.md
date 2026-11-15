@@ -13,6 +13,13 @@ He first wanted a separate structures mod, then: "we'll do it all in Crimson, th
 - "Little structures everywhere", "very, very stylish ones", "sometimes immense things".
 - "Suggest ideas, ask me questions, we do it together."
 
+## Bastien's answers (2026-11-15)
+- Awake under the blood moon or always alive: **both, depending on the structure**.
+- Gameplay to start: **scenery and loot**.
+- Workflow: Claude proposes, we refine together, Claude codes, Bastien edits in game or says what to change.
+- **First structure: a stylish abandoned building, quite big.** Candidates in `preview/abandoned-building.html`.
+- Vanilla villages allowed later; first something of our own.
+
 ## The idea that ties them to the mod (proposed)
 **By day they are ruins; under the blood moon they wake up.** The Overworld's structures are what is left of the people who watched the red moon before us: quiet, mossy, cracked by day. When the moon turns red they come alive with it (crystals rise, eyes open, bells toll, beams reach for the moon) and fall asleep again at dawn's cleansing. The Pale Realm's structures (the Spire, monoliths, ribs) are the other side: always alive, and seen through the broken sky before they are reached.
 

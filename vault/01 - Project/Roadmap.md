@@ -59,8 +59,9 @@ Back: [[00 - Home]]
 
 ## Structures track (started 2026-11-15) 🟠
 - [x] Horizon's structure support read ([[Horizon hooks and API]] § D), first catalogue ([[Structures]]), pipeline ([[How a structure is made]])
-- [ ] Bastien's answers ([[Open questions]] § Structures), first small and medium structures picked
-- [ ] Preview page of the first structure's candidates (`preview/`), Bastien picks
+- [x] Bastien's answers ([[Open questions]] § Structures, 2026-11-15): both kinds (awake under the blood moon or always alive), scenery and loot first, first structure = a big stylish abandoned building
+- [x] Preview page of three candidates, day and blood moon: `preview/abandoned-building.html` (A Chapel of the Eclipse, B Moonwatch Observatory, C Vigil Manor) (2026-11-15)
+- [ ] Bastien picks one (or mixes), then we refine it on the page
 - [ ] Pipeline proof: one NBT template from our own tool, generating in a new world, one anchor block inside that wakes under the blood moon; far terrain checked
 - [ ] The first medium structure at full quality
 - [ ] A first immense one
