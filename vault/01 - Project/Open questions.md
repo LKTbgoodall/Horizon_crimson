@@ -1,9 +1,17 @@
 ---
 tags: [project, questions]
 status: living
-updated: 2026-11-14
+updated: 2026-11-15
 ---
 # Open questions
+
+## Structures (asked to Bastien on 2026-11-15)
+- **S-1 The tie**: ruins by day that wake under the blood moon (proposed), or always alive?
+- **S-2 Gameplay**: scenery to discover, loot, dungeons with guardians or bosses, or structures that do something (rituals, travel to the Pale Realm, a warning bell)?
+- **S-3 Who builds the shapes**: Bastien in game, Claude through a generator, or both?
+- **S-4 First picks**: which small and which medium one from [[Structures]]?
+- **S-5 Vanilla villages**: may we add our pieces to them (`horizon:add_to`)?
+- To check: Horizon's structure block saves templates in game; jigsaw size limits; far terrain shows our structures; when `structure_template` gets numbered.
 
 1. **Name**: "Crimson Eclipse" is Claude's pick of 2026-11-14. To confirm.
 2. **Which events first**: see [[Events]].

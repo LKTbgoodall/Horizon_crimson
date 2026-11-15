@@ -1,7 +1,7 @@
 ---
 tags: [horizon, reference, api, hooks]
 source: horizon native-hooks.json, docs/native-mods.md, crates/horizon-client/src/game/native_*.rs, generated mod_api_generated*.rs (Organa, fdc87ae); Horizon Quests' API note (1453e0e / fdc87ae / 9f42064)
-verified_on: 2026-11-13
+verified_on: 2026-11-15
 ---
 # Horizon hooks and API ("mob machine" view)
 
@@ -158,3 +158,29 @@ Read in `ext/src-9f42064` (shallow fetch of the Nightly) and in the generated `m
 - ✅ **Moving a player across levels**: `native_run_command` runs a console command (level 4), so `execute in <dimension> run tp <player> <x> <y> <z>` works (API 21, `docs/native-mods.md` 250). `player_changed_dimension` hears it afterwards.
 - ✅ **Building blocks fast**: `native_edit_blocks(dimension, edit)` (API 126) writes columns straight into chunks; `native_spawn_falling_block` (API 81) throws real falling blocks (debris).
 - ✅ `native_level_load` / `native_level_unload` (API 134): the End opens when someone first goes there.
+
+# D. Worldgen and structures (read 2026-11-15 at `9f42064`, docs only)
+Read in `ext/src-9f42064/docs/mods.md`, `native-mods.md`, `modpacks.md`, `graphics.md` (Crimson Eclipse's pinned copy). **Nothing tried in game yet.**
+
+## D1. Structures as content (the `.hmod` half) ✅ documented
+- A content mod holds **structures** like a data pack (`mods.md` line 7): structures, structure sets, template pools, processor lists (`data/<ns>/worldgen/...`) and structure templates (NBT) in `data/<ns>/structure/` (`native-mods.md` § Structure templates says the game reads content mods' templates there).
+- **Appending to sets and pools we don't own** (vanilla villages, another mod's): a file in our namespace with `"horizon:add_to": "minecraft:villages"` and `structures` / `elements` / `processors` (`mods.md` § after tags). Order by `horizon:priority`.
+- **Terrain fitting**: `horizon:enhanced_terrain_adaptation` on a structure or pool element (MoogsStructureLib's kernel: `kernel_size`, `kernel_distance`, `top` / `bottom` = `carve` / `bury` / `none`, `padding`, `band`, `rigid_junctions`, `inflate`). Carves or buries the land around the pieces, on top of vanilla's `terrain_adaptation`.
+- **Start checks**: `horizon:start_checks` (refuse to start in liquid, check biomes and terrain height in a radius: `terrain_radius`, `terrain_range`) (`modpacks.md` 571-583, `horizon-world` `structure/start_checks.rs`).
+- **Pool elements of Lithostitched**: `lithostitched:limited` (at most N per start) and `lithostitched:guaranteed` (at least N per start), with `min_depth`.
+- **Features in vanilla biomes**: NeoForge biome modifiers in `data/<ns>/neoforge/biome_modifier/` (`neoforge:add_features`, step, biome tags). Good for tiny decorations scattered everywhere.
+- ❌ A **world's data pack** worldgen does not run (`mod-browser.md`): structures must ship in the mod's content, not as a separate data pack.
+- **Far terrain (LOD)** generates chunks with "supported carvers, structures and decoration" (`graphics.md` 99): a giant structure should be **visible from far away**. ❓ to see in game.
+
+## D2. Code side
+- ✅ `native_edit_blocks(dimension, edit)` (API 126): writes columns straight into chunks (fast, big edits). `native_spawn_falling_block` (API 81): real falling blocks. `native_set_block(dimension, pos, state, flags)`.
+- ✅ `chunk_load` (listen, server, version 1): a chunk with one of our structures arrives (find our marker blocks, wake their logic).
+- ⏳ **`native_structure_template(id, at, rotation, mirror)`** (`@API:structure_template@`, **not numbered at `9f42064`**): reads a template without placing it (blocks in vanilla's placing order, with block entity NBT) "for a builder that places it a block at a time". The tool for **structures that build themselves in front of the player**. Cannot be targeted until numbered (CLAUDE.md rule).
+- ⏳ **`native_chunk_generate`** (`@API:chunk_generate@`, not numbered): set a chunk's blocks on the generation workers before the noise. Would allow code-generated giants; not usable yet.
+- ⏳ `native_world_seed()` (`@API:world_seed@`).
+- Structure blocks: the template lookup reads the world's `generated/<namespace>/structures/` (what a structure block saves). ❓ whether Horizon's structure block screen saves and loads (to try in game: it would let Bastien build pieces by hand).
+
+## D3. Limits to keep in mind
+- Block entity drawing (`block_entity_submit`) runs **up to 64 blocks** away (§ A5): animated parts of a giant structure seen from far need a GPU pass (`world_drawn`) or `world_primitives`, not block entity drawing.
+- Coloured lights: 8 per mod, within 32 blocks (§ A8).
+- ❓ Jigsaw size limits in Horizon (vanilla: depth ≤ 20, `max_distance_from_center` ≤ 128). To read in `horizon-world/src/worldgen/structure/`.

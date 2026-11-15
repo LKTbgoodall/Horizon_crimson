@@ -10,6 +10,7 @@ A **blood moon** mod for **Horizon** (Minecraft Java 26.3 rewritten in Rust), wr
 3. Read the notes the task needs. The most important ones:
    - `vault/04 - Design/Concept.md` (what the mod is, Bastien's rules)
    - `vault/04 - Design/Events.md` (the event catalogue)
+   - `vault/04 - Design/Structures.md` (the structure catalogue) and `How a structure is made.md`; Horizon § D for worldgen
    - `vault/02 - Horizon/Horizon hooks and API.md` (the API reference; § A8 and § C for rendering)
    - `vault/03 - History/From Cagebound.md` (what already worked in game, and the traps)
 

@@ -29,3 +29,6 @@ Some nights the moon rises red; during that blood moon, spectacular events happe
 
 ## Events
 See [[Events]]. Rendering methods: [[Rendering toolkit]].
+
+## Structures (added 2026-11-15)
+Bastien wants masterclass, animated structures in the mod, from small ones everywhere to immense ones. Proposed tie: **ruins by day, awake under the blood moon**; the Pale Realm's structures are the other side. See [[Structures]] and [[How a structure is made]].

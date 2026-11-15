@@ -56,3 +56,11 @@ Back: [[00 - Home]]
 
 ## Phase 4: release 🟡
 - [ ] Balance, docs, release checklist, 1.0.0 on playhorizon.dev
+
+## Structures track (started 2026-11-15) 🟠
+- [x] Horizon's structure support read ([[Horizon hooks and API]] § D), first catalogue ([[Structures]]), pipeline ([[How a structure is made]])
+- [ ] Bastien's answers ([[Open questions]] § Structures), first small and medium structures picked
+- [ ] Preview page of the first structure's candidates (`preview/`), Bastien picks
+- [ ] Pipeline proof: one NBT template from our own tool, generating in a new world, one anchor block inside that wakes under the blood moon; far terrain checked
+- [ ] The first medium structure at full quality
+- [ ] A first immense one
