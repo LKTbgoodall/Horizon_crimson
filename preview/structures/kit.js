@@ -35,6 +35,13 @@ const rbox = (c, h, r) => { const b = box(c, h.map(v => v - r)); return p => b(p
 // set a block only where nothing is (furnishing never cuts walls)
 const put = (W, x, y, z, s, o) => { if (!W.get(x, y, z)) W.set(x, y, z, s, o); };
 const onFloor = (W, x, y, z) => !W.get(x, y, z) && W.get(x, y - 1, z) && CE.blocks.fullSolid(W.get(x, y - 1, z));
+// set a block on the floor cell nearest (x, z) at height y (a chest never floats); false when no floor is within reach
+function putOnFloor(W, x, y, z, s, o, reach = 4) {
+  for (let r = 0; r <= reach; r++) for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+    if (Math.max(Math.abs(dx), Math.abs(dz)) !== r || !onFloor(W, x + dx, y, z + dz)) continue;
+    W.set(x + dx, y, z + dz, s, o); return true; }
+  return false;
+}
 // a spiral stair round a pole: 8 cells round (cx, cz), one step up each cell; headroom is cut through floors on the way
 function spiral(W, cx, cz, y0, y1, mat, pole) {
   const R = [[1,0], [1,1], [0,1], [-1,1], [-1,0], [-1,-1], [0,-1], [1,-1]], steps = [];
@@ -45,6 +52,6 @@ function spiral(W, cx, cz, y0, y1, mat, pole) {
   for (let y = y0 - 1; y <= y1 + 2; y++) W.set(cx, y, cz, pole);
 }
 
-CE.sk = { hash3, vnoise, ss, K, M4, Tm, Sm, RX, RY, RZ, about, applyP, spinUp, norm, dirFrom, pick, facingIn, facingOut, LIT, sub, dot, len, taper, ell, box, rbox, put, onFloor, spiral,
+CE.sk = { hash3, vnoise, ss, K, M4, Tm, Sm, RX, RY, RZ, about, applyP, spinUp, norm, dirFrom, pick, facingIn, facingOut, LIT, sub, dot, len, taper, ell, box, rbox, put, onFloor, putOnFloor, spiral,
   axisOf, rast, bez, curve, hangLantern };
 })();

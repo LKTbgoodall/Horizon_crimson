@@ -33,6 +33,9 @@ if (meta.ground) meta.ground(W);
 // model y 0 is the ground level: what stands there stands on the natural ground
 const unsupported = [];
 for (const e of W.M.values()) for (const dir of CE.kit.unsupported(W, e, 0)) unsupported.push(`${CE.describe(e)} at ${e.x} ${e.y} ${e.z} (nothing ${dir})`);
+// containers and furniture hold in the game in mid-air, but a floating chest looks broken: they need a full block under
+for (const e of W.M.values()) if (e.y !== 0 && /^(chest|barrel|bookshelf)/.test(e.id) && !CE.blocks.fullSolid(W.get(e.x, e.y - 1, e.z)))
+  unsupported.push(`${CE.describe(e)} at ${e.x} ${e.y} ${e.z} (no floor under it)`);
 if (unsupported.length) { console.error(`${unsupported.length} blocks with nothing to hold them:\n  ` + unsupported.slice(0, 40).join('\n  ')); if (!process.argv.includes('--force')) process.exit(1); }
 
 // ---- cells: every block, plus the air the builder asked for
@@ -54,6 +57,9 @@ for (const c of cells) {
   const p = pos(c), b = { state: index.get(key), pos: [p[0] - lo[0], p[1] - lo[1], p[2] - lo[2]] };
   if (c.e && (c.e.id === 'chest' || c.e.id === 'barrel') && build.loot) { const t = build.loot(c.e);
     if (t) { b.nbt = { id: 'minecraft:' + c.e.id, LootTable: `${NS}:chests/${t}` }; loots[t] = (loots[t] || 0) + 1; } }
+  // an anchor's block entity must be in the template: worldgen and /place only make the block entities the template
+  // carries (Horizon makes a mod's block entity on its own only when the block is placed by a player or a command)
+  if (c.e && c.e.id.startsWith(NS + ':') && c.e.id.endsWith('_anchor')) b.nbt = { id: c.e.id };
   blocks.push(b);
 }
 

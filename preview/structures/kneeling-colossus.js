@@ -4,7 +4,7 @@
 'use strict';
 (function () {
 const CE = window.CE;
-const { hash3, vnoise, ss, K, M4, Tm, Sm, RX, RY, RZ, about, applyP, spinUp, norm, dirFrom, pick, facingIn, facingOut, LIT, taper, ell, box, rbox, put, onFloor, spiral } = CE.sk;
+const { hash3, vnoise, ss, K, M4, Tm, Sm, RX, RY, RZ, about, applyP, spinUp, norm, dirFrom, pick, facingIn, facingOut, LIT, taper, ell, box, rbox, put, onFloor, putOnFloor, spiral } = CE.sk;
 function colossus(W) {
   const Y = 4, P = (x, y, z) => [x, y + Y, z], TB = 'polished_blackstone_bricks', TC = 'chiseled_polished_blackstone';
   // the dais, its ring of pillars and braziers
@@ -115,12 +115,12 @@ function colossus(W) {
   for (let x = -9; x <= 9; x++) for (let z = -9; z <= 3; z++) { if (!onFloor(W, x, Y + 15, z) || Math.hypot(x - SC[0], z - SC[1]) < 2.6) continue;
     const wallNear = [[1,0], [-1,0], [0,1], [0,-1]].some(([a, b]) => W.get(x + a, Y + 15, z + b)), r = hash3(x, 15, z);
     if (wallNear && r > .55) W.set(x, Y + 15, z, r > .8 ? 'bookshelf' : 'barrel'); }
-  for (const [x, z, f] of [[-7, -3, 'east'], [7, -3, 'west'], [3, 1, 'north']]) if (!W.get(x, Y + 15, z)) W.set(x, Y + 15, z, `chest[facing=${f}]`);
+  for (const [x, z, f] of [[-7, -3, 'east'], [7, -3, 'west'], [3, 1, 'north']]) putOnFloor(W, x, Y + 15, z, `chest[facing=${f}]`);   // on the floor, never in the air
   for (const x of [-4, -3]) put(W, x, Y + 15, 0, 'dark_oak_slab[type=top]'); put(W, -4, Y + 16, 0, 'candle[candles=3,lit=false]', LIT(4.5));
   for (const [x, z] of [[-5, -6], [5, -6], [0, 1]]) put(W, x, Y + 18, z, 'crimson_eclipse:vigil_lantern[hanging=true]', { d:4.6 });
   for (const [x, z] of [[-5, -1], [5, -1], [-5, -5], [5, -5]]) if (onFloor(W, x, Y + 15, z)) W.set(x, Y + 15, z, 'soul_lantern');
-  for (const [x, z, f] of [[-3, -4, 'east'], [3, -2, 'west']]) put(W, x, Y + 27, z, `chest[facing=${f}]`);
-  put(W, 3, Y + 27, -4, 'barrel'); put(W, -3, Y + 27, -1, 'candle[candles=4,lit=false]', LIT(4.2));
+  for (const [x, z, f] of [[-3, -4, 'east'], [3, -2, 'west']]) putOnFloor(W, x, Y + 27, z, `chest[facing=${f}]`);
+  putOnFloor(W, 3, Y + 27, -4, 'barrel'); putOnFloor(W, -3, Y + 27, -1, 'candle[candles=4,lit=false]', LIT(4.2));
   spiral(W, SC[0], SC[1], -8, Y + 26, 'polished_blackstone_brick_stairs', 'polished_blackstone');
   K.vines(W, e => BODY.get(key(e.x, e.y, e.z)) === 'body', .03, 7);
   K.settle(W);                                   // nothing may hold to nothing (carpets over the stair hole, vines on carpets...)

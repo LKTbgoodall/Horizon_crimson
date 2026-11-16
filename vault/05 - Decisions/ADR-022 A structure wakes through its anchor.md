@@ -19,4 +19,4 @@ date: 2026-11-16
 ## Consequences
 - The same mechanism serves the next structures (the lantern tree): a builder, an anchor, a generated table.
 - Moving parts (the colossus raising its head, the heart beating) are not states: they need a block entity renderer (`block_entity_submit`, standalone models), later.
-- A colossus placed before 0.5.0 has no anchor and never wakes.
+- A colossus placed before 0.5.1 never wakes: before 0.5.0 it has no anchor, in 0.5.0 its anchor has no block entity (the template must carry the anchor's `nbt` `{id}`; worldgen does not call the `block_entity` hook).

@@ -19,6 +19,19 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.5.1 (Bastien's first look at 0.5.0: floating chests, no light at night)
+- **The colossus lights up now**: the anchor in its heart had no block entity in the template, and worldgen and
+  `/place` only make the block entities a template carries (Horizon makes a mod's block entity by itself only when a
+  player or a command places the block). The template now carries `{id: "crimson_eclipse:colossus_anchor"}`.
+- **No more floating chests**: two reliquary chests and the heart chamber's chest and barrel stood where the floor
+  does not reach; they now go to the nearest floor cell, and the exporter refuses a chest, barrel or bookshelf
+  without a full block under it.
+- A colossus already in the world (0.4.0 or 0.5.0) keeps both problems: test on a new one.
+
+**Test**: `/place structure crimson_eclipse:kneeling_colossus` on flat ground (or `/locate` far from explored
+land), `/crimson start` next to it; the wave starts about 20 s after the eclipse begins. Check the reliquary
+(above the spiral's first floor) and the heart chamber: every chest on the floor.
+
 ## New in 0.5.0: the colossus wakes under the blood moon
 - **It lights up**: a block hidden in its heart (`colossus_anchor`, a block entity that ticks while you are near)
   turns on 293 blocks one after the other during the eclipse, over about 13 seconds: the heart and the crystal sword,

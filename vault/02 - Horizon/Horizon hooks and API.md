@@ -1,7 +1,7 @@
 ---
 tags: [horizon, reference, api, hooks]
 source: horizon native-hooks.json, docs/native-mods.md, crates/horizon-client/src/game/native_*.rs, generated mod_api_generated*.rs (Organa, fdc87ae); Horizon Quests' API note (1453e0e / fdc87ae / 9f42064)
-verified_on: 2026-11-15
+verified_on: 2026-11-16
 ---
 # Horizon hooks and API ("mob machine" view)
 
@@ -34,6 +34,7 @@ Back: [[Horizon - Overview]]
 
 ## A3. Holding a specimen in a block (block entity)
 - `block_entity(host, BlockEntityEvent { block }) -> Option<(String, Compound)>`: a block of ours gets a saved block entity on any template (API 15, 129).
+  - ✅ **Only when a player or a command places the block** (`new_block_entity_for_state`: use_hand, blockctl, dispenser, falling blocks...). **Structure templates (worldgen and `/place`) make only the block entities the template carries** in its `nbt` (`processor.rs` → `set_block_entity` → `save::decode_block_entity`, where any id with a namespace other than `minecraft` becomes a `BlockEntity::Mod`). A template block of ours that needs one must carry `nbt: {id: "<our id>"}` (read on `9f42064`, 2026-11-16; found when the 0.5.0 colossus never woke).
 - `ModBlockEntity { id, nbt, items, data }`, each `DerefMut` bumps its revision. `host.mod_block_entity(pos)` gives a copy; `host.change_mod_block_entity(pos, &mut |be| …)` changes it and marks it to save; `host.block_entity_sync(pos)` resends the tag (API 52).
 - **Client tag**: `block_entity_update_tag(event) -> Option<Compound>` (no `Host`). The client **merges** the received tag and never removes a key: always send every key, an empty value rather than nothing.
 - **Ticking**: `block_entity_ticks(BlockEntityTicksEvent { block, ticks })` set true; `block_entity_tick(BlockEntityTickEvent { pos, entity: &mut ModBlockEntity })` writes `entity.nbt` and `entity.items`. The block entity is out of the world during the call. `block_entity_sync` from a tick goes out next tick. `play_sound`, `send_particles` work from it (per their docs).
