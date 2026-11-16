@@ -1,7 +1,7 @@
 // Crimson Eclipse preview engine: the viewer (WebGL2, HDR + bloom, day and blood moon, inspection, layer cut).
 // Particle kinds (W.part): 0 motes, 1 rising embers (ex = height), 2 drips falling from a ring, 3 a shockwave ring every 3.3 s (ex = last radius, ph = angle),
 // 4 a soul streaming in a spiral into its point (ex = start radius), 5 a spark thrown once from its point at d (ph = direction, ex = reach),
-// 6 low fog drifting over the ground (ex = drift radius).
+// 6 low fog drifting over the ground (ex = drift radius), 7 a bead of a light stream laid along a path (ph = place along it, 0 to 1; pulses run along it).
 // A page calls CE.viewer({ variants:[{ key, name, make(W) -> meta }] }). meta: tag, cam {target, dist, yaw, pitch}, sun, moon,
 // size, shakeAt, shakes [[nt, strength]], phases [[nt, label]], groups(nt, t, eye) -> [mat4 by group], beams(nt, t, G, eye) -> [{a, b, w, e}] (4 at most),
 // glow(nt, t) -> { g: emissive gain, c: [x, y, z], r: radius of a pulse wavefront from c, s: its strength }.
@@ -140,6 +140,8 @@ void main(){
     p += vec3(cos(an)*r, -ex*.7*(1.-f)*(1.-f), sin(an)*r); a = e*smoothstep(0., .15, f)*(1.-f*f)*1.3; sz *= .6 + .8*(1.-f); }
   else if (k == 5) { float f = clamp((uAT - d)/1.6, 0., 1.), an = ph*6.2832, el = .35 + fract(ph*13.)*.9;
     p += vec3(cos(an)*cos(el), sin(el), sin(an)*cos(el))*ex*(1.-(1.-f)*(1.-f)) - vec3(0., 4.*f*f, 0.); a = uN*step(.001, f)*(1.-f)*2.2; }
+  else if (k == 7) { p += vec3(sin(t*1.7+ph*40.), sin(t*1.3+ph*31.), cos(t*1.5+ph*27.))*.12;
+    float w = fract(ph*3. - t*.45); a = e*smoothstep(0., .08, ph)*(.18 + 1.4*pow(w, 7.)); sz *= .7 + .6*pow(w, 7.); }
   else if (k == 6) { p += vec3(sin(t*.05+ph*6.3)*ex, sin(t*.3+ph*9.)*.3, cos(t*.04+ph*5.1)*ex); a = .09*e*(.7+.3*sin(t*.4+ph*20.)); }
   else if (k == 2) { float f = fract(t*.9 + ph*5.), an = ph*6.2832; p += vec3(cos(an)*(1.05+f*.7), -2.9*f*f, sin(an)*(1.05+f*.7)); a = e*(1.-f*.7); }
   vC = aC; vCol = col; vA = a;

@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Colossus Awakening</title>
 <!--
-  The Kneeling Colossus waking under the blood moon: three stagings to pick from (vault/04 - Design/Structures.md).
+  The Kneeling Colossus waking under the blood moon: stagings to pick from (round 2: D and E, made of what Bastien kept from round 1's A, B and C, which are in git history) (vault/04 - Design/Structures.md).
   The colossus is the real one (preview/structures/kneeling-colossus.js, what generates in the game); only the
   awakening changes: when each part lights, what moves, the beams, the particles. Press "Blood moon", then "Replay".
-  URL parameters: ?v=a|b|c  &night=1  &ui=0  &spin=0
+  URL parameters: ?v=d|e  &night=1  &ui=0  &spin=0
 -->
 </head>
 <body>
@@ -71,108 +71,100 @@ const head = (lift, turn = 0) => about(NECK, M4(RY(turn), RX(-lift)));
 const towards = (eye, from = NECK) => [Math.atan2(eye[0] - from[0], eye[2] - from[2]), Math.atan2(eye[1] - from[1], Math.hypot(eye[0] - from[0], eye[2] - from[2]))];
 const clamp = (v, a) => Math.max(-a, Math.min(a, v));
 
+// what Bastien kept from round 1 (A, B, C), shared by D and E
+const motes = W => { for (let i = 0; i < 160; i++) W.part(-12 + hash3(i,1,6)*24, Y + 1 + hash3(i,2,6)*30, -10 + hash3(i,3,6)*28, 0, hash3(i,4,6), .07, 0, 0, 1,1,1); };
+// red mist rolling round the dais (C)
+const mist = (W, d) => { for (let i = 0; i < 300; i++) { const a = hash3(i,1,11)*6.283, r = 17 + hash3(i,2,11)*18;
+  W.part(.5 + Math.sin(a)*r, Y + .3 + hash3(i,3,11)*.8, .5 + Math.cos(a)*r, 6, hash3(i,4,11), 2.4 + hash3(i,5,11)*1.8, d + hash3(i,6,11)*1.5, 2.5, .8, .1, .09); } };
+// eight shards hidden in the helm by day, flung out at `d` to circle the head (C), group 3
+function halo(W, d) {
+  for (let i = 0; i < 8; i++) { const a = i/8*Math.PI*2, x = Math.round(Math.sin(a)*9), z = Math.round(Math.cos(a)*9) + 2, y = Y + 50 + (i % 2);
+    W.set(x, y, z, 'crimson_eclipse:crimson_crystal', { g:3, d }); W.set(x, y + 1, z, 'crimson_eclipse:crimson_crystal_cluster', { g:3, d }); }
+  for (let i = 0; i < 140; i++) W.part(HEAD[0], HEAD[1], HEAD[2], 5, hash3(i,3,13), .15, d, 8 + hash3(i,4,13)*6, 5, .8, .4);
+  return (nt, t) => { const o = ss(d, d + 2, nt); return M4(Tm(0, .6*Math.sin(t*1.3)*o, 0), about(HEAD, M4(RY(t*.45), Sm(Math.max(o, .001))))); };
+}
+// sparks rising along the blade as it fills (A), `delay(y)` for each height
+const bladeSparks = (W, delay) => { for (let y = Y; y <= Y + 25; y++) for (let k = 0; k < 3; k++) W.part(.5 + (hash3(y, k, 21) - .5)*2.4, y, 15.5 + (hash3(k, y, 22) - .5)*1.4, 1, hash3(y, k, 23), .08, delay(y), 3 + hash3(y, k, 24)*4, 4, .6, .3); };
+// souls streaming into the heart (B), through the air only: up from the ground before him, over the sword, in through the crack in the breastplate
+const SOUL_PATHS = [-14, -9, -4, 5, 10, 15].map((sx, i) => {
+  const s = [sx + .5, .5, 25 + (i % 3)*3], c = [[...s], [sx*.45 + .5, Y + 24, 27], [.5, Y + 33, 13], [.5, Y + 31.5, 4.5]];
+  const pts = []; for (let k = 0; k <= 90; k++) pts.push(CE.sk.bez(c, k/90));
+  for (let k = 1; k <= 12; k++) pts.push(lerp(c[3], HEART, k/12));
+  return pts; });
+const souls = (W, d) => SOUL_PATHS.forEach((pts, i) => pts.forEach((p, k) => W.part(p[0], p[1], p[2], 7, k/(pts.length - 1), .2, d + i*.25, 0, 2.6, .45, .4)));
+const thumpAfter = (beat, from) => nt => nt < from ? 0 : thump(beat(nt));
+// the beam from the red moon down onto the crown (B, Bastien's favourite): it reaches down from `from` over 2 s, then stays
+function moonBeam(meta, P, from, thin) {
+  return (nt, t, G) => { if (nt < from) return [];
+    const m = meta.moon, sky = add(P.crownTop, m, 420), a = applyP(G[1], P.crownTop);
+    return [{ a:sky, b:lerp(sky, a, ss(from, from + 2, nt)), w:2.2 - (2.2 - thin)*ss(thinFrom(from), thinFrom(from) + 4, nt) + .15*Math.sin(t*3), e:ss(from, from + .4, nt) }]; };
+}
+const thinFrom = from => from + 7;
+
 CE.viewer({ dayLabel:'Day: a ruin', variants:[
 
-// ---------------------------------------------------------------- A: the heart starts first and wakes the rest
-{ key:'A', short:'The Heart', name:'A · The Heart', make(W) {
-  const { meta, P } = colossus(W);
-  const beat = beater(nt => nt < 2.5 ? 0 : .55 + 1.25*ss(3, 9, nt) - .55*ss(10, 14, nt));
-  P.heart.forEach(e => e.d = 2.5);
-  P.veins.forEach(e => e.d = 4 + Math.hypot(e.x - HEART[0], e.y - HEART[1], e.z - HEART[2])*.14);
-  P.eyes.forEach(e => e.d = 9.5);
-  P.lanterns.forEach(e => e.d = 11 + hash3(e.x, e.y, e.z)*1.5);
-  P.candles.forEach(e => e.d = 11.5 + hash3(e.x, e.y, e.z)*1.5);
-  P.fires.forEach((e, i) => e.d = 12.5 + i*.18);
-  P.sword.forEach(e => e.d = 14 + (e.y - Y)*.085);
-  P.crown.forEach(e => e.d = 16.5 + hash3(e.x, e.y, e.z)*.4);
-  W.light(HEART, [6, .6, .4], 13, 2.5, 2);
-  W.light([.5, Y + 10, 16.5], [3.5, .35, .25], 10, 14);
-  W.light(P.crownTop, [4, .4, .3], 12, 16.5, 1);
-  for (let i = 0; i < 160; i++) W.part(-12 + hash3(i,1,6)*24, Y + 1 + hash3(i,2,6)*30, -10 + hash3(i,3,6)*28, 0, hash3(i,4,6), .07, 0, 0, 1,1,1);
-  for (let i = 0; i < 220; i++) { const a = hash3(i,5,7)*6.283, r = 6 + hash3(i,6,7)*10; W.part(.5 + Math.sin(a)*r, Y + 4 + hash3(i,9,7)*20, -.5 + Math.cos(a)*r, 1, hash3(i,7,7), .1, 10, 14 + hash3(i,8,7)*14, 4, .7, .3); }
-  for (let i = 0; i < 90; i++) W.part(HEART[0], HEART[1], HEART[2] + 6, 3, i/90, .14, 2.5, 26, 4, .5, .3);
-  for (let i = 0; i < 160; i++) W.part(P.crownTop[0], P.crownTop[1], P.crownTop[2], 5, hash3(i,3,8), .16, 16.5, 7 + hash3(i,4,8)*9, 5, .8, .4);
-  return { ...meta, tag:'<b>The heart starts first, and wakes the rest.</b> A single beat in the dark chest shakes the ground; the beats quicken and each one sends a wave of light through the veins, outward from the heart. Then the eyes open, the head lifts and turns to you, the sword fills from the ground up, and the crown fires a beam into the moon. <i>In the game:</i> the beat and its waves need our GPU pass over the colossus; the head is a block entity model (seen within 64 blocks); the beam is our sky pass.',
-    phases:[[0, 'Nightfall'], [2.5, 'A single beat'], [4, 'The heart wakes the veins'], [9.5, 'His eyes open'], [10.5, 'He raises his head'], [14, 'The sword fills'], [16.5, 'The crown calls the moon'], [19, 'Awake under the blood moon']],
-    shakes:[[2.5, .55], [9.5, .3], [16.5, .6]],
-    glow(nt) { const ph = beat(nt), b = nt < 2.5 ? 0 : thump(ph); return { g:.75 + .7*b, c:HEART, r:(ph % 1)*46, s:nt < 4 ? 0 : 2.4*(1 - (ph % 1)) }; },
-    groups(nt, t, eye) { const g = [], [a, p] = towards(eye), k = ss(12.5, 15, nt);
-      g[1] = head(.34*ss(10.5, 13.5, nt) + .2*k*clamp(p, .3), .55*k*clamp(a, 1));
-      g[2] = about(HEART, Sm(1 + .16*(nt < 2.5 ? 0 : thump(beat(nt))))); return g; },
-    beams(nt, t, G) { const a = applyP(G[1], P.crownTop), m = meta.moon, e = ss(16.5, 17.4, nt);
-      return e > 0 ? [{ a, b:add(a, m, 420), w:1.7 + .3*Math.sin(t*7), e }, { a, b:add(a, m, 420), w:5, e:e*.18 }] : []; } };
-} },
-
-// ---------------------------------------------------------------- B: the moon reaches down and pours light into him
-{ key:'B', short:"The Moon's Call", name:"B · The Moon's Call", make(W) {
+// ---------------------------------------------------------------- D: B's moon and light, A's heart, C's mist and halo
+{ key:'D', short:"The Moon's Gift", name:"D · The Moon's Gift", make(W) {
   const { meta, P } = colossus(W);
   const top = P.crownTop[1], down = e => 5 + (top - e.y)*.11;
+  const beat = beater(nt => nt < 10 ? 0 : 1.05), th = thumpAfter(beat, 10);
   P.crown.forEach(e => e.d = 5 + hash3(e.x, e.y, e.z)*.3);
   P.eyes.forEach(e => e.d = 6.2);
   P.veins.forEach(e => e.d = down(e) + hash3(e.x, e.y, e.z)*.4);
+  P.lanterns.forEach(e => e.d = down(e));
   P.heart.forEach(e => e.d = 10);
   P.sword.forEach(e => e.d = 12.5 + (Y + 25 - e.y)*.06);
-  P.lanterns.forEach(e => e.d = down(e));
   P.candles.forEach(e => e.d = 14 + hash3(e.x, e.y, e.z));
   P.fires.forEach(e => e.d = 16);
   runes(W, a => 13.5 + a/(Math.PI*2)*2.4);
+  const ring = halo(W, 17.5);
   W.light(P.crownTop, [4.5, .45, .35], 13, 5, 1);
   W.light(HEART, [6, .6, .4], 13, 10, 2);
   W.light([.5, Y + 10, 16.5], [3.5, .35, .25], 10, 12.5);
   W.light([.5, Y + 1, .5], [4, .4, .3], 22, 13.5);
-  for (let i = 0; i < 160; i++) W.part(-12 + hash3(i,1,6)*24, Y + 1 + hash3(i,2,6)*30, -10 + hash3(i,3,6)*28, 0, hash3(i,4,6), .07, 0, 0, 1,1,1);
-  for (let i = 0; i < 260; i++) W.part(HEART[0], HEART[1], HEART[2], 4, hash3(i,2,9), .18, 10, 16 + hash3(i,3,9)*12, 3, .4, .35);
-  for (let i = 0; i < 120; i++) W.part(.5, Y, .5, 3, i/120, .16, 13.5, 30, 4, .5, .3);
+  W.light(HEAD, [4, .4, .3], 14, 17.5, 1);
+  motes(W); souls(W, 8); mist(W, 13.5); bladeSparks(W, y => 12.5 + (Y + 25 - y)*.06);
   P.fires.forEach((e, k) => { for (let i = 0; i < 26; i++) W.part(e.x + .5, e.y + .8, e.z + .5, 1, hash3(k, i, 3), .13, 16, 9 + hash3(i, k, 4)*7, 5, 1.1, .3); });
-  return { ...meta, tag:"<b>The moon reaches down and pours light into him.</b> A beam comes down from the red moon onto the crown; the light runs down the colossus, crown, eyes, veins from the top, until it reaches the heart, which takes it in one great beat while souls spiral in from the ground. The sword fills from the guard down, a ring of runes lights round the dais, the braziers flare, and he lifts his face to the moon. <i>In the game:</i> the descending beam is our sky pass; the run of light is the lit states timed as now (no new code); the runes are a new block of ours in the dais.",
-    phases:[[0, 'Nightfall'], [3, 'The moon reaches down'], [5, 'Light pours into him'], [10, 'His heart takes it'], [12.5, 'The sword fills'], [13.5, 'The ring of runes wakes'], [16, 'The braziers flare'], [18, 'Awake under the blood moon']],
-    shakes:[[5, .3], [10, .6], [13.5, .4]],
-    glow(nt, t) { const flow = ss(10, 10.4, nt)*(1 - ss(10.4, 12.5, nt)); return { g:.9 + .1*Math.sin(t*2.2) + 1.2*flow, c:HEART, r:Math.max(nt - 10, 0)*24, s:nt > 10 ? 3*(1 - ss(10, 12, nt)) : 0 }; },
-    groups(nt, t) { const g = [], b = Math.pow(Math.max(Math.sin(t*2.6), 0), 12);
-      g[1] = head(.2*ss(6.2, 8, nt) + .38*ss(16, 19.5, nt) + .012*Math.sin(t*.8)*ss(19, 20, nt));
-      g[2] = about(HEART, Sm(1 + .22*Math.exp(-Math.max(nt - 10, 0)*3)*ss(9.9, 10, nt) + .1*b*ss(11, 12, nt))); return g; },
-    beams(nt, t, G) { const m = meta.moon, sky = add(P.crownTop, m, 420), a = applyP(G[1], P.crownTop), reach = ss(3, 5, nt);
-      const out = []; if (nt > 3) out.push({ a:sky, b:lerp(sky, a, reach), w:2.2 - 1.2*ss(10, 14, nt), e:ss(3, 3.4, nt) });
-      if (nt > 16.5) out.push({ a, b:add(a, m, 420), w:.9 + .2*Math.sin(t*9), e:ss(16.5, 17.5, nt) });
-      return out; } };
+  return { ...meta, tag:"<b>B's moon, A's heart, C's halo.</b> A beam comes down from the red moon onto the crown and stays all night; the light runs down him from the top. Souls rise from the ground before him, pass over the sword and go in through the crack in his breastplate, never through stone, to the heart, which takes the light in one great beat and keeps beating. The sword fills from the guard down, sparks running up the blade; the ring round the dais lights and red mist rolls over it; the braziers flare. Eight shards burst from his helm to circle his head in the beam, and he lifts his face to the moon.",
+    phases:[[0, 'Nightfall'], [3, 'The moon reaches down'], [5, 'Light pours into him'], [8, 'Souls come to him'], [10, 'His heart takes it'], [12.5, 'The sword fills'], [13.5, 'The ring wakes, the mist rolls'], [16, 'The braziers flare'], [17.5, 'The shards rise'], [19.5, 'Awake under the blood moon']],
+    shakes:[[5, .3], [10, .6], [17.5, .3]],
+    glow(nt, t) { return { g:.8 + .65*th(nt) + .1*Math.sin(t*2.2)*(nt < 10 ? 1 : 0) }; },
+    groups(nt, t) { const g = [];
+      g[1] = head(.2*ss(6.2, 8, nt) + .38*ss(17.5, 21, nt) + .012*Math.sin(t*.8)*ss(21, 22, nt));
+      g[2] = about(HEART, Sm(1 + .25*Math.exp(-Math.max(nt - 10, 0)*3)*ss(9.9, 10, nt) + .14*th(nt)));
+      g[3] = ring(nt, t); return g; },
+    beams:moonBeam(meta, P, 3, 1.1) };
 } },
 
-// ---------------------------------------------------------------- C: the guardian wakes and watches you
-{ key:'C', short:'The Guardian', name:'C · The Guardian', make(W) {
+// ---------------------------------------------------------------- E: A's heart and sword, C's mist, gaze and halo, B's ring and moon beam as the finale
+{ key:'E', short:'The Heart Guardian', name:'E · The Heart Guardian', make(W) {
   const { meta, P } = colossus(W);
-  const beat = beater(nt => nt < 7 ? 0 : 1.5);
+  const beat = beater(nt => nt < 5 ? 0 : .55 + 1.1*ss(5.5, 10, nt) - .5*ss(11, 14, nt)), th = thumpAfter(beat, 5);
   runes(W, a => 3.5 + a/(Math.PI*2)*3);
-  P.heart.forEach(e => e.d = 7);
-  P.veins.forEach(e => e.d = 7.2 + Math.hypot(e.x - HEART[0], e.y - HEART[1], e.z - HEART[2])*.06);
-  P.eyes.forEach(e => e.d = 9);
-  P.sword.forEach(e => e.d = 12 + (e.y - Y)*.05);
-  P.crown.forEach(e => e.d = 13);
-  P.lanterns.forEach(e => e.d = 8 + hash3(e.x, e.y, e.z));
-  P.candles.forEach(e => e.d = 8.5 + hash3(e.x, e.y, e.z));
-  P.fires.forEach((e, i) => e.d = 4 + i*.3);
-  // the halo: eight shards hidden in the helm by day, flung out to circle the head at night (group 3)
-  for (let i = 0; i < 8; i++) { const a = i/8*Math.PI*2, x = Math.round(Math.sin(a)*9), z = Math.round(Math.cos(a)*9) + 2, y = Y + 50 + (i % 2);
-    W.set(x, y, z, 'crimson_eclipse:crimson_crystal', { g:3, d:13 }); W.set(x, y + 1, z, 'crimson_eclipse:crimson_crystal_cluster', { g:3, d:13 }); }
-  W.light(HEART, [6, .6, .4], 13, 7, 2);
-  W.light(HEAD, [4, .4, .3], 14, 13, 1);
-  W.light([.5, Y + 10, 16.5], [3.5, .35, .25], 10, 12);
+  P.heart.forEach(e => e.d = 5);
+  P.veins.forEach(e => e.d = 6 + Math.hypot(e.x - HEART[0], e.y - HEART[1], e.z - HEART[2])*.1);
+  P.fires.forEach((e, i) => e.d = 9 + i*.2);
+  P.lanterns.forEach(e => e.d = 10 + hash3(e.x, e.y, e.z));
+  P.candles.forEach(e => e.d = 10.5 + hash3(e.x, e.y, e.z));
+  P.eyes.forEach(e => e.d = 12);
+  P.sword.forEach(e => e.d = 15 + (e.y - Y)*.085);
+  P.crown.forEach(e => e.d = 19 + hash3(e.x, e.y, e.z)*.4);
+  const ring = halo(W, 20);
+  W.light(HEART, [6, .6, .4], 13, 5, 2);
   W.light([.5, Y + 1, .5], [3.5, .35, .28], 22, 3.5);
-  for (let i = 0; i < 160; i++) W.part(-12 + hash3(i,1,6)*24, Y + 1 + hash3(i,2,6)*30, -10 + hash3(i,3,6)*28, 0, hash3(i,4,6), .07, 0, 0, 1,1,1);
-  for (let i = 0; i < 360; i++) { const a = hash3(i,1,11)*6.283, r = 6 + hash3(i,2,11)*34; W.part(.5 + Math.sin(a)*r, Y + .4 + hash3(i,3,11)*.8, .5 + Math.cos(a)*r, 6, hash3(i,4,11), 2.4 + hash3(i,5,11)*1.8, 2 + hash3(i,6,11)*1.5, 3, .8, .1, .09); }
+  W.light([.5, Y + 10, 16.5], [3.5, .35, .25], 10, 15);
+  W.light(HEAD, [4, .4, .3], 14, 19, 1);
+  motes(W); mist(W, 2); bladeSparks(W, y => 15 + (y - Y)*.085);
   for (let i = 0; i < 180; i++) { const a = hash3(i,5,12)*6.283, r = 6 + hash3(i,6,12)*10; W.part(.5 + Math.sin(a)*r, Y + 4 + hash3(i,9,12)*20, -.5 + Math.cos(a)*r, 1, hash3(i,7,12), .1, 9, 14 + hash3(i,8,12)*14, 4, .7, .3); }
-  for (let i = 0; i < 140; i++) W.part(HEAD[0], HEAD[1], HEAD[2], 5, hash3(i,3,13), .15, 13, 8 + hash3(i,4,13)*6, 5, .8, .4);
-  return { ...meta, tag:'<b>The guardian wakes, and watches you.</b> Red mist rolls over the ground and a ring of runes turns round the dais; his heart starts, quick and steady, and the veins catch at once. His eyes open, his head lifts and <i>follows you</i> (turn the view: he keeps looking), two red gazes sweeping the ground before him. The sword lights, and eight crystal shards burst out of his helm to circle his head. <i>In the game:</i> the head that follows the nearest player, the gazes and the halo are block entity models and our GPU pass (seen within 64 blocks); the mist is the fog hook.',
-    phases:[[0, 'Nightfall'], [2, 'Red mist rolls in'], [3.5, 'The ring of runes turns'], [7, 'His heart starts'], [9, 'His eyes open'], [10, 'He looks at you'], [13, 'The shards rise'], [16, 'Awake: he watches']],
-    shakes:[[7, .35], [9, .5], [13, .3]],
-    glow(nt) { const ph = beat(nt), b = nt < 7 ? 0 : thump(ph); return { g:.85 + .45*b, c:HEART, r:(ph % 1)*30, s:nt < 7.5 ? 0 : 1.2*(1 - (ph % 1)) }; },
-    groups(nt, t, eye) { const g = [], [a, p] = towards(eye), k = ss(10, 12, nt), up = ss(9.5, 11.5, nt);
-      g[1] = head(.3*up + k*clamp(p - .05, .35), k*clamp(a, 1.1));
-      g[2] = about(HEART, Sm(1 + .13*(nt < 7 ? 0 : thump(beat(nt)))));
-      const o = ss(13, 15, nt);
-      g[3] = M4(Tm(0, .6*Math.sin(t*1.3)*o, 0), about(HEAD, M4(RY(t*.45), Sm(Math.max(o, .001))))); return g; },
-    beams(nt, t, G, eye) { const e = ss(10, 10.6, nt); if (e <= 0) return [];
-      const [a] = towards(eye), k = ss(10, 12, nt), yaw = k*clamp(a, 1.1), d = norm([Math.sin(yaw), -.42, Math.cos(yaw)]);
-      return P.eyeAt.map(p => { const s = applyP(G[1], p); return { a:s, b:add(s, d, 34), w:.4, e:e*(.85 + .15*Math.sin(t*11)) }; }); } };
+  return { ...meta, tag:"<b>The heart first, the moon last.</b> Red mist rolls round the dais and the ring of runes turns. Then one beat in the dark chest shakes the ground; the beats quicken, the heart swells with each, and the veins catch from the heart outward. The braziers take, his eyes open, he lifts his head and <i>follows you</i> (turn the view: he keeps looking, no laser). The sword fills from the ground up, sparks running up the blade. Last, the red moon reaches down to him: its beam lands on the crown, the crown burns, and eight shards burst from his helm to circle his head.",
+    phases:[[0, 'Nightfall'], [2, 'Red mist rolls in'], [3.5, 'The ring of runes turns'], [5, 'A single beat'], [6, 'The heart quickens'], [9, 'The braziers take'], [12, 'His eyes open'], [13.5, 'He looks at you'], [15, 'The sword fills'], [17, 'The moon reaches down'], [20, 'The shards rise'], [22, 'Awake: he watches']],
+    shakes:[[5, .55], [12, .3], [19, .4]],
+    glow(nt) { return { g:.75 + .7*th(nt) }; },
+    groups(nt, t, eye) { const g = [], [a, p] = towards(eye), k = ss(13.5, 15.5, nt);
+      g[1] = head(.3*ss(12.5, 15, nt) + k*clamp(p - .05, .35), k*clamp(a, 1.1));
+      g[2] = about(HEART, Sm(1 + .16*th(nt)));
+      g[3] = ring(nt, t); return g; },
+    beams:moonBeam(meta, P, 17, 1.3) };
 } },
 ] });
 </script>
