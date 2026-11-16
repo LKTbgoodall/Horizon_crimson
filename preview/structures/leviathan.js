@@ -156,6 +156,8 @@ function leviathan(W, opts = {}) {
 }
 
 const HIDE = (x, y, z) => { const r = hash3(x, y, z), n = vnoise(x*.4 + 3, y*.4, z*.4); return n > .64 ? 'brown_wool' : n < .3 ? 'light_gray_wool' : r > .93 ? 'red_wool' : 'white_wool'; };
+// half-timbering for the village's walls between the bones: a stone sill, dark oak beams and studs, daub between
+const TIMBER = (x, y, z) => y === 0 ? 'cobblestone' : y % 4 === 0 ? 'stripped_dark_oak_log[axis=z]' : ((z % 3) + 3) % 3 === 0 ? 'stripped_dark_oak_log' : hash3(x, y, z) > .6 ? 'packed_mud' : 'mud_bricks';
 const out = s => s < 0 ? 'west' : 'east', inn = s => s < 0 ? 'east' : 'west';
 
 // ================================================================ A · a village grafted onto the bones
@@ -194,8 +196,46 @@ function villageA(V) {
     W.set(cx - s, 0, cz, pick(['barrel', 'hay_block', `chest[facing=${inn(s)}]`, 'cauldron'], hash3(cx, cz, 1))); W.set(cx, 0, cz, pick(['barrel', 'hay_block', 'barrel', 'bone_block'], hash3(cx, cz, 2)));
     put(W, cx - s, 1, cz, 'candle[candles=2,lit=false]', LIT(4.1)); }
   for (const [x, z0] of [[-5, -27], [5, -15], [-5, -6], [5, -1]]) for (let z = z0; z <= z0 + 2; z++) { W.set(x, 0, z, 'spruce_fence'); W.set(x, 1, z, 'spruce_fence'); W.set(x, 2, z, pick(['white_carpet', 'brown_carpet', 'light_gray_carpet'], hash3(x, z, 3))); }
+  const pave = (x, z, id) => { if (!W.get(x, -1, z) && !isBone(W.get(x, 0, z))) W.set(x, -1, z, id); };
+  // ---- toward the tail: a road along the humps, a house under the high arch, a beacon on the first hump, a drying yard
+  for (let z = -41; z <= -36; z++) for (let x = 0; x <= 5; x++) if (Math.abs(x - (z + 41)*.8) <= 1.5 && x <= 5) pave(x, z, hash3(x, z, 2) > .3 ? 'dirt_path' : 'coarse_dirt');
+  for (let z = -80; z <= -41; z++) for (let x = 3; x <= 5; x++) if (hash3(x, z, 11) > (x === 4 ? .06 : .5)) pave(x, z, x === 4 || hash3(x, z, 12) > .5 ? 'dirt_path' : 'coarse_dirt');
+  for (let z = -76; z <= -44; z += 8) { W.set(7, 0, z, 'spruce_fence'); W.set(7, 1, z, 'spruce_fence'); W.set(7, 2, z, 'crimson_eclipse:vigil_lantern', { d:3.6 + (z + 76)*.004 }); }
+  // the arch house: two storeys of half-timbering under the second hump, its roof chained to the spine above
+  cabin(-7, -3, -51, -47, 4.3);
+  // the beacon on the first hump: a platform on the vertebrae, a fire, a ladder on a post
+  for (let x = -6; x <= 2; x++) for (let z = -69; z <= -65; z++) { if (isBone(W.get(x, 15, z))) continue; W.set(x, 15, z, x === -6 || z === -69 || z === -65 ? 'stripped_spruce_log[axis=x]' : 'spruce_planks');
+    if ((x === -6 || x === 2 || z === -69 || z === -65) && !(x === -6 && z === -67)) put(W, x, 16, z, 'spruce_fence'); }
+  for (let y = 0; y <= 14; y++) W.set(-6, y, -67, 'stripped_spruce_log'); for (let y = 0; y <= 15; y++) W.set(-7, y, -67, 'ladder[facing=west]');
+  for (let x = -2; x <= 0; x++) for (let z = -68; z <= -66; z++) W.set(x, 16, z, x === -1 && z === -67 ? 'campfire[lit=false]' : 'cobblestone_slab', x === -1 && z === -67 ? LIT(4) : {});
+  smoke.push([-.5, 17, -66.5, 14]); lights.push([[-.5, 18, -66.5], [5, 1.6, .4], 16, 4]);
+  // the drying yard between the humps: a fence, racks of bones and hay, a kiln, barrels
+  for (let x = 8; x <= 14; x++) for (let z = -63; z <= -55; z++) { const edge = x === 8 || x === 14 || z === -63 || z === -55;
+    if (edge) W.set(x, 0, z, x === 8 && z === -59 ? 'spruce_fence_gate[facing=east]' : 'spruce_fence'); else pave(x, z, hash3(x, z, 4) > .5 ? 'coarse_dirt' : 'packed_mud'); }
+  for (const z of [-61, -58]) for (let x = 10; x <= 12; x++) { W.set(x, 0, z, 'spruce_fence'); W.set(x, 1, z, 'spruce_fence'); W.set(x, 2, z, (x + z) & 1 ? 'hay_block' : 'bone_block[axis=x]'); }
+  for (let x = 11; x <= 13; x++) for (let z = -57; z <= -56; z++) for (let y = 0; y <= 1; y++) W.set(x, y, z, 'bricks');
+  W.set(12, 2, -56, 'campfire[lit=false]', LIT(4.1)); smoke.push([12.5, 3, -55.5, 10]);
+  W.set(9, 0, -62, 'barrel'); W.set(9, 0, -61, 'barrel'); W.set(9, 1, -62, 'barrel'); W.set(13, 0, -62, 'chest[facing=west]'); W.set(9, 0, -56, 'cauldron'); W.set(10, 0, -56, 'hay_block');
+  // ---- toward the head: a processional way under the neck, round the jaw by gates of bone, offerings, a plaza at the mouth
+  for (let z = 11; z <= 27; z++) for (let x = -1; x <= 1; x++) pave(x, z, x ? 'coarse_dirt' : 'dirt_path');
+  for (let k = 0; k <= 11; k++) for (const s of [-1, 1]) for (let w = -1; w <= 1; w++) pave(s*k + w, 27 + Math.round(k*.35), Math.abs(w) ? 'coarse_dirt' : 'dirt_path');
+  for (let z = 31; z <= 58; z++) for (const s of [-1, 1]) for (let ax = 10; ax <= 12; ax++) pave(s*ax, z, ax === 11 ? 'dirt_path' : hash3(ax, z, s) > .4 ? 'coarse_dirt' : 'dirt_path');
+  for (let x = -7; x <= 7; x++) for (let z = 56; z <= 68; z++) { const r = Math.hypot(x, z - 62); if (r > 6.4) continue; pave(x, z, r > 5.4 ? 'polished_blackstone_bricks' : ((x + z) & 1) ? 'calcite' : 'polished_blackstone'); }
+  for (const s of [-1, 1]) for (let k = 0; k <= 4; k++) pave(s*(10 - k), 59 + Math.round(k*.3), 'dirt_path');
+  for (const z of [35, 43, 51]) for (const s of [-1, 1]) {        // gates of bone over the side ways, a lantern under each, a crystal on top
+    for (const ax of [9, 13]) for (let y = 0; y <= 4; y++) W.set(s*ax, y, z, 'bone_block[axis=y]');
+    for (let ax = 9; ax <= 13; ax++) W.set(s*ax, 5, z, ax === 9 || ax === 13 ? 'calcite' : 'bone_block[axis=x]');
+    W.set(s*11, 6, z, 'crimson_eclipse:crimson_crystal_cluster', { d:4.6 + (z - 35)*.02 }); W.set(s*11, 4, z, 'crimson_eclipse:vigil_lantern[hanging=true]', { d:4.5 + (z - 35)*.02 }); }
+  for (const z of [39, 47, 55]) for (const s of [-1, 1]) { W.set(s*14, 0, z, 'chiseled_polished_blackstone'); W.set(s*14, 1, z, 'candle[candles=3,lit=false]', LIT(4.4 + (z - 39)*.02));
+    for (const dz of [-1, 1]) put(W, s*14, 0, z + dz, pick(['poppy', 'red_tulip', 'wither_rose'], hash3(s, z, dz))); put(W, s*15, 0, z, 'bone_block'); }
+  for (const z of [14, 18, 22, 25]) { let b = 1; while (b < 30 && !isBone(W.get(0, b, z))) b++; if (b >= 30) continue;      // lanterns hung from the neck over the way
+    let y = b - 1; for (; y > 7 && !W.get(0, y - 1, z); y--) W.set(0, y, z, 'iron_chain'); W.set(0, y, z, 'crimson_eclipse:vigil_lantern[hanging=true]', { d:4.2 + (z - 14)*.03 }); }
+  for (const s of [-1, 1]) { for (let y = 0; y <= 2; y++) W.set(s*5, y, 62, 'bone_block[axis=y]'); W.set(s*5, 3, 62, 'campfire[lit=false]', LIT(4.8)); }
+  lights.push([[.5, 4, 62.5], [4, 1.3, .4], 14, 4.8]);
+  for (let k = 0; k < 8; k++) { const a = k/8*Math.PI*2 + .39, x = Math.round(Math.cos(a)*3.6), z = 62 + Math.round(Math.sin(a)*3.6); put(W, x, 0, z, 'candle[candles=2,lit=false]', LIT(4.6 + k*.05)); }
+  for (let x = -1; x <= 1; x++) { put(W, x, 0, 58, 'polished_diorite'); put(W, x, 0, 59, 'polished_diorite_stairs[facing=north]'); put(W, x, 1, 58, 'polished_diorite_stairs[facing=north]'); }
   return { smoke, lights,
-    tag:'The fossil of a sea serpent, some 130 blocks long, its skull resting its jaw on the plain (a shrine inside), a vault in its belly down the well. <b>The village is grafted onto the bones:</b> every gap between two ribs is a house (the ribs are its walls, hides stretched between them its back, a roof that climbs to the bones, a trade inside: smith, bone carver, tanner, tavern, store, homes); above them nests between the same ribs open on two galleries hung from the ribs on chains; three cocoon houses hang under the spine, bridges join them to both galleries; where a rib is broken a spiral stair climbs up. In the street: a fire pit, stalls, drying racks of hides. <i>Under the blood moon:</i> every lantern lights, red light runs along the spine and the ribs, the pearl beats, the skull lifts to the moon and fires at it. <i>Cut slider: look inside.</i>' };
+    tag:'The fossil of a sea serpent, some 130 blocks long, its skull resting its jaw on the plain (a shrine inside), a vault in its belly down the well. <b>The village is grafted onto the bones:</b> every gap between two ribs is a house (the ribs are its walls, half-timbering between them its back, a roof that climbs to the bones, a trade inside: smith, bone carver, tanner, tavern, store, homes); above them nests between the same ribs open on two galleries hung from the ribs on chains; three cocoon houses hang under the spine, bridges join them to both galleries; where a rib is broken a spiral stair climbs up. In the street: a fire pit, stalls, drying racks. <b>Toward the tail</b> a road runs along the humps: a two-storey house under the high arch, chained to the spine; a beacon on the first hump; a drying yard with its kiln. <b>Toward the head</b> a processional way passes under the neck (lanterns hung from its vertebrae), round the jaw through gates of bone and offerings, to a plaza and steps up into the mouth. <i>Under the blood moon:</i> every lantern lights, red light runs along the spine and the ribs, the pearl beats, the skull lifts to the moon and fires at it. <i>Cut slider: look inside.</i>' };
 
   // a house between two ribs: front wall on the street (x = s·8), the ribs as side walls, hides at the back, a lean-to roof
   function house(s, ra, rb, role, d) {
@@ -208,9 +248,9 @@ function villageA(V) {
       W.set(x, 0, z, ax === 8 || edge ? 'stripped_spruce_log[axis=z]' : 'spruce_planks');
       for (let y = 1; y < RY(ax); y++) { if (isBone(W.get(x, y, z))) continue;
         if (ax === 8) W.set(x, y, z, edge ? 'stripped_spruce_log' : y === 4 ? 'spruce_planks' : (y === 2 || y === 3) && z !== zm && z1 - z0 >= 2 ? 'glass_pane' : 'spruce_planks');
-        else if (edge) { if (ins(ax, y, z)) W.set(x, y, z, hash3(x, y, z) > .7 ? 'brown_wool' : 'spruce_planks'); }
+        else if (edge) { if (ins(ax, y, z)) W.set(x, y, z, TIMBER(x, y, z)); }
         else if (ins(ax, y, z)) W.del(x, y, z); } }
-    panel(Ls(s), z0 - 1, z1 + 1, 0, 11, HIDE);
+    panel(Ls(s), z0 - 1, z1 + 1, 0, 11, TIMBER);
     for (let ax = 7; ax <= 20; ax++) { const y = RY(ax); for (let z = z0 - 1; z <= z1 + 1; z++) { const x = s*ax; if (ax > 8 && !ins(ax, Math.max(1, y - 1), z)) continue; if (isBone(W.get(x, y, z))) continue;
       W.set(x, y, z, y === 11 && ax > 14 ? 'spruce_slab[type=top]' : `dark_oak_stairs[facing=${out(s)}]`); } }
     W.door(s*8, 1, zm, 'spruce_door', { facing:inn(s) }); W.set(s*7, 0, zm, `spruce_stairs[facing=${out(s)}]`);
@@ -247,13 +287,28 @@ function villageA(V) {
         else if (edge) { if (ins(ax, y, z)) W.set(x, y, z, 'spruce_planks'); } else if (ins(ax, y, z)) W.del(x, y, z); }
       if (ins(ax, 17, z) || ax === 10) W.set(x, 17, z, ax === 10 ? `spruce_stairs[facing=${out(s)},half=bottom]` : 'spruce_planks'); }
     for (let z = z0 - 1; z <= z1 + 1; z++) put(W, s*9, 17, z, `spruce_stairs[facing=${out(s)}]`);
-    panel(Ls(s), z0 - 1, z1 + 1, 12, 17, (x, y, z) => y === 17 ? 'spruce_planks' : HIDE(x, y, z));
+    panel(Ls(s), z0 - 1, z1 + 1, 12, 17, (x, y, z) => y === 17 ? 'spruce_planks' : TIMBER(x, y, z));
     W.door(s*10, 13, zm, 'spruce_door', { facing:inn(s) });
     const ch = `chest[facing=${inn(s)}]`, at = (ax, z, st, o) => { if (ax >= 11 && ax <= B && z >= z0 && z <= z1 && !W.get(s*ax, 13, z)) W.set(s*ax, 13, z, st, o); };
     at(B, z0 + 1, 'spruce_slab[type=top]'); put(W, s*B, 14, z0 + 1, pick(['red_carpet', 'white_carpet', 'brown_carpet'], hash3(z0, s, 9)));
     at(B, z1, ch); at(11, z1, 'barrel'); at(B - 1, z1, 'spruce_slab[type=top]'); put(W, s*(B - 1), 14, z1, 'candle[candles=2,lit=false]', LIT(d));
     hangLantern(W, s*11, 13, zm, 0, d + .05);
   }
+  // a two-storey cabin of half-timbering (x0..x1, z0..z1 outside walls), door on the east; its roof stops at the bones and is chained to them
+  function cabin(x0, x1, z0, z1, d) { const cx = Math.round((x0 + x1)/2), cz = Math.round((z0 + z1)/2), free = (x, y, z) => !isBone(W.get(x, y, z));
+    for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) { const ex = x === x0 || x === x1, ez = z === z0 || z === z1, corner = ex && ez;
+      W.set(x, 0, z, 'spruce_planks'); W.set(x, 4, z, ex || ez ? 'stripped_dark_oak_log[axis=x]' : 'spruce_planks');
+      for (const y of [1, 2, 3, 5, 6, 7]) { if (!free(x, y, z)) continue; if (!(ex || ez)) { W.del(x, y, z); continue; }
+        W.set(x, y, z, corner ? 'stripped_dark_oak_log' : (y === 2 || y === 6) && (x === cx || z === cz) ? 'glass_pane' : TIMBER(x, y, z)); } }
+    [3, 2, 1, 0].forEach((h, k) => { for (let dx = -h; dx <= h; dx++) for (let dz = -h; dz <= h; dz++) { if (Math.max(Math.abs(dx), Math.abs(dz)) !== h) continue; const x = cx + dx, z = cz + dz, y = 8 + k; if (!free(x, y, z)) continue;
+      W.set(x, y, z, h ? `dark_oak_stairs[facing=${Math.abs(dx) >= Math.abs(dz) ? (dx < 0 ? 'east' : 'west') : (dz < 0 ? 'south' : 'north')}]` : 'dark_oak_planks'); } });
+    for (const [x, z] of [[cx, cz], [x0, z0], [x1, z1]]) { const y0 = x === cx ? 12 : 9; let t = y0; while (t < 30 && !W.get(x, t, z)) t++; if (t < 30 && isBone(W.get(x, t, z))) for (let y = y0; y < t; y++) W.set(x, y, z, 'iron_chain'); }
+    W.door(x1, 1, cz, 'spruce_door', { facing:'east' }); W.set(x1 + 1, 0, cz, 'spruce_stairs[facing=west]');
+    for (let y = 1; y <= 4; y++) W.set(x0 + 1, y, z0 + 1, 'ladder[facing=south]');
+    W.set(x0 + 1, 1, z1 - 1, 'chest[facing=east]'); W.set(x0 + 2, 1, z1 - 1, 'barrel'); W.set(x1 - 1, 1, z0 + 1, `furnace[facing=west,lit=false]`, LIT(d)); W.set(cx, 1, cz, 'red_carpet');
+    W.set(x0 + 1, 5, z1 - 1, 'spruce_slab[type=top]'); W.set(x0 + 1, 6, z1 - 1, 'white_carpet'); W.set(x1 - 1, 5, z1 - 1, 'chest[facing=west]'); W.set(x1 - 1, 5, z0 + 1, 'spruce_slab[type=top]');
+    W.set(x1 - 1, 6, z0 + 1, 'candle[candles=3,lit=false]', LIT(d)); hangLantern(W, cx, 1, cz, 1, d); hangLantern(W, cx, 5, cz, 0, d + .1);
+    W.set(x1 + 1, 3, z0, 'crimson_eclipse:vigil_lantern', { d }); W.set(x1 + 1, 2, z0, 'spruce_fence'); W.set(x1 + 1, 1, z0, 'spruce_fence'); W.set(x1 + 1, 0, z0, 'spruce_fence'); }
   // a spiral stair in the gap of a broken rib, framed by four posts and a little roof
   function stairTower(s, zc) { const cx = s*12, cz = Math.round(zc);
     spiral(W, cx, cz, 0, 11, 'spruce_stairs', 'stripped_spruce_log');
@@ -268,7 +323,7 @@ function villageA(V) {
       if (r <= 1.2) { W.set(x, 9, z, 'stripped_spruce_log'); W.set(x, 10, z, 'spruce_planks'); }
       if (r <= 2.3) W.set(x, 11, z, r > 1.2 ? `spruce_stairs[facing=${x === 0 ? (z < zc ? 'north' : 'south') : x < 0 ? 'west' : 'east'},half=top]` : 'spruce_planks');
       if (r <= 3.3) W.set(x, 12, z, r > 2.4 ? 'stripped_spruce_log[axis=y]' : ((x + z) & 1) ? 'spruce_planks' : 'stripped_spruce_wood');
-      for (let y = 13; y <= 16; y++) if (r > 2.4 && r <= 3.3) W.set(x, y, z, (y === 14 || y === 15) && (x === 0 || z === zc) ? 'glass_pane' : (Math.abs(x) === 2 && Math.abs(z - zc) === 2) ? 'stripped_spruce_log' : y === 16 ? 'spruce_planks' : HIDE(x, y, z));
+      for (let y = 13; y <= 16; y++) if (r > 2.4 && r <= 3.3) W.set(x, y, z, (y === 14 || y === 15) && (x === 0 || z === zc) ? 'glass_pane' : (Math.abs(x) === 2 && Math.abs(z - zc) === 2) ? 'stripped_spruce_log' : y === 16 ? 'stripped_dark_oak_log' : 'spruce_planks');
       if (r <= 3.6) W.set(x, 17, z, r > 2.4 ? `dark_oak_stairs[facing=${x === 0 ? (z < zc ? 'south' : 'north') : x < 0 ? 'east' : 'west'}]` : 'dark_oak_planks');
       if (r <= 2.4) W.set(x, 18, z, r > 1.3 ? `dark_oak_stairs[facing=${x === 0 ? (z < zc ? 'south' : 'north') : x < 0 ? 'east' : 'west'}]` : 'dark_oak_planks');
       if (r <= 1.3) W.set(x, 19, z, 'dark_oak_planks'); }
