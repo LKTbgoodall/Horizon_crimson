@@ -2,3 +2,4 @@ target/
 build/
 ext/
 vault/.obsidian/workspace*.json
+preview/vanilla/

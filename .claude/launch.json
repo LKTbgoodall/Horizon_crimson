@@ -6,6 +6,12 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8765", "--bind", "127.0.0.1", "--directory", "preview"],
       "port": 8765
+    },
+    {
+      "name": "preview-node",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tools/serve-preview.mjs"],
+      "port": 8766
     }
   ]
 }

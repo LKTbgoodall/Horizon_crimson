@@ -25,4 +25,4 @@ Three layers, from what Horizon offers at `9f42064` (read, nothing tried yet).
 - **A. Bastien builds in game** with structure blocks (if Horizon saves them, ❓), Claude adds anchors, pools and JSON.
 - **B. Claude generates** templates from code (a generator in `tools/` writing NBT): parametric, good for huge or regular shapes (rings, towers, a colossus from primitives).
 - **C. Both**: generator for big geometry, hand detailing in game.
-- Every look goes through a preview page first (`preview/`).
+- Every look goes through a preview page first (`preview/`), built with the shared engine `preview/lib/` ([[ADR-020 Structure previews in real blocks]]): real vanilla blocks and states, our `crimson_eclipse:*` blocks, **every block in one cell** (`W.set` refuses anything else), day/night as block state changes, Minecraft light. Hover shows each block's id and position, so a preview can be turned into a template block for block. All blocks: `preview/block-palette.html`.

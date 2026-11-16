@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Block Palette</title>
+<!--
+  Every block the structure previews can use, laid out on a floor. Hover a block for its exact id and state.
+  Real vanilla textures once tools/extract-textures.ps1 has run (preview/vanilla/textures.js, gitignored); stand-ins otherwise.
+  URL parameters: ?night=1  &ui=0  &spin=0  &q=<filter, e.g. q=stairs>
+-->
+</head>
+<body>
+<script src="vanilla/textures.js" onerror="void 0"></script>
+<script src="lib/blocks.js"></script>
+<script src="lib/world.js"></script>
+<script src="lib/textures.js"></script>
+<script src="lib/viewer.js"></script>
+<script>
+'use strict';
+const { REG } = CE.blocks;
+const q = new URLSearchParams(location.search).get('q');
+function make(W) {
+  const ids = Object.keys(REG).filter(id => REG[id].id === id && (!q || id.includes(q)));
+  const COLS = 20, rows = Math.ceil(ids.length / COLS);
+  W.box(-2, -1, -3, COLS*2, -1, rows*3, 'smooth_stone');
+  ids.forEach((id, i) => {
+    const x = (i % COLS)*2, z = Math.floor(i / COLS)*3, d = REG[id], sh = d.shape, S = CE.blocks.S;
+    if (sh === S.door) return W.door(x, 0, z, id, { facing:'south' });
+    if (sh === S.banner) { W.set(x, 2, z-1, 'polished_andesite'); return W.set(x, 2, z, id + '[facing=south]'); }
+    if (sh === S.vine) { W.set(x, 0, z-1, 'stone_bricks'); W.set(x, 1, z-1, 'stone_bricks'); W.set(x, 1, z, 'vine[north=true]'); return W.set(x, 0, z, 'vine[north=true]'); }
+    if (id === 'wall_torch') { W.set(x, 1, z-1, 'stone_bricks'); return W.set(x, 1, z, 'wall_torch[facing=south]'); }
+    if (sh === S.candle) return W.set(x, 0, z, id + '[candles=3,lit=false]', { awake:{ lit:true }, d:2 + (i % 7)*.4 });
+    if (sh === S.stairs) return W.set(x, 0, z, id + '[facing=north]');
+    if (sh === S.chest) return W.set(x, 0, z, id + '[facing=south]');
+    if (sh === S.bell) return W.set(x, 0, z, id + '[attachment=floor,facing=north]');
+    if (sh === S.armillary) { W.set(x, 0, z, 'polished_blackstone_wall'); return W.set(x, 1, z, id); }
+    if (sh === S.clockHands) { W.set(x, 1, z, 'smooth_quartz'); return W.set(x, 0, z, 'polished_blackstone'); }
+    W.set(x, 0, z, id);
+  });
+  W.figure(-2, 0, -2);
+  const cx = COLS - 1, cz = rows*1.5;
+  return { tag:`${ids.length} blocks. Hover one for its id; the candles light up under the blood moon.`, size:null, figure:false, noGround:false, groundR:Math.max(COLS*2, rows*3) + 6,
+    cam:{ target:[cx, 0, cz], dist:Math.max(30, rows*3.2), yaw:.3, pitch:.75 }, sun:CE.m.norm([.45, .78, .5]), moon:CE.m.dirFrom(3.6, .3), shakeAt:null };
+}
+CE.viewer({ variants:[{ key:'P', name:'Block palette', short:'Palette', make }], spin:false, dayLabel:'Day' });
+</script>
+</body>
+</html>

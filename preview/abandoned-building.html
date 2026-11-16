@@ -6,391 +6,275 @@
 <title>Abandoned Building</title>
 <!--
   Preview of the first structure (vault/04 - Design/Structures.md): a big abandoned building, three candidates.
-  Each one is shown by day (a ruin) and under the blood moon (it wakes up). Real blocks: instanced cubes with
-  16x16 pixel faces, plus free boxes for the moving parts (the future anchor blocks' models). HDR + bloom.
-  Self-contained, no dependency.
+  Each one is shown by day (a ruin) and under the blood moon (it wakes up).
+  Real Minecraft blocks only, each in exactly one cell (preview/lib: the shared block engine). Our own blocks are
+  crimson_eclipse:*; moving parts are blocks (or anchor models) that sit on the grid at rest.
+  Real vanilla textures: "Load real textures…" (your own client jar) or preview/vanilla/textures.js; painted stand-ins otherwise.
   URL parameters: ?v=a|b|c  &night=1  &ui=0  &spin=0
 -->
-<style>
-  :root { --red:#ff3b2f; --dim:#b9a7a5; --bg:rgba(12,4,5,.72); --line:rgba(255,90,70,.22); }
-  * { box-sizing:border-box; }
-  html,body { margin:0; height:100%; background:#000; color:#f3e9e7; overflow:hidden;
-    font:14px/1.45 system-ui,"Segoe UI",Roboto,sans-serif; }
-  canvas { position:fixed; inset:0; width:100%; height:100%; display:block; cursor:grab; touch-action:none; }
-  canvas.drag { cursor:grabbing; }
-  .ui { transition:opacity .35s; }
-  body.hide .ui { opacity:0; pointer-events:none; }
-  #cap { position:fixed; left:18px; top:14px; max-width:min(620px,74vw); text-shadow:0 1px 6px #000,0 0 2px #000; pointer-events:none; }
-  #cap .v { font-size:22px; font-weight:700; letter-spacing:.02em; }
-  #cap .v b { color:var(--red); margin-right:.35em; }
-  #cap .tag { color:#e6d6d3; margin-top:4px; }
-  #cap .tag i { color:var(--dim); font-style:normal; }
-  #cap .size { color:var(--dim); margin-top:6px; font-size:12px; }
-  #cap .ph { margin-top:8px; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:#ffb4a8; }
-  #bar { position:fixed; left:0; right:0; bottom:0; padding:10px 16px 12px; background:linear-gradient(transparent,rgba(0,0,0,.82) 45%);
-    display:flex; flex-wrap:wrap; align-items:center; gap:10px 12px; }
-  .grp { display:flex; gap:6px; flex-wrap:wrap; }
-  button { font:inherit; color:inherit; background:var(--bg); border:1px solid var(--line); border-radius:7px; padding:6px 11px; cursor:pointer; white-space:nowrap; }
-  button:hover { border-color:var(--red); }
-  button.on { background:#7d120d; border-color:var(--red); }
-  #hint { color:var(--dim); font-size:12px; margin-left:auto; }
-  #err { position:fixed; inset:0; display:none; place-items:center; padding:30px; text-align:center; color:#ffb4a8; white-space:pre-wrap; font:12px monospace; overflow:auto; }
-  @media (max-width:640px){ #cap .tag { font-size:12px; } #hint { display:none; } }
-</style>
 </head>
 <body>
-<canvas id="cv"></canvas>
-<div id="cap" class="ui"><div class="v"><b id="vk"></b><span id="vn"></span></div><div class="tag" id="vt"></div><div class="size" id="vs"></div><div class="ph" id="ph"></div></div>
-<div id="bar" class="ui">
-  <div class="grp" id="vars"></div>
-  <div class="grp"><button id="bDay">☀ Day</button><button id="bNight">☾ Blood moon</button></div>
-  <div class="grp"><button id="bSpin">⟳ Turn</button><button id="bUi">Hide UI (H)</button></div>
-  <span id="hint">drag to turn · wheel to zoom · 1 2 3 · N night · D day</span>
-</div>
-<div id="err"></div>
+<script src="vanilla/textures.js" onerror="void 0"></script>
+<script src="lib/blocks.js"></script>
+<script src="lib/world.js"></script>
+<script src="lib/textures.js"></script>
+<script src="lib/viewer.js"></script>
 <script>
 'use strict';
-// ---------------------------------------------------------------- helpers
-const ss = (a, b, x) => { x = Math.min(1, Math.max(0, (x-a)/(b-a))); return x*x*(3-2*x); };
-function hash3(x, y, z) { let h = (Math.imul(x|0,374761393) + Math.imul(y|0,668265263) + Math.imul(z|0,1442695041)) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177); h ^= h >>> 16; return (h >>> 0) / 4294967296; }
-function vnoise(x, y, z) { const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
-  const s = t => t*t*(3-2*t), u = s(x-xi), v = s(y-yi), w = s(z-zi), h = (a,b,c) => hash3(xi+a, yi+b, zi+c), l = (a,b,t) => a+(b-a)*t;
-  return l(l(l(h(0,0,0),h(1,0,0),u), l(h(0,1,0),h(1,1,0),u), v), l(l(h(0,0,1),h(1,0,1),u), l(h(0,1,1),h(1,1,1),u), v), w); }
-const norm = a => { const l = Math.hypot(...a) || 1; return a.map(x => x/l); };
-const dirFrom = (az, el) => [Math.sin(az)*Math.cos(el), Math.sin(el), Math.cos(az)*Math.cos(el)];
+const { hash3, vnoise, ss } = CE.math, K = CE.kit;
+const { M4, Tm, Sm, RX, RY, RZ, about, applyP, applyD, spinUp, norm, dirFrom } = CE.m;
+const pick = (list, r) => list[Math.floor(r*list.length) % list.length];
+const RUBBLE = e => pick(['cobblestone', 'gravel', 'cobblestone', 'mossy_cobblestone', 'andesite'], hash3(e.x, e.y*3, e.z));
+const isRoof = e => e.id.startsWith('deepslate_tile');
 
-// matrices, column-major
-const I4 = () => { const m = new Float32Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; };
-const Tm = (x,y,z) => { const m = I4(); m[12] = x; m[13] = y; m[14] = z; return m; };
-const Sm = s => { const m = I4(); m[0] = m[5] = m[10] = s; return m; };
-const RX = a => { const c = Math.cos(a), s = Math.sin(a), m = I4(); m[5] = c; m[6] = s; m[9] = -s; m[10] = c; return m; };
-const RY = a => { const c = Math.cos(a), s = Math.sin(a), m = I4(); m[0] = c; m[2] = -s; m[8] = s; m[10] = c; return m; };
-const RZ = a => { const c = Math.cos(a), s = Math.sin(a), m = I4(); m[0] = c; m[1] = s; m[4] = -s; m[5] = c; return m; };
-function mul(a, b) { const o = new Float32Array(16); for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) { let s = 0; for (let k = 0; k < 4; k++) s += a[k*4+j]*b[i*4+k]; o[i*4+j] = s; } return o; }
-const M4 = (...ms) => ms.reduce((a, b) => mul(a, b));
-const about = (p, m) => M4(Tm(p[0],p[1],p[2]), m, Tm(-p[0],-p[1],-p[2]));
-const applyP = (m, p) => [m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12], m[1]*p[0]+m[5]*p[1]+m[9]*p[2]+m[13], m[2]*p[0]+m[6]*p[1]+m[10]*p[2]+m[14]];
-const applyD = (m, p) => [m[0]*p[0]+m[4]*p[1]+m[8]*p[2], m[1]*p[0]+m[5]*p[1]+m[9]*p[2], m[2]*p[0]+m[6]*p[1]+m[10]*p[2]];
-// eased ramp then linear: integral of a smooth speed-up, so spins start gently
-const spinUp = (n, ramp) => n <= 0 ? 0 : n < ramp ? n*n/(2*ramp) : n - ramp/2;
-
-// ---------------------------------------------------------------- block types (same numbers in the shader)
-const T = { GRASS:0, DIRT:1, PALE:2, PALEMOSS:3, DEEP:4, SLATE:5, PLANK:6, LOG:7, DGLASS:8, RGLASS:9, LEAF:10, RUBBLE:11, BLACK:12,
-  COPPER:13, CANDLE:14, GOLD:15, WOOL:16, BRICK:17, WHITE:18, WATER:19, EYE:20, IRON:21, STONE:22, LENS:23, RUNE:24, FIGURE:25,
-  CRYSTAL:26, SHUTTER:27, BOOKS:28, PINE:29, PALECRACK:30, DEEPCRACK:31, BRICKMOSS:32, CHAR:33 };
-const CLEAR = new Set([T.DGLASS, T.RGLASS, T.LEAF, T.PINE, T.WATER, T.EYE]);
-
-// ---------------------------------------------------------------- the world being built
-function World() {
-  const M = new Map(), F = [], LIGHTS = [], PARTS = [];
-  const K = (x,y,z) => (x+1000)*4e6 + (y+1000)*2000 + (z+1000);
-  return { M, F, LIGHTS, PARTS,
-    set(x,y,z,t,g=0,d=0) { M.set(K(x,y,z), {x,y,z,t,g,d}); },
-    get(x,y,z) { return M.get(K(x,y,z)); },
-    del(x,y,z) { M.delete(K(x,y,z)); },
-    box(x0,y0,z0,x1,y1,z1,t,g=0,d=0) { for (let x = Math.min(x0,x1); x <= Math.max(x0,x1); x++) for (let y = Math.min(y0,y1); y <= Math.max(y0,y1); y++)
-      for (let z = Math.min(z0,z1); z <= Math.max(z0,z1); z++) this.set(x,y,z,t,g,d); },
-    fb(x,y,z,sx,sy,sz,t,g=0,d=0) { F.push({x,y,z,sx,sy,sz,t,g,d}); },
-    light(p,c,rad,d,grp=0) { LIGHTS.push({p,c,rad,d,grp}); },
-    part(x,y,z,kind,ph,size,d,ex,r,g,b) { PARTS.push(x,y,z,kind, ph,size,d,ex, r,g,b); },
-  };
-}
-function dropRubble(W, x, y, z, t) { let yy = y; while (yy > -1 && !W.get(x, yy-1, z)) yy--; if (!W.get(x, yy, z)) W.set(x, yy, z, t); }
-// remove what `test` picks (static blocks only); some of it falls as rubble below
-function collapse(W, test, rubble = T.RUBBLE, chance = .35) {
-  const gone = []; for (const e of W.M.values()) if (e.g === 0 && test(e)) gone.push(e);
-  for (const e of gone) W.del(e.x, e.y, e.z);
-  for (const e of gone) if (e.y > 2 && hash3(e.x+11, e.y, e.z) < chance)
-    dropRubble(W, e.x + Math.round((hash3(e.x, e.y+5, e.z)-.5)*3), e.y, e.z + Math.round((hash3(e.x, e.y, e.z+5)-.5)*3), typeof rubble === 'function' ? rubble(e) : rubble);
-}
-function weather(W) { for (const e of W.M.values()) { if (e.g) continue;
-  const n = vnoise(e.x*.21+3, e.y*.21, e.z*.21), r = hash3(e.x, e.y, e.z);
-  if (e.t === T.PALE) { if (n > .72 - (e.y < 4 ? .2 : 0)) e.t = T.PALEMOSS; else if (r > .88) e.t = T.PALECRACK; }
-  else if (e.t === T.DEEP) { if (r > .84) e.t = T.DEEPCRACK; }
-  else if (e.t === T.BRICK) { if (n > .64 - (e.y < 4 ? .2 : 0)) e.t = T.BRICKMOSS; } } }
-function vines(W, types, chance, seed) { const D = [[1,0],[-1,0],[0,1],[0,-1]];
-  for (const e of [...W.M.values()]) { if (!types.has(e.t) || e.y < 3 || e.g || hash3(e.x*3+seed, e.y, e.z) > chance) continue;
-    for (const [dx, dz] of D) { if (W.get(e.x+dx, e.y, e.z+dz)) continue;
-      const len = 3 + Math.floor(hash3(e.x, e.y*7, e.z)*9), th = .06;
-      for (let k = 0; k < len; k++) { const y = e.y - k; if (y < 0 || !W.get(e.x, y, e.z) || W.get(e.x+dx, y, e.z+dz)) break;
-        W.fb(dx > 0 ? e.x+1 : dx < 0 ? e.x-th : e.x, y, dz > 0 ? e.z+1 : dz < 0 ? e.z-th : e.z, dx ? th : 1, 1, dz ? th : 1, T.LEAF); }
-      break; } } }
-function terrain(W, flat, R = 76) {
-  const hgt = (x, z) => { const v = 1.3*Math.sin(x*.09+z*.05) + .9*Math.sin(z*.13-x*.07+2) + .5*Math.sin(x*.31+z*.23);
-    return Math.round(Math.max(-.6, v+.7) * ss(0, 16, flat(x, z))); };
-  for (let x = -R; x < R; x++) for (let z = -R; z < R; z++) {
-    const h = hgt(x, z); let lo = h;
-    for (const [dx, dz] of [[1,0],[-1,0],[0,1],[0,-1]]) lo = Math.min(lo, hgt(x+dx, z+dz));
-    for (let y = h-1; y >= Math.min(lo-1, h-1); y--) if (!W.get(x, y, z)) W.set(x, y, z, y === h-1 ? T.GRASS : T.DIRT);
-  }
-  const g = (x,z,sx,sz) => W.fb(x, -2, z, sx, 1.02, sz, T.GRASS);
-  g(-400, -400, 800, 400-R); g(-400, R, 800, 400-R); g(-400, -R, 400-R, 2*R); g(R, -R, 400-R, 2*R);
-}
-function pine(W, x, z, h) { const y0 = W.get(x, 0, z) ? 1 : 0;
-  for (let y = 0; y < h; y++) W.set(x, y0+y, z, T.LOG);
-  for (let y = 3; y <= h+1; y++) { const r = Math.max(0, Math.round((h+1-y)*.42)); for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++)
-    if ((dx || dz || y > h-1) && Math.abs(dx)+Math.abs(dz) <= r+ (y%2) && hash3(x+dx, y, z+dz) > .12 && !W.get(x+dx, y0+y, z+dz)) W.set(x+dx, y0+y, z+dz, T.PINE); } }
-function deadTree(W, x, z, h, seed) { for (let y = 0; y < h; y++) W.set(x, y, z, T.LOG);
-  const arms = [[1,0],[-1,0],[0,1],[0,-1],[1,1],[-1,-1]];
-  for (let i = 0; i < 4; i++) { const [dx, dz] = arms[Math.floor(hash3(seed, i, 3)*arms.length)]; let px = x, pz = z, py = h-4+i;
-    for (let k = 0; k < 3+Math.floor(hash3(seed, i, 9)*3); k++) { px += dx; pz += dz; if (k % 2) py++; W.set(px, py, pz, T.LOG); } } }
-function figure(W, x, y, z) { W.fb(x-.3, y, z-.15, .6, .75, .3, T.FIGURE); W.fb(x-.3, y+.75, z-.15, .6, .72, .3, T.FIGURE);
-  W.fb(x-.42, y+.8, z-.12, .12, .65, .24, T.FIGURE); W.fb(x+.3, y+.8, z-.12, .12, .65, .24, T.FIGURE); W.fb(x-.25, y+1.47, z-.25, .5, .5, .5, T.FIGURE); }
-
-// ---------------------------------------------------------------- candidate A: the chapel
-function buildChapel(W) {
+// ================================================================ A · the chapel
+function chapel(W) {
+  const STONE = 'stone_bricks', TRIM = 'polished_blackstone_bricks', HEAD = 'chiseled_stone_bricks', GLASS = 'crimson_eclipse:eclipse_glass';
   const yr = x => 15 + Math.round((7 - Math.abs(x))*1.6);
-  for (let x = -7; x <= 7; x++) for (let z = -26; z <= 16; z++) W.set(x, 0, z, ((x+z) & 1) ? T.BLACK : T.PALE);
-  // nave walls, windows, buttresses
-  for (let z = -18; z <= 14; z++) for (let y = 1; y <= 14; y++) { W.set(-7, y, z, T.PALE); W.set(7, y, z, T.PALE); }
+  for (let x = -7; x <= 7; x++) for (let z = -26; z <= 16; z++) W.set(x, 0, z, ((x + z) & 1) ? 'polished_blackstone' : 'polished_diorite');
+  // nave walls, windows (our eclipse glass: it lights from the altar to the door), buttresses with stair caps
+  for (let z = -18; z <= 14; z++) for (let y = 1; y <= 14; y++) { W.set(-7, y, z, STONE); W.set(7, y, z, STONE); }
   for (const zc of [-14, -8, -2, 4, 10]) for (const sx of [-7, 7]) {
-    const d = 3.8 + (zc+14)*.055 + (sx > 0 ? .08 : 0);
-    for (let dz = -1; dz <= 1; dz++) { for (let y = 3; y <= 10; y++) W.set(sx, y, zc+dz, T.RGLASS, 0, d); W.set(sx, 2, zc+dz, T.BLACK); }
-    W.set(sx, 11, zc, T.RGLASS, 0, d); W.set(sx, 11, zc-1, T.WHITE); W.set(sx, 11, zc+1, T.WHITE); W.set(sx, 12, zc, T.WHITE);
+    const d = 3.8 + (zc + 14)*.055 + (sx > 0 ? .08 : 0);
+    for (let dz = -1; dz <= 1; dz++) { for (let y = 3; y <= 10; y++) W.set(sx, y, zc+dz, GLASS, { d }); W.set(sx, 2, zc+dz, TRIM); }
+    W.set(sx, 11, zc, GLASS, { d }); W.set(sx, 11, zc-1, HEAD); W.set(sx, 11, zc+1, HEAD); W.set(sx, 12, zc, HEAD);
   }
   for (const zp of [-17, -11, -5, 1, 7, 13]) for (const s of [-1, 1]) {
-    for (let y = 1; y <= 12; y++) W.set(s*8, y, zp, T.PALE);
-    for (let y = 1; y <= 8; y++) W.set(s*9, y, zp, T.PALE);
-    for (let y = 1; y <= 4; y++) W.set(s*10, y, zp, T.PALE);
-    W.set(s*8, 13, zp, T.WHITE); W.set(s*9, 9, zp, T.WHITE); W.set(s*10, 5, zp, T.WHITE);
-    if (hash3(zp, s, 1) > .3) W.fb(s*8 + .3, 14, zp + .3, .4, 1.8, .4, T.SLATE);
+    const inward = s < 0 ? 'east' : 'west';
+    for (let y = 1; y <= 12; y++) W.set(s*8, y, zp, STONE);
+    for (let y = 1; y <= 8; y++) W.set(s*9, y, zp, STONE);
+    for (let y = 1; y <= 4; y++) W.set(s*10, y, zp, STONE);
+    W.set(s*8, 13, zp, `stone_brick_stairs[facing=${inward}]`); W.set(s*9, 9, zp, `stone_brick_stairs[facing=${inward}]`); W.set(s*10, 5, zp, `stone_brick_stairs[facing=${inward}]`);
+    if (hash3(zp, s, 1) > .3) W.set(s*8, 14, zp, 'polished_blackstone_brick_wall');
   }
-  // steep stepped roof, ridge cresting, back gable
+  // steep roof: tiles, the top of each column a stair facing the ridge, a crest of wall posts
   for (let z = -18; z <= 14; z++) for (let x = -7; x <= 7; x++) {
-    const a = yr(x), b = x ? yr(Math.abs(x)-1) : a+1; for (let y = a; y < Math.max(b, a+1); y++) W.set(x, y, z, T.SLATE);
-    if (x === 0 && (z & 1)) W.set(0, a+1, z, T.BLACK);
+    const a = yr(x), b = x ? yr(Math.abs(x) - 1) : a + 1, top = Math.max(b, a + 1) - 1;
+    for (let y = a; y <= top; y++) W.set(x, y, z, y === top && x ? `deepslate_tile_stairs[facing=${x < 0 ? 'east' : 'west'}]` : 'deepslate_tiles');
+    if (x === 0 && (z & 1)) W.set(0, a + 1, z, 'deepslate_tile_wall');
   }
-  for (let x = -7; x <= 7; x++) for (let y = 14; y < yr(x); y++) W.set(x, y, -19, T.PALE);
-  // facade: gable, pilasters, door, rose window
-  for (let x = -7; x <= 7; x++) for (let y = 1; y <= yr(x); y++) { W.set(x, y, 15, T.PALE); W.set(x, y, 16, T.PALE); }
-  for (const s of [-1, 1]) { for (let y = 1; y <= 19; y++) { W.set(s*8, y, 15, T.PALE); W.set(s*8, y, 16, T.PALE); } W.set(s*8, 20, 16, T.BLACK); W.fb(s*8+.3, 21, 16.3, .4, 2.2, .4, T.BLACK); }
+  for (let x = -7; x <= 7; x++) for (let y = 14; y < yr(x); y++) W.set(x, y, -19, STONE);
+  // facade: gable, pilasters with pinnacles, pointed door, rose window with the eye
+  for (let x = -7; x <= 7; x++) for (let y = 1; y <= yr(x); y++) { W.set(x, y, 15, STONE); W.set(x, y, 16, STONE); }
+  for (const s of [-1, 1]) { for (let y = 1; y <= 19; y++) { W.set(s*8, y, 15, STONE); W.set(s*8, y, 16, STONE); }
+    W.set(s*8, 20, 16, TRIM); W.set(s*8, 21, 16, 'polished_blackstone_brick_wall'); W.set(s*8, 22, 16, 'polished_blackstone_brick_wall'); }
   const door = (x, y) => (Math.abs(x) <= 2 && y >= 1 && y <= 6) || (Math.abs(x) <= 1 && y === 7) || (x === 0 && y === 8);
   for (let x = -3; x <= 3; x++) for (let y = 1; y <= 9; y++) {
     if (door(x, y)) { W.del(x, y, 15); W.del(x, y, 16); }
-    else if (door(x + Math.sign(x), y) || door(x, y-1)) W.set(x, y, 16, T.BLACK);
+    else if (door(x + Math.sign(x), y) || door(x, y - 1)) W.set(x, y, 16, TRIM);
   }
-  for (let x = -6; x <= 6; x++) for (let y = 9; y <= 21; y++) { const r = Math.hypot(x, y-15); if (r > 5.3) continue;
-    for (const z of [15, 16]) { const a = Math.atan2(y-15, x);
-      if (r > 4.4) W.set(x, y, z, T.BLACK);
-      else if (r < 1.7) W.set(x, y, z, T.EYE, 0, 4.3);
-      else if (Math.abs(Math.sin(a*4)) < .24) W.set(x, y, z, T.BLACK);
-      else W.set(x, y, z, T.RGLASS, 0, 4.15); } }
-  W.fb(-2, 0.99, 17.4, 2.6, .3, 5.6, T.PLANK);                 // the left door leaf, fallen
-  W.fb(.3, 1, 14.6, 2.4, 6.2, .3, T.PLANK);                    // the right one, hanging ajar
+  for (let x = -6; x <= 6; x++) for (let y = 9; y <= 21; y++) { const r = Math.hypot(x, y - 15); if (r > 5.3) continue;
+    for (const z of [15, 16]) { const a = Math.atan2(y - 15, x);
+      if (r > 4.4) W.set(x, y, z, TRIM);
+      else if (r < 1.7) W.set(x, y, z, 'crimson_eclipse:eclipse_eye', { d:4.3 });
+      else if (Math.abs(Math.sin(a*4)) < .24) W.set(x, y, z, TRIM);
+      else W.set(x, y, z, GLASS, { d:4.15 }); } }
+  // the door leaves: one fallen flat on the grass (trapdoors), one swung open inside (open trapdoors stacked)
+  for (const x of [-2, -1]) for (let z = 18; z <= 21; z++) if (hash3(x, z, 2) > .15) W.set(x, 0, z, 'dark_oak_trapdoor[half=bottom]');
+  for (let y = 1; y <= 6; y++) for (const z of [13, 14]) W.set(2, y, z, 'dark_oak_trapdoor[open=true,facing=west]');
   // bell tower (front left)
   for (let y = 0; y <= 30; y++) for (let x = -13; x <= -9; x++) for (let z = 14; z <= 18; z++) {
     const edge = x === -13 || x === -9 || z === 14 || z === 18; if (!edge && y > 0) continue;
     const mid = (x > -13 && x < -9) || (z > 14 && z < 18), corner = !mid;
-    if (y >= 21 && y <= 26 && !corner) continue;               // belfry openings
-    if (((y >= 8 && y <= 10) || (y >= 15 && y <= 17)) && ((x === -11 && (z === 14 || z === 18)) || (z === 16 && (x === -13 || x === -9)))) { W.set(x, y, z, T.DGLASS, 0, 9); continue; }
-    W.set(x, y, z, y === 20 || y === 30 ? T.BLACK : T.PALE);
+    if (y >= 21 && y <= 26 && !corner) continue;                                 // belfry openings
+    if (((y >= 8 && y <= 10) || (y >= 15 && y <= 17)) && ((x === -11 && (z === 14 || z === 18)) || (z === 16 && (x === -13 || x === -9)))) { W.set(x, y, z, GLASS, { d:9 }); continue; }
+    W.set(x, y, z, y === 20 || y === 30 ? TRIM : STONE);
   }
-  for (const [x, z] of [[-13,14],[-9,14],[-13,18],[-9,18]]) { W.set(x, 31, z, T.BLACK); W.fb(x+.3, 32, z+.3, .4, 1.8, .4, T.BLACK); }
-  for (let k = 0; k < 10; k++) { const h = k < 3 ? 2 : k < 6 ? 1 : 0;
-    for (let dx = -h; dx <= h; dx++) for (let dz = -h; dz <= h; dz++) if (Math.max(Math.abs(dx), Math.abs(dz)) === h) W.set(-11+dx, 31+k, 16+dz, T.SLATE); }
-  W.fb(-11.6, 25.4, 15.2, .15, .3, 1.6, T.LOG); W.fb(-10.45, 25.4, 15.2, .15, .3, 1.6, T.LOG);
-  // the bell (group 1), hung on a yoke along z, swings about the z axis
-  const bell = (x,y,z,sx,sy,sz,t) => W.fb(x,y,z,sx,sy,sz,t,1,0);
-  bell(-11.2, 25.4, 15.1, .4, .4, 1.8, T.LOG);
-  bell(-11.45, 24.85, 15.95, .9, .55, .9, T.GOLD); bell(-11.65, 23.75, 15.75, 1.3, 1.1, 1.3, T.GOLD); bell(-11.85, 23.45, 15.55, 1.7, .32, 1.7, T.GOLD);
-  bell(-11.1, 23.0, 16.4, .2, .7, .2, T.IRON); bell(-11.18, 22.75, 16.32, .36, .3, .36, T.IRON);
+  for (const [x, z] of [[-13,14], [-9,14], [-13,18], [-9,18]]) { W.set(x, 31, z, TRIM); W.set(x, 32, z, 'polished_blackstone_brick_wall'); W.set(x, 33, z, 'polished_blackstone_brick_wall'); }
+  K.pyramid(W, -11, 16, 31, [2, 2, 2, 1, 1, 1, 0, 0, 0, 0], 'deepslate_tiles', 'deepslate_tile_stairs');
+  for (let x = -12; x <= -10; x++) W.set(x, 26, 16, 'dark_oak_log[axis=x]');               // the bell's beam
+  W.set(-11, 25, 16, 'bell[attachment=ceiling,facing=north]', { parts:{ body:1 } });
   // apse with tall slits and a half dome
-  for (let x = -8; x <= 8; x++) for (let z = -27; z <= -19; z++) { const r = Math.hypot(x+.5-.5, z+18.5), a = Math.atan2(z+18.5, x);
+  for (let x = -8; x <= 8; x++) for (let z = -27; z <= -19; z++) { const r = Math.hypot(x, z + 18.5), a = Math.atan2(z + 18.5, x);
     if (r >= 6.5 && r < 7.6) for (let y = 1; y <= 13; y++) {
       const slit = y >= 4 && y <= 10 && [-Math.PI/2, -Math.PI/4, -3*Math.PI/4].some(s => Math.abs(a - s) < .12);
-      W.set(x, y, z, slit ? T.RGLASS : T.PALE, 0, 3.7); }
-    for (let y = 14; y <= 21; y++) { const rr = 7.1*Math.sqrt(Math.max(0, 1 - ((y-14)/7.6)**2)); if (r >= rr-1.25 && r < rr) W.set(x, y, z, T.SLATE); } }
-  // altar, candles, banner, chest
-  W.box(-2, 1, -23, 2, 1, -22, T.WHITE); W.fb(-2.15, 2, -23.15, 5.3, .15, 2.3, T.BLACK);
-  for (let i = 0; i < 7; i++) W.fb(-1.85 + i*.6, 2.15, -22.4 - (i % 2)*.4, .18, .35 + (i % 3)*.15, .18, T.CANDLE, 0, 3.6 + i*.05);
-  W.fb(-1, 3.5, -25.35, 2, 6, .12, T.WOOL); W.fb(-1.3, 9.4, -25.4, 2.6, .25, .25, T.GOLD);
-  W.fb(-.45, 1, -20.6, .9, .75, .7, T.PLANK); W.fb(-.48, 1.55, -20.64, .96, .25, .78, T.PLANK); W.fb(-.1, 1.45, -19.9, .2, .25, .05, T.GOLD);
-  // pews, carpet, banners
-  for (let z = -15; z <= 10; z += 2.6) for (const s of [-1, 1]) { const r = hash3(Math.round(z*10), s, 5), x0 = s < 0 ? -6 : 2;
+      W.set(x, y, z, slit ? GLASS : STONE, { d:3.7 }); }
+    for (let y = 14; y <= 21; y++) { const rr = 7.1*Math.sqrt(Math.max(0, 1 - ((y - 14)/7.6)**2)); if (r >= rr - 1.25 && r < rr) W.set(x, y, z, 'deepslate_tiles'); } }
+  // altar with candles (lit one by one under the blood moon), banners, the loot chest
+  W.box(-2, 1, -23, 2, 1, -22, TRIM);
+  for (let x = -2; x <= 2; x++) for (const z of [-23, -22]) { const i = (x + 2)*2 + (z + 23);
+    if (hash3(x, z, 7) > .25) W.set(x, 2, z, `candle[candles=${1 + Math.floor(hash3(x, z, 8)*4)},lit=false]`, { awake:{ lit:true }, d:3.6 + i*.08 }); }
+  W.set(0, 6, -24, 'red_wall_banner[facing=south]'); W.set(-2, 6, -24, 'black_wall_banner[facing=south]'); W.set(2, 6, -24, 'black_wall_banner[facing=south]');
+  W.set(0, 1, -20, 'chest[facing=south]', { parts:{ lid:3 } });
+  // pews (stairs, the backrest towards the door), the carpet, banners on the walls
+  for (let z = -15; z <= 9; z += 3) for (const xs of [[-6, -3], [3, 6]]) { const r = hash3(z, xs[0], 5);
     if (r < .2) continue;
-    if (r < .38) { W.fb(x0, 1, z, 4, .15, 1.1, T.PLANK); continue; }
-    W.fb(x0, 1.45, z, 4, .15, .6, T.PLANK); W.fb(x0, 1.45, z+.6, 4, .9, .12, T.PLANK);
-    W.fb(x0+.2, 1, z+.1, .15, .45, .4, T.PLANK); W.fb(x0+3.65, 1, z+.1, .15, .45, .4, T.PLANK); }
-  for (let z = -18; z <= 14; z++) if (hash3(0, z, 77) > .22 && Math.abs(z+1) > 3) W.fb(-1.2, 1, z, 2.4, .05, 1, T.WOOL);
-  for (const zb of [-11, -5, 1, 7]) for (const s of [-1, 1]) if (hash3(zb, s, 31) > .35) W.fb(s < 0 ? -5.95 : 5.83, 6, zb-.6, .12, 4 + hash3(zb,s,2)*2.5, 1.2, T.WOOL);
-  // the crater and the crystal that broke through the roof (group 2)
-  for (let x = -4; x <= 4; x++) for (let z = -5; z <= 3; z++) { const r = Math.hypot(x, z+1);
-    if (r < 2.7) { W.del(x, 0, z); W.set(x, -1, z, T.RUBBLE); W.set(x, -2, z, T.DIRT); }
-    else if (r < 3.9 && hash3(x, 1, z) > .45) W.set(x, 1, z, T.RUBBLE); }
-  const cr = (x,y,z,sx,sy,sz) => W.fb(x,y,z,sx,sy,sz,T.CRYSTAL,2,3.2);
-  cr(-.7, -.6, -1.7, 1.4, 5.8, 1.4); cr(.55, -.4, -1.25, .85, 3.4, .85); cr(-1.5, -.5, -.7, .75, 2.7, .75); cr(.15, -.5, -.05, .6, 2.3, .6); cr(-1.1, -.5, -2.3, .55, 1.9, .55);
+    for (let x = xs[0]; x <= xs[1]; x++) { if (r < .38) { if (hash3(x, z, 6) > .5) W.set(x, 1, z, 'dark_oak_slab'); continue; }
+      W.set(x, 1, z, 'dark_oak_stairs[facing=south]'); } }
+  for (let z = -18; z <= 14; z++) for (let x = -1; x <= 1; x++) if (hash3(x, z, 77) > .22 && Math.abs(z + 1) > 3) W.set(x, 1, z, 'red_carpet');
+  for (const zb of [-11, -5, 1, 7]) for (const s of [-1, 1]) if (hash3(zb, s, 31) > .35) W.set(s*6, 8, zb, `red_wall_banner[facing=${s < 0 ? 'east' : 'west'}]`);
+  // the crater and the crimson crystal that broke through the roof (group 2: it lifts and turns)
+  for (let x = -4; x <= 4; x++) for (let z = -5; z <= 3; z++) { const r = Math.hypot(x, z + 1);
+    if (r < 2.7) { W.del(x, 0, z); W.del(x, 1, z); W.set(x, -1, z, RUBBLE({ x, y:-1, z })); W.set(x, -2, z, 'dirt'); }
+    else if (r < 3.9 && hash3(x, 1, z) > .45) W.set(x, 1, z, RUBBLE({ x, y:1, z })); }
+  const CR = 'crimson_eclipse:crimson_crystal', CL = 'crimson_eclipse:crimson_crystal_cluster', g2 = { g:2 };
+  const spike = (x, z, y0, y1) => { for (let y = y0; y <= y1; y++) W.set(x, y, z, CR, g2); W.set(x, y1 + 1, z, CL, g2); };
+  spike(0, -1, 0, 6); spike(-1, -1, 0, 4); spike(0, -2, 0, 3); spike(-1, -2, 0, 5);
+  spike(1, -1, 0, 2); spike(-2, -2, 0, 1); spike(0, 0, 0, 1); spike(-1, -3, 0, 2);
   // ruin: roof hole above the crystal, broken windows, a collapsed corner, a fallen spire tip
-  collapse(W, e => e.t === T.SLATE && e.z >= -19 && e.y >= 15 && Math.hypot(e.x*.7, e.z+1) < 5.8 + 3.6*(vnoise(e.x*.25, e.y*.25, e.z*.25)-.5)*2);
-  collapse(W, e => e.y >= 11 && Math.abs(e.x) === 7 && Math.abs(e.z+1) < 4 && vnoise(e.x*.3, e.y*.3, e.z*.3) > .4);
-  collapse(W, e => e.t === T.RGLASS && Math.abs(e.x) === 7 && vnoise(e.x*.4+9, e.y*.35, e.z*.4) > .56, T.RUBBLE, .1);
-  collapse(W, e => e.x >= 3 && e.x <= 8 && e.z >= 15 && e.y >= 17 && vnoise(e.x*.3, e.y*.3, e.z*.3) > .38);
-  collapse(W, e => e.x > 6 && e.z >= 5 && e.z <= 11 && e.y > 7 && e.y < 15 && vnoise(e.x*.3+5, e.y*.3, e.z*.3) > .45);
-  collapse(W, e => e.y >= 38 && e.x < -8 && e.z > 13, T.SLATE);
-  for (const z of [-6, -3, 0, 3]) { const brk = hash3(z, 9, 9);
-    W.fb(-7, 14.2, z+.35, brk > .5 ? 14 : 6 + brk*6, .35, .35, T.LOG);
-    for (let x = -6; x <= 6; x++) if (!W.get(x, yr(x), z) && hash3(x, z, 4) > .35) W.fb(x+.1, yr(x)-.3, z+.33, .8, .32, .32, T.LOG); }
+  K.collapse(W, e => isRoof(e) && e.z >= -19 && e.y >= 15 && Math.hypot(e.x*.7, e.z + 1) < 5.8 + 3.6*(vnoise(e.x*.25, e.y*.25, e.z*.25) - .5)*2, RUBBLE);
+  K.collapse(W, e => e.y >= 11 && Math.abs(e.x) === 7 && Math.abs(e.z + 1) < 4 && vnoise(e.x*.3, e.y*.3, e.z*.3) > .4, RUBBLE);
+  K.collapse(W, e => e.id === GLASS && Math.abs(e.x) === 7 && vnoise(e.x*.4 + 9, e.y*.35, e.z*.4) > .56, 'gravel', .1);
+  K.collapse(W, e => e.x >= 3 && e.x <= 8 && e.z >= 15 && e.y >= 17 && vnoise(e.x*.3, e.y*.3, e.z*.3) > .38, RUBBLE);
+  K.collapse(W, e => e.x > 6 && e.z >= 5 && e.z <= 11 && e.y > 7 && e.y < 15 && vnoise(e.x*.3 + 5, e.y*.3, e.z*.3) > .45, RUBBLE);
+  K.collapse(W, e => e.y >= 38 && e.x < -8 && e.z > 13, 'deepslate_tiles');
+  // what is left of the roof frame: tie beams, and rafters where the tiles fell
+  for (const z of [-6, -3, 0, 3]) { const brk = hash3(z, 9, 9), len = brk > .5 ? 13 : 5 + Math.floor(brk*6);
+    for (let x = -6; x <= -6 + len - 1; x++) if (!W.get(x, 14, z)) W.set(x, 14, z, 'dark_oak_log[axis=x]');
+    for (let x = -6; x <= 6; x++) if (!W.get(x, yr(x), z) && !W.get(x, yr(x) - 1, z) && hash3(x, z, 4) > .35) W.set(x, yr(x) - 1, z, 'dark_oak_log[axis=x]'); }
   // a tree grew inside, through the hole
-  for (let y = 1; y <= 12; y++) W.set(4, y, -5, T.LOG);
-  for (const [x, y, z] of [[5,9,-5],[6,10,-5],[3,10,-6],[3,11,-6],[4,11,-4]]) W.set(x, y, z, T.LOG);
+  for (let y = 1; y <= 12; y++) W.set(4, y, -5, 'dark_oak_log');
+  for (const [x, y, z, ax] of [[5,9,-5,'x'], [6,10,-5,'x'], [3,10,-6,'z'], [3,11,-6,'y'], [4,11,-4,'z']]) W.set(x, y, z, `dark_oak_log[axis=${ax}]`);
   for (let x = -1; x <= 9; x++) for (let y = 10; y <= 17; y++) for (let z = -10; z <= 0; z++)
-    if (Math.hypot(x-4, (y-13.5)*1.2, z+5) < 3.8 && hash3(x, y, z) > .28 && !W.get(x, y, z)) W.set(x, y, z, T.LEAF);
-  weather(W);
-  vines(W, new Set([T.PALE, T.PALEMOSS, T.PALECRACK]), .018, 1);
-  // graveyard on the right
-  for (let i = 0; i < 16; i++) { const x = 13 + (i % 4)*3 + Math.round(hash3(i,1,1)), z = -13 + Math.floor(i/4)*5 + Math.round(hash3(i,2,1)*2);
-    if (hash3(i, 3, 3) < .5) W.fb(x+.1, 0, z+.38, .8, 1.25, .24, T.STONE);
-    else { W.fb(x+.38, 0, z+.38, .24, 1.6, .24, T.STONE); W.fb(x+.05, .95, z+.38, .9, .24, .24, T.STONE); } }
-  for (let x = 11; x <= 26; x++) for (const z of [-16, 9]) W.fb(x+.45, 0, z+.45, .1, 1.5, .1, T.IRON);
-  deadTree(W, 20, -3, 8, 4);
-  figure(W, 3.6, 0, 20);
+    if (Math.hypot(x - 4, (y - 13.5)*1.2, z + 5) < 3.8 && hash3(x, y, z) > .28 && !W.get(x, y, z)) W.set(x, y, z, 'dark_oak_leaves');
+  K.weather(W, { stone_bricks:(e, n, r) => n > .72 - (e.y < 4 ? .2 : 0) ? 'mossy_stone_bricks' : r > .88 ? 'cracked_stone_bricks' : null,
+    polished_blackstone_bricks:(e, n, r) => r > .85 ? 'cracked_polished_blackstone_bricks' : null });
+  K.vines(W, e => e.id.includes('stone_bricks'), .018, 1);
+  // graveyard on the right: headstones (walls), crosses (walls), mounds, an iron fence
+  for (let i = 0; i < 16; i++) { const x = 13 + (i % 4)*3 + Math.round(hash3(i, 1, 1)), z = -13 + Math.floor(i/4)*5 + Math.round(hash3(i, 2, 1)*2);
+    W.set(x, -1, z + 1, hash3(i, 4, 4) > .5 ? 'podzol' : 'coarse_dirt');
+    if (hash3(i, 3, 3) < .5) { W.set(x, 0, z, hash3(i, 5, 5) > .5 ? 'mossy_stone_brick_wall' : 'stone_brick_wall'); }
+    else { for (let y = 0; y <= 2; y++) W.set(x, y, z, 'cobblestone_wall'); W.set(x - 1, 1, z, 'cobblestone_wall'); W.set(x + 1, 1, z, 'cobblestone_wall'); } }
+  for (let x = 11; x <= 26; x++) for (const z of [-16, 9]) if (hash3(x, z, 9) > .1) W.set(x, 0, z, x % 5 === 1 ? 'polished_blackstone_wall' : 'iron_bars');
+  K.deadTree(W, 20, -3, 8, 4);
+  W.figure(4, 0, 20);
   return {
-    key:'A', name:'Chapel of the Eclipse',
-    tag:'A tall gothic chapel, roof caved in by a crimson crystal that fell from the sky long ago. <i>Under the blood moon:</i> the crystal lifts and turns, a red pillar rises through the hole, the stained glass lights up from the altar to the door, the rose window opens like an eye and the bell starts to swing.',
+    tag:'A tall gothic chapel, roof caved in by a crimson crystal that fell from the sky long ago. <i>Under the blood moon:</i> the crystal lifts and turns, a red pillar rises through the hole, the altar candles light one by one, the eclipse glass lights from the altar to the door, the rose window opens like an eye, the bell swings and the chest by the altar opens.',
     cam:{ target:[-1, 12, -3], dist:78, yaw:.72, pitch:.2 },
-    sun: norm([.45, .78, .5]), moon: dirFrom(.72 + Math.PI + .32, .26),
-    flat: (x, z) => Math.max(Math.abs(x+2) - 30, Math.abs(z+4) - 30, 0),
-    shakeAt: 3.2,
+    sun:norm([.45, .78, .5]), moon:dirFrom(.72 + Math.PI + .32, .26),
+    flat:(x, z) => Math.max(Math.abs(x + 2) - 30, Math.abs(z + 4) - 30, 0),
+    shakeAt:3.2,
     groups(nt, t) {
       const g = [];
-      const kb = ss(4.6, 6.2, nt); g[1] = about([-11, 25.6, 16], RZ(kb*.62*Math.sin(t*2.3) + (1-kb)*.012*Math.sin(t*.7)));
-      const kc = ss(3.2, 5.5, nt); g[2] = M4(Tm(0, kc*1.6 + kc*.18*Math.sin(t*1.3), 0), about([0, 0, -1], M4(RY(spinUp(nt-3.2, 2)*.45), RX((1-kc)*.12))));
+      const kb = ss(4.6, 6.2, nt); g[1] = about([-10.5, 26, 16.5], RX(kb*.62*Math.sin(t*2.3) + (1 - kb)*.012*Math.sin(t*.7)));
+      const kc = ss(3.2, 5.5, nt); g[2] = M4(Tm(0, kc*1.6 + kc*.18*Math.sin(t*1.3), 0), about([0, 0, -1], M4(RY(spinUp(nt - 3.2, 2)*.45), RX((1 - kc)*.0))));
+      g[3] = about([.5, 1 + 9/16, -20 + 1/16], RX(-ss(5, 6.5, nt)*1.15));
       return g;
     },
-    beams(nt, t, G) { const p = applyP(G[2], [0, 4.5, -1]); return [{ a:p, b:[p[0], 200, p[2]], w:1.1, e:ss(4.0, 5.5, nt) }]; },
+    beams(nt, t, G) { const p = applyP(G[2], [0, 8, -1]); return [{ a:p, b:[p[0], 200, p[2]], w:1.1, e:ss(4.0, 5.5, nt) }]; },
+    lights(W) {
+      W.light([0, 3, -1], [4.5, .45, .32], 13, 3.2, 2);
+      W.light([0, 14, 20], [3.4, .34, .26], 13, 4.4);
+      for (let i = 0; i < 230; i++) W.part(-6 + hash3(i,1,2)*12, 1 + hash3(i,2,2)*13, -17 + hash3(i,3,2)*30, 0, hash3(i,4,2), .07, 0, 0, 1,1,1);
+      for (let i = 0; i < 200; i++) { const a = hash3(i,5,2)*6.283, r = hash3(i,6,2)*2.6;
+        W.part(Math.cos(a)*r, .5, -1 + Math.sin(a)*r, 1, hash3(i,7,2), .12 + hash3(i,8,2)*.1, 3.5, 14 + hash3(i,9,2)*14, 4, .5, .3); }
+    },
+    trees:[[-44,-28,12], [-50,0,14], [-40,34,11], [46,-38,12], [54,-6,13], [-14,-54,12], [16,-52,13], [-32,-46,10]],
   };
 }
-function chapelLights(W) {
-  W.light([0, 2.8, -22], [3.2, 1.0, .4], 7, 3.6);
-  W.light([0, 3, -1], [4.5, .45, .32], 13, 3.2, 2);
-  W.light([0, 14, 12.6], [3.2, .32, .24], 9, 4.2);
-  W.light([0, 14, 20], [3.4, .34, .26], 13, 4.4);
-  W.light([-5.6, 7, -8], [2.6, .25, .2], 6, 4.15); W.light([5.6, 7, -8], [2.6, .25, .2], 6, 4.2);
-  W.light([-5.6, 7, 4], [2.6, .25, .2], 6, 4.5); W.light([5.6, 7, 4], [2.6, .25, .2], 6, 4.55);
-  for (let i = 0; i < 230; i++) W.part(-6 + hash3(i,1,2)*12, 1 + hash3(i,2,2)*13, -17 + hash3(i,3,2)*30, 0, hash3(i,4,2), .07, 0, 0, 1,1,1);
-  for (let i = 0; i < 200; i++) { const a = hash3(i,5,2)*6.283, r = hash3(i,6,2)*2.6;
-    W.part(Math.cos(a)*r, .5, -1 + Math.sin(a)*r, 1, hash3(i,7,2), .12 + hash3(i,8,2)*.1, 3.5, 14 + hash3(i,9,2)*14, 4, .5, .3); }
-}
 
-// ---------------------------------------------------------------- candidate B: the observatory
-function buildObservatory(W) {
-  const F = 4, D = F + 14;
-  // rock platform, stairs, lantern posts
+// ================================================================ B · the observatory
+function observatory(W) {
+  const F = 4, D = F + 14, P = [0, D + 1, 0], A = [-14, F + 4, 7], GLASS = 'crimson_eclipse:eclipse_glass';
+  const moon = dirFrom(-.62, .27), az = Math.atan2(moon[0], moon[2]), el = Math.asin(moon[1]);
+  // rock platform, stairs up, two candle posts
   for (let x = -26; x <= 28; x++) for (let z = -26; z <= 26; z++) {
-    const rr = Math.hypot(x*(x > 0 ? .8 : 1), z*1.08), edge = 22 + 2.6*(vnoise(x*.15, 0, z*.15)-.5)*2;
-    if (rr >= edge) continue; const top = rr < edge-2 ? 3 : rr < edge-1 ? 2 : 1;
-    for (let y = 0; y <= top; y++) W.set(x, y, z, T.STONE);
-    if (top === 3 && rr < edge-3.5) W.set(x, 3, z, ((x+z) & 1) ? T.DEEP : T.PALE);
+    const rr = Math.hypot(x*(x > 0 ? .8 : 1), z*1.08), edge = 22 + 2.6*(vnoise(x*.15, 0, z*.15) - .5)*2;
+    if (rr >= edge) continue; const top = rr < edge - 2 ? 3 : rr < edge - 1 ? 2 : 1;
+    for (let y = 0; y <= top; y++) W.set(x, y, z, hash3(x, y, z) > .8 ? 'andesite' : 'stone');
+    if (top === 3 && rr < edge - 3.5) W.set(x, 3, z, ((x + z) & 1) ? 'deepslate_tiles' : 'polished_andesite');
   }
-  for (let z = -28; z <= -18; z++) for (let x = -2; x <= 2; x++) { const h = Math.min(3, z+24);
-    for (let y = 0; y <= 6; y++) W.del(x, y, z); for (let y = 0; y <= h; y++) W.set(x, y, z, y === h ? T.PALE : T.STONE); }
-  for (const s of [-3, 3]) { for (let y = 0; y <= 2; y++) W.set(s, y, -24, T.BLACK); W.fb(s+.3, 3, -24+.3, .4, .55, .4, T.CANDLE, 0, s < 0 ? 3.2 : 3.3); W.fb(s+.2, 3.55, -23.8, .6, .12, .6, T.BLACK); }
-  // rotunda: pilasters, windows, door, cornice
+  for (let z = -28; z <= -18; z++) for (let x = -2; x <= 2; x++) { const h = Math.min(3, z + 24);
+    for (let y = 0; y <= 6; y++) W.del(x, y, z);
+    for (let y = 0; y <= h; y++) W.set(x, y, z, y === h ? (h === 3 ? 'polished_andesite' : 'polished_andesite_stairs[facing=south]') : 'stone'); }
+  for (const s of [-3, 3]) { for (let y = 0; y <= 2; y++) W.set(s, y, -24, 'polished_blackstone_wall');
+    W.set(s, 3, -24, 'candle[candles=3,lit=false]', { awake:{ lit:true }, d:s < 0 ? 3.2 : 3.3 }); }
+  // rotunda: pilasters, eclipse-glass windows (they light round the drum), door, cornice, a gallery floor
   for (let x = -11; x <= 11; x++) for (let z = -11; z <= 11; z++) {
     const r = Math.hypot(x, z), a8 = Math.atan2(z, x)*4/Math.PI, fr = a8 - Math.floor(a8);
-    const pil = Math.abs(fr - .5) < .1, win = Math.min(fr, 1-fr) < .11, k = Math.round(a8);
-    if (r >= 8.5 && r < (pil ? 10.6 : 9.6)) for (let y = F; y <= F+13; y++) {
-      let t = pil ? T.PALE : T.DEEP;
-      if (y === F+13) t = T.BLACK;
+    const pil = Math.abs(fr - .5) < .1, win = Math.min(fr, 1 - fr) < .11, k = Math.round(a8);
+    if (r >= 8.5 && r < (pil ? 10.6 : 9.6)) for (let y = F; y <= F + 13; y++) {
+      let t = pil ? 'polished_andesite' : 'deepslate_bricks';
+      if (y === F + 13) t = 'polished_blackstone_bricks';
       else if (win && !pil && r < 9.6) {
-        if (k === -2 || k === 0) { if (y <= F+5) continue; if (y === F+6) t = T.BLACK; }
-        else if (y >= F+3 && y <= F+10) { W.set(x, y, z, T.DGLASS, 0, 4 + ((k+8) % 8)*.12); continue; }
-        else if (y === F+2 || y === F+11) t = T.BLACK;
+        if (k === -2 || k === 0) { if (y <= F + 5) continue; if (y === F + 6) t = 'polished_blackstone_bricks'; }
+        else if (y >= F + 3 && y <= F + 10) { W.set(x, y, z, GLASS, { d:4 + ((k + 8) % 8)*.12 }); continue; }
+        else if (y === F + 2 || y === F + 11) t = 'polished_blackstone_bricks';
       }
       W.set(x, y, z, t);
     }
-    if (r >= 5.5 && r < 8.5 && hash3(x, 9, z) > .18) W.set(x, F+6, z, T.PLANK);
+    if (r >= 5.5 && r < 8.5 && hash3(x, 9, z) > .18) W.set(x, F + 6, z, 'spruce_planks');
   }
-  // dome (group 1) with its shutter strip (group 2) and ribs
-  for (let x = -10; x <= 10; x++) for (let z = -10; z <= 10; z++) for (let y = D; y <= D+10; y++) {
-    const r3 = Math.hypot(x, y-D, z); if (r3 < 8.7 || r3 >= 9.75) continue;
-    if (Math.abs(x) <= 1 && z >= 0) { W.set(x, y, z, T.SHUTTER, 2); continue; }
-    W.set(x, y, z, Math.abs(Math.sin(Math.atan2(z, x)*6)) < .16 ? T.BLACK : T.COPPER, 1);
+  // the dome (group 1: it turns to the moon) and its shutter strip (group 2: it slides open)
+  for (let x = -10; x <= 10; x++) for (let z = -10; z <= 10; z++) for (let y = D; y <= D + 10; y++) {
+    const r3 = Math.hypot(x, y - D, z); if (r3 < 8.7 || r3 >= 9.75) continue;
+    if (Math.abs(x) <= 1 && z >= 0) { W.set(x, y, z, 'oxidized_cut_copper', { g:2 }); continue; }
+    W.set(x, y, z, Math.abs(Math.sin(Math.atan2(z, x)*6)) < .16 ? 'polished_blackstone' : hash3(x, y, z) > .3 ? 'oxidized_copper' : 'weathered_copper', { g:1 });
   }
-  for (const e of [...W.M.values()]) if (e.g === 1 && e.x < -2 && e.y > D+2 && Math.hypot(e.x+6, e.y-D-5, e.z+2) < 4.6 + 2*(vnoise(e.x*.4, e.y*.4, e.z*.4)-.5)) {
-    W.del(e.x, e.y, e.z); if (hash3(e.x, e.y, e.z) < .4) dropRubble(W, e.x+3, F+5, e.z, T.RUBBLE); }
-  // telescope pillar and fork (static), the tube (group 3)
-  W.box(-1, F, -1, 0, D-1, 0, T.BLACK); W.fb(-1.7, D-1, -.4, .3, 1.7, .8, T.BLACK); W.fb(1.4, D-1, -.4, .3, 1.7, .8, T.BLACK);
-  const P = [0, D+.4, 0], tb = (x,y,z,sx,sy,sz,t,d=0) => W.fb(x, y, z, sx, sy, sz, t, 3, d);
-  tb(-1.1, P[1]-1.1, -6, 2.2, 2.2, 14.3, T.IRON);
-  for (const z of [-5.5, -1, 3.4, 7.4]) tb(-1.35, P[1]-1.35, z, 2.7, 2.7, .45, T.GOLD);
-  tb(-.95, P[1]-.95, 8.3, 1.9, 1.9, .14, T.LENS, 4.8); tb(-.35, P[1]-.35, -7, .7, .7, 1, T.GOLD); tb(-.7, P[1]-1.9, -5.4, 1.4, .75, 1.4, T.IRON);
-  // armillary sphere on the terrace (groups 4, 5, 6)
-  const A = [-13.5, F+4.6, 7.5];
-  W.fb(A[0]-.7, F, A[2]-.7, 1.4, .5, 1.4, T.BLACK); W.fb(A[0]-.4, F+.5, A[2]-.4, .8, 1.6, .8, T.BLACK); W.fb(A[0]-.6, F+2.1, A[2]-.6, 1.2, .3, 1.2, T.GOLD);
-  W.fb(A[0]-.42, A[1]-.42, A[2]-.42, .84, .84, .84, T.CRYSTAL, 0, 4.6);
-  const ring = (rad, plane, g) => { for (let i = 0; i < 34; i++) { const a = i/34*Math.PI*2, c = Math.cos(a)*rad, s = Math.sin(a)*rad, q = .38;
-    const p = plane === 'xz' ? [A[0]+c, A[1], A[2]+s] : [A[0]+c, A[1]+s, A[2]]; W.fb(p[0]-q/2, p[1]-q/2, p[2]-q/2, q, q, q, T.RUNE, g, 4.6); } };
-  ring(2.7, 'xz', 4); ring(2.35, 'xy', 5); ring(2.0, 'xz', 6);
+  for (const e of [...W.M.values()]) if (e.g === 1 && e.x < -2 && e.y > D + 2 && Math.hypot(e.x + 6, e.y - D - 5, e.z + 2) < 4.6 + 2*(vnoise(e.x*.4, e.y*.4, e.z*.4) - .5)) {
+    W.del(e.x, e.y, e.z); if (hash3(e.x, e.y, e.z) < .4) K.dropRubble(W, e.x + 3, F + 5, e.z, 'cobblestone'); }
+  // the telescope: pillar and fork (static), the tube (group 3): copper, gold rings, our moon lens at the mouth
+  W.box(-1, F, -1, 0, D - 1, 0, 'polished_blackstone');
+  for (const x of [-2, 1]) for (let y = D - 1; y <= D; y++) W.set(x, y, 0, 'polished_blackstone_wall');
+  const g3 = { g:3 };
+  for (let z = -6; z <= 8; z++) for (let x = -1; x <= 0; x++) for (let y = D; y <= D + 1; y++) W.set(x, y, z, z === 8 ? 'crimson_eclipse:moon_lens' : z === -6 ? 'chiseled_copper' : 'cut_copper', { ...g3, d:8.6 });
+  for (const z of [-5, 3, 7]) for (let x = -2; x <= 1; x++) for (let y = D - 1; y <= D + 2; y++) if (x < -1 || x > 0 || y < D || y > D + 1) W.set(x, y, z, 'gold_block', g3);
+  // the armillary sphere on the terrace: our anchor block on a pedestal, its rings are groups 4, 5, 6
+  W.set(A[0], F, A[2], 'chiseled_polished_blackstone'); W.set(A[0], F + 1, A[2], 'polished_blackstone_wall'); W.set(A[0], F + 2, A[2], 'polished_blackstone_wall');
+  W.set(A[0], F + 3, A[2], 'gold_block'); W.set(A[0], F + 4, A[2], 'crimson_eclipse:armillary', { parts:{ ringA:4, ringB:5, ringC:6 }, d:4.6 });
   // library wing with a portico, mostly fallen in
-  for (let x = 10; x <= 24; x++) for (let z = -7; z <= 7; z++) for (let y = F; y <= F+11; y++) {
+  for (let x = 10; x <= 24; x++) for (let z = -7; z <= 7; z++) for (let y = F; y <= F + 11; y++) {
     const wall = x === 24 || z === -7 || z === 7 || x === 10;
-    if (y === F+5 && !wall) { W.set(x, y, z, T.PLANK); continue; }
-    if (y === F+11) { W.set(x, y, z, T.BLACK); continue; }
-    if (!wall) { if (y < F+4 && (z === 6 || z === -6) && x > 11 && x < 23 && hash3(x, y, z) > .15) W.set(x, y, z, T.BOOKS); continue; }
-    if (x === 10 && Math.abs(z) <= 1 && y <= F+3) continue;
-    const win = (z === 7 || z === -7) && (x % 3 === 0) && x < 24 && ((y >= F+2 && y <= F+3) || (y >= F+7 && y <= F+9));
-    W.set(x, y, z, win ? T.DGLASS : T.DEEP, 0, 5.3 + (x-10)*.08 + (y > F+5 ? .4 : 0));
+    if (y === F + 5 && !wall) { W.set(x, y, z, 'spruce_planks'); continue; }
+    if (y === F + 11) { W.set(x, y, z, 'polished_blackstone_bricks'); continue; }
+    if (!wall) { if (y < F + 4 && (z === 6 || z === -6) && x > 11 && x < 23 && hash3(x, y, z) > .15) W.set(x, y, z, 'bookshelf'); continue; }
+    if (x === 10 && Math.abs(z) <= 1 && y <= F + 3) continue;
+    const win = (z === 7 || z === -7) && (x % 3 === 0) && x < 24 && ((y >= F + 2 && y <= F + 3) || (y >= F + 7 && y <= F + 9));
+    W.set(x, y, z, win ? GLASS : 'deepslate_bricks', { d:5.3 + (x - 10)*.08 + (y > F + 5 ? .4 : 0) });
   }
   for (const x of [11, 14, 17, 20, 23]) { const fallen = x === 17 || x === 23;
-    for (let y = F; y <= (fallen ? F+1 : F+8); y++) W.set(x, y, -10, T.PALE);
-    if (fallen) W.fb(x-4.5, F, -12.5, 6, 1, 1, T.PALE); else W.set(x, F+9, -10, T.BLACK); }
-  for (let x = 10; x <= 21; x++) if (hash3(x, 3, 3) > .4) W.set(x, F+9, -10, T.BLACK);
-  collapse(W, e => e.x > 15 && e.y > F+4 + 4*vnoise(e.x*.3, 1, e.z*.3) - (e.x-15)*.25 && e.x <= 24 && e.z >= -7 && e.z <= 7);
-  collapse(W, e => e.x > 9 && e.x < 25 && e.z >= -10 && e.z <= -10 && e.y > F+8 && hash3(e.x, e.y, 1) > .5);
-  collapse(W, e => e.g === 0 && e.t !== T.BLACK && Math.hypot(e.x, e.z) >= 8.5 && Math.hypot(e.x, e.z) < 10.6 && e.x > 2 && e.z > 3 && e.y > F+7 && vnoise(e.x*.35, e.y*.3, e.z*.35) > .45);
-  weather(W);
-  vines(W, new Set([T.PALE, T.DEEP, T.DEEPCRACK, T.STONE]), .022, 2);
-  for (const [x, z, h] of [[-40,-24,11],[-46,6,13],[-36,32,10],[42,-34,12],[50,14,14],[-16,48,12],[54,-8,10]]) pine(W, x, z, h);
-  figure(W, 4.2, 0, -27);
-  const az = Math.atan2(this_moon[0], this_moon[2]), el = Math.asin(this_moon[1]);
+    for (let y = F; y <= (fallen ? F + 1 : F + 8); y++) W.set(x, y, -10, 'quartz_pillar');
+    if (fallen) for (let k = 2; k <= 6; k++) W.set(x - k, F, -12, 'quartz_pillar[axis=x]'); else W.set(x, F + 9, -10, 'polished_blackstone_bricks'); }
+  for (let x = 10; x <= 21; x++) if (hash3(x, 3, 3) > .4) W.set(x, F + 9, -10, 'polished_blackstone_bricks');
+  K.collapse(W, e => e.x > 15 && e.y > F + 4 + 4*vnoise(e.x*.3, 1, e.z*.3) - (e.x - 15)*.25 && e.x <= 24 && e.z >= -7 && e.z <= 7, RUBBLE);
+  K.collapse(W, e => e.x > 9 && e.x < 25 && e.z === -10 && e.y > F + 8 && hash3(e.x, e.y, 1) > .5, RUBBLE);
+  K.collapse(W, e => e.g === 0 && e.id !== 'polished_blackstone_bricks' && Math.hypot(e.x, e.z) >= 8.5 && Math.hypot(e.x, e.z) < 10.6 && e.x > 2 && e.z > 3 && e.y > F + 7 && vnoise(e.x*.35, e.y*.3, e.z*.35) > .45, RUBBLE);
+  K.weather(W, { deepslate_bricks:(e, n, r) => r > .84 ? 'cracked_deepslate_bricks' : null, stone:(e, n) => n > .66 ? 'mossy_cobblestone' : null,
+    polished_andesite:(e, n) => n > .7 ? 'andesite' : null });
+  K.vines(W, e => e.id === 'deepslate_bricks' || e.id === 'stone' || e.id === 'polished_andesite', .022, 2);
+  W.figure(4, 0, -27);
   return {
-    key:'B', name:'Moonwatch Observatory',
     tag:'A domed observatory on a rock above the plain, its library wing fallen in, a dead brass sphere on the terrace. <i>Under the blood moon:</i> the dome grinds round to face the moon, the shutters slide open, the great telescope lifts and fires a red beam into it; the sphere\'s rings start turning around a red core.',
     cam:{ target:[3, 12, 0], dist:82, yaw:Math.PI - .62, pitch:.2 },
-    sun: norm([.35, .78, -.55]), moon: this_moon,
-    flat: (x, z) => Math.max(Math.hypot(x*(x > 0 ? .8 : 1), z) - 26, 0),
-    shakeAt: 3.3,
+    sun:norm([.35, .78, -.55]), moon,
+    flat:(x, z) => Math.max(Math.hypot(x*(x > 0 ? .8 : 1), z) - 26, 0),
+    shakeAt:3.3,
     groups(nt, t) {
       const g = [], k = ss(3.3, 6.8, nt), open = ss(5.2, 7.6, nt), tilt = ss(6.4, 9, nt);
-      const Y = RY(az*k + (1-k)*0);
+      const Y = RY(az*k);
       g[1] = Y;
       g[2] = M4(Y, about([0, D, 0], M4(RX(-1.68*open), Sm(1 + .06*open))));
-      g[3] = M4(Y, about(P, RX(.1*(1-tilt) - el*tilt)));
-      const n = nt - 4.6;
-      g[4] = about(A, RX(.6 + spinUp(n, 1.5)*1.3)); g[5] = about(A, RY(.3 + spinUp(n, 1.5)*.9)); g[6] = about(A, M4(RZ(.41), RY(spinUp(n, 1.5)*-1.7), RX(.2 + spinUp(n,1.5)*.5)));
+      g[3] = M4(Y, about(P, RX(-el*tilt)));
+      const n = nt - 4.6, C = [A[0] + .5, A[1] + .5, A[2] + .5];
+      g[4] = about(C, RX(.6 + spinUp(n, 1.5)*1.3)); g[5] = about(C, RY(.3 + spinUp(n, 1.5)*.9)); g[6] = about(C, M4(RZ(.41), RY(spinUp(n, 1.5)*-1.7), RX(.2 + spinUp(n, 1.5)*.5)));
       return g;
     },
-    beams(nt, t, G) { const p = applyP(G[3], [0, P[1], 8.5]), d = applyD(G[3], [0, 0, 1]);
-      return [{ a:p, b:[p[0]+d[0]*260, p[1]+d[1]*260, p[2]+d[2]*260], w:.75, e:ss(8.6, 10, nt) }]; },
+    beams(nt, t, G) { const p = applyP(G[3], [0, P[1], 9]), d = applyD(G[3], [0, 0, 1]);
+      return [{ a:p, b:[p[0] + d[0]*260, p[1] + d[1]*260, p[2] + d[2]*260], w:.75, e:ss(8.6, 10, nt) }]; },
+    lights(W) {
+      W.light([0, D + 1, 9.5], [6, .6, .4], 14, 8.6, 3);
+      W.light([0, D + 6, 0], [2.4, .25, .18], 9, 6);
+      for (let i = 0; i < 160; i++) W.part(-7 + hash3(i,1,3)*14, F + 1 + hash3(i,2,3)*16, -7 + hash3(i,3,3)*14, 0, hash3(i,4,3), .07, 0, 0, 1,1,1);
+      for (let i = 0; i < 90; i++) { const a = hash3(i,5,3)*6.283, r = 1 + hash3(i,6,3)*2;
+        W.part(A[0] + .5 + Math.cos(a)*r, F + 2.5, A[2] + .5 + Math.sin(a)*r, 1, hash3(i,7,3), .1, 4.8, 5 + hash3(i,8,3)*4, 4, .55, .3); }
+    },
+    trees:[[-40,-24,11], [-46,6,13], [-36,32,10], [42,-34,12], [50,14,14], [-16,48,12], [54,-8,10]],
   };
 }
-let this_moon = null;
-function observatoryLights(W) {
-  const F = 4, D = F + 14;
-  W.light([0, D+.4, 9], [6, .6, .4], 14, 5, 3);
-  W.light([0, F+3, 0], [3.2, .35, .25], 9, 4.2);
-  W.light([-13.5, F+4.6, 7.5], [4, .4, .3], 7, 4.6);
-  W.light([-3.2, 3.6, -23.7], [3.2, 1.0, .35], 6, 3.2); W.light([3.2, 3.6, -23.7], [3.2, 1.0, .35], 6, 3.3);
-  W.light([17, F+3, 0], [2.6, .28, .2], 7, 5.5);
-  W.light([0, D+6, 0], [2.4, .25, .18], 9, 6);
-  for (let i = 0; i < 160; i++) W.part(-7 + hash3(i,1,3)*14, F+1 + hash3(i,2,3)*16, -7 + hash3(i,3,3)*14, 0, hash3(i,4,3), .07, 0, 0, 1,1,1);
-  for (let i = 0; i < 90; i++) { const a = hash3(i,5,3)*6.283, r = 1 + hash3(i,6,3)*2;
-    W.part(-13.5 + Math.cos(a)*r, F+2.5, 7.5 + Math.sin(a)*r, 1, hash3(i,7,3), .1, 4.8, 5 + hash3(i,8,3)*4, 4, .55, .3); }
-}
 
-// ---------------------------------------------------------------- candidate C: the manor
-function buildManor(W) {
-  const yb3 = [2, 7, 12];
-  for (let x = -15; x <= 15; x++) for (let z = -7; z <= 7; z++) W.set(x, 0, z, T.PLANK);
-  // main block: walls, bands, quoins, floors
+// ================================================================ C · the manor
+function manor(W) {
+  const yb3 = [2, 7, 12], BRICK = 'bricks', WHITE = 'calcite', FLOOR = 'dark_oak_planks', PANE = 'glass_pane';
+  const candleAt = [];
+  for (let x = -15; x <= 15; x++) for (let z = -7; z <= 7; z++) W.set(x, 0, z, FLOOR);
+  // main block: walls, bands, quoins, floors (and an attic floor)
   for (let x = -15; x <= 15; x++) for (let z = -7; z <= 7; z++) for (let y = 1; y <= 15; y++) {
     const edge = x === -15 || x === 15 || z === -7 || z === 7;
-    if (!edge) { if (y === 5 || y === 10) W.set(x, y, z, T.PLANK); continue; }
-    const corner = (Math.abs(x) >= 14 && Math.abs(z) >= 6);
-    W.set(x, y, z, (y === 5 || y === 10 || y === 15) ? T.WHITE : corner && (y % 2 === 0) ? T.WHITE : T.BRICK);
+    if (!edge) { if (y === 5 || y === 10 || y === 15) W.set(x, y, z, FLOOR); continue; }
+    const corner = Math.abs(x) >= 14 && Math.abs(z) >= 6;
+    W.set(x, y, z, (y === 5 || y === 10 || y === 15) ? WHITE : corner && (y % 2 === 0) ? WHITE : BRICK);
   }
-  // windows, lit one after the other at night
+  // windows: glass panes; behind each one a candle that lights under the blood moon, one room after the other
   const wins = [];
   for (const yb of yb3) {
     for (const x of [12, 9, 6, -7, -10, -13]) wins.push([x, yb, 7, 'z']);
@@ -399,495 +283,127 @@ function buildManor(W) {
     for (const z of [-4, 2]) wins.push([15, yb, z, 'x']);
   }
   wins.forEach(([a, yb, b, ax], i) => { const d = 3.6 + i*.21 + hash3(i, 2, 2)*.3, broken = hash3(i, 7, 7) < .28;
-    for (let k = 0; k <= 1; k++) for (let y = yb; y <= yb+2; y++) {
-      const x = ax === 'z' ? a+k : a, z = ax === 'z' ? b : b+k; if (broken) W.del(x, y, z); else W.set(x, y, z, T.DGLASS, 0, d); }
-    for (let k = -1; k <= 2; k++) { const x = ax === 'z' ? a+k : a, z = ax === 'z' ? b : b+k; W.set(x, yb-1, z, T.WHITE); W.set(x, yb+3, z, T.WHITE); } });
-  // central tower with a portico, balcony and clock
+    for (let k = 0; k <= 1; k++) for (let y = yb; y <= yb + 2; y++) {
+      const x = ax === 'z' ? a + k : a, z = ax === 'z' ? b : b + k; if (broken) W.del(x, y, z); else W.set(x, y, z, PANE); }
+    for (let k = -1; k <= 2; k++) { const x = ax === 'z' ? a + k : a, z = ax === 'z' ? b : b + k; W.set(x, yb - 1, z, WHITE); W.set(x, yb + 3, z, WHITE); }
+    candleAt.push([ax === 'z' ? a : a - Math.sign(a), yb - 1, ax === 'z' ? b - Math.sign(b) : b, d]); });
+  // central tower: portico, balcony with iron railing, the clock (our anchor: its hands turn backwards at night)
   for (let x = -2; x <= 2; x++) for (let z = 6; z <= 10; z++) for (let y = 1; y <= 24; y++) {
     const edge = x === -2 || x === 2 || z === 6 || z === 10;
-    if (!edge) { if (y === 5 || y === 10 || y === 15) W.set(x, y, z, T.PLANK); else W.del(x, y, z); continue; }
+    if (!edge) { if (y === 5 || y === 10 || y === 15) W.set(x, y, z, FLOOR); else W.del(x, y, z); continue; }
     if (z === 7 && y <= 15) { W.del(x, y, z); continue; }
-    W.set(x, y, z, (Math.abs(x) === 2 && (z === 6 || z === 10) && y % 2 === 0) || y === 15 || y === 24 ? T.WHITE : T.BRICK);
+    W.set(x, y, z, (Math.abs(x) === 2 && (z === 6 || z === 10) && y % 2 === 0) || y === 15 || y === 24 ? WHITE : BRICK);
   }
   for (let x = -1; x <= 1; x++) for (let y = 1; y <= 3; y++) W.del(x, y, 10); W.del(0, 4, 10);
-  for (const [x, y] of [[-2,1],[-2,2],[-2,3],[2,1],[2,2],[2,3],[-1,4],[1,4],[0,5]]) W.set(x, y, 10, T.WHITE);
-  for (const yb of [7, 12, 17]) for (let y = yb; y <= yb+1; y++) W.set(0, y, 10, T.DGLASS, 0, 4.4 + yb*.08);
-  for (const s of [-3, 3]) for (let y = 1; y <= 5; y++) W.set(s, y, 12, T.WHITE);
-  W.box(-3, 6, 11, 3, 6, 12, T.WHITE);
-  for (let x = -3; x < 3; x += .5) W.fb(x+.2, 7, 12.85, .08, .9, .08, T.IRON); W.fb(-3, 7.85, 12.8, 6, .1, .18, T.IRON);
-  W.fb(-1.75, 19.7, 10.98, 3.5, 3.5, .08, T.BLACK); W.fb(-1.55, 19.9, 11.0, 3.1, 3.1, .08, T.WHITE);
-  for (let i = 0; i < 12; i++) { const a = i/12*Math.PI*2; W.fb(Math.sin(a)*1.25 - .08, 21.45 + Math.cos(a)*1.25 - .08, 11.04, .16, .16, .04, T.BLACK); }
-  W.fb(-.06, 21.45, 11.08, .12, 1.3, .05, T.BLACK, 1); W.fb(-.09, 21.45, 11.12, .18, .85, .05, T.BLACK, 2);
-  for (let k = 0; k < 9; k++) { const h = k < 2 ? 2 : k < 4 ? 1 : 0;
-    for (let dx = -h; dx <= h; dx++) for (let dz = -h; dz <= h; dz++) if (Math.max(Math.abs(dx), Math.abs(dz)) === h) W.set(dx, 25+k, 8+dz, T.SLATE); }
-  W.fb(-.08, 34, 7.92, .16, 1.6, .16, T.IRON);
-  // mansard roof, dormers, chimneys
+  for (const [x, y] of [[-2,1], [-2,2], [-2,3], [2,1], [2,2], [2,3], [-1,4], [1,4], [0,5]]) W.set(x, y, 10, WHITE);
+  for (const yb of [7, 12, 17]) { for (let y = yb; y <= yb + 1; y++) W.set(0, y, 10, PANE); candleAt.push([0, yb - 1, 9, 4.4 + yb*.08]); }
+  for (const s of [-3, 3]) for (let y = 1; y <= 5; y++) W.set(s, y, 12, 'quartz_pillar');
+  W.box(-3, 6, 11, 3, 6, 12, 'smooth_quartz');
+  for (let x = -3; x <= 3; x++) W.set(x, 7, 12, 'iron_bars'); W.set(-3, 7, 11, 'iron_bars'); W.set(3, 7, 11, 'iron_bars');
+  for (let x = -2; x <= 2; x++) for (let y = 19; y <= 23; y++) if (Math.abs(x) === 2 || y === 19 || y === 23) W.set(x, y, 10, 'polished_blackstone_bricks'); else W.set(x, y, 10, WHITE);
+  W.set(0, 21, 10, 'crimson_eclipse:vigil_clock[facing=south]', { parts:{ minute:1, hour:2 } });
+  K.pyramid(W, 0, 8, 25, [2, 2, 1, 1, 0, 0, 0, 0, 0], 'deepslate_tiles', 'deepslate_tile_stairs');
+  W.set(0, 34, 8, 'iron_chain');
+  // mansard roof (stairs on each step), dormers, chimneys
   const ins = [0, 0, 1, 1, 2, 4, 6, 99];
   for (let y = 16; y <= 22; y++) for (let x = -15; x <= 15; x++) for (let z = -7; z <= 7; z++) {
     if (x >= -2 && x <= 2 && z >= 6) continue;
-    const d = Math.min(x+15, 15-x, z+7, 7-z), i = y - 16;
-    if (d >= ins[i] && (y === 22 || d < ins[i+1] + 1)) W.set(x, y, z, T.SLATE); }
+    const d = Math.min(x + 15, 15 - x, z + 7, 7 - z), i = y - 16;
+    if (!(d >= ins[i] && (y === 22 || d < ins[i+1] + 1))) continue;
+    if (d === ins[i] && y < 22 && ins[i+1] > ins[i]) { const f = d === x + 15 ? 'east' : d === 15 - x ? 'west' : d === z + 7 ? 'south' : 'north';
+      W.set(x, y, z, `deepslate_tile_stairs[facing=${f}]`); }
+    else W.set(x, y, z, 'deepslate_tiles'); }
   for (const x of [-11, -6, 5, 10]) for (const z of [7, -7]) { const s = Math.sign(z);
-    for (let y = 16; y <= 18; y++) for (let k = 0; k <= 1; k++) W.set(x+k, y, z, y <= 17 ? T.DGLASS : T.BRICK, 0, 7.6 + (x+11)*.05);
-    for (let k = -1; k <= 2; k++) { W.set(x+k, 19, z, T.SLATE); W.set(x+k, 19, z - s, T.SLATE); } }
-  for (const [x, z, top] of [[11,-4,26],[11,3,25],[-12,-4,25],[-12,3,21]]) { W.box(x, 16, z, x+1, top, z+1, T.BRICK); if (top > 22) W.box(x, top+1, z, x+1, top+1, z+1, T.BLACK); }
+    for (let y = 16; y <= 18; y++) for (let k = 0; k <= 1; k++) W.set(x + k, y, z, y <= 17 ? PANE : BRICK);
+    for (let k = -1; k <= 2; k++) { W.set(x + k, 19, z, 'deepslate_tile_slab'); W.set(x + k, 19, z - s, 'deepslate_tile_slab'); }
+    for (let k = 0; k <= 1; k++) W.del(x + k, 16, z - s);
+    candleAt.push([x, 16, z - s, 7.6 + (x + 11)*.05]); }
+  for (const [x, z, top] of [[11,-4,26], [11,3,25], [-12,-4,25], [-12,3,21]]) { W.box(x, 16, z, x + 1, top, z + 1, BRICK); if (top > 22) W.box(x, top + 1, z, x + 1, top + 1, z + 1, 'polished_blackstone_bricks'); }
   // side wings: the right one overgrown, the left one burnt out
   for (const s of [1, -1]) for (let ax = 16; ax <= 26; ax++) for (let z = -5; z <= 4; z++) {
     const x = s*ax, edge = ax === 26 || z === -5 || z === 4;
-    W.set(x, 0, z, T.PLANK);
+    W.set(x, 0, z, FLOOR);
     for (let y = 1; y <= 10; y++) {
-      if (!edge) { if (y === 5) W.set(x, y, z, T.PLANK); continue; }
+      if (!edge) { if (y === 5) W.set(x, y, z, FLOOR); continue; }
       const win = z === 4 && (ax === 18 || ax === 19 || ax === 22 || ax === 23) && ((y >= 2 && y <= 4) || (y >= 7 && y <= 9));
-      W.set(x, y, z, win ? (s > 0 ? T.DGLASS : T.CHAR) : (y === 5 || y === 10) ? T.WHITE : T.BRICK, 0, 6.4 + ax*.06 + (y > 5 ? .5 : 0));
+      if (win) { if (s > 0) W.set(x, y, z, PANE); continue; }
+      W.set(x, y, z, (y === 5 || y === 10) ? WHITE : BRICK);
     }
-    const d = Math.min(ax-16, 26-ax, z+5, 4-z);
-    for (let y = 11; y <= 14; y++) if (d >= y-11 && (d < y-10 || y === 14)) W.set(x, y, z, T.SLATE);
+    const d = Math.min(ax - 16, 26 - ax, z + 5, 4 - z);
+    for (let y = 11; y <= 14; y++) if (d >= y - 11 && (d < y - 10 || y === 14)) W.set(x, y, z, 'deepslate_tiles');
   }
   for (const e of W.M.values()) if (e.x <= -16 && e.g === 0) {
-    if (e.t === T.BRICK || e.t === T.WHITE) e.t = vnoise(e.x*.3, e.y*.3, e.z*.3) > .45 ? T.CHAR : T.BLACK;
-    if (e.t === T.PLANK || e.t === T.CHAR && e.y === 5) e.t = T.CHAR; }
-  collapse(W, e => e.x <= -16 && (e.t === T.SLATE || (e.y > 6 && vnoise(e.x*.3+4, e.y*.25, e.z*.3) > .42) || (e.y === 5 && hash3(e.x, 5, e.z) > .5)), T.CHAR);
-  for (const z of [-3, 0, 3]) W.fb(-26, 10.3, z+.3, 10 + hash3(z, 1, 1)*1, .35, .35, T.CHAR);
+    if (e.id === BRICK || e.id === WHITE) e.id = vnoise(e.x*.3, e.y*.3, e.z*.3) > .45 ? 'blackstone' : hash3(e.x, e.y, e.z) > .5 ? 'cracked_polished_blackstone_bricks' : 'polished_blackstone_bricks';
+    if (e.id === FLOOR) e.id = hash3(e.x, e.y, e.z) > .4 ? 'coal_block' : 'stripped_dark_oak_log'; }
+  K.collapse(W, e => e.x <= -16 && (isRoof(e) || (e.y > 6 && vnoise(e.x*.3 + 4, e.y*.25, e.z*.3) > .42) || (e.y === 5 && hash3(e.x, 5, e.z) > .5)), 'blackstone');
+  for (const z of [-3, 0, 3]) for (let x = -26; x <= -17; x++) if (!W.get(x, 10, z) && hash3(x, z, 1) > .15) W.set(x, 10, z, 'stripped_dark_oak_log[axis=x]');
   // collapsed back corner of the main block
-  collapse(W, e => e.x >= 7 && e.x <= 15 && e.z <= 2 && e.y >= 7 && vnoise(e.x*.28, e.y*.28, e.z*.28) > .32 - (e.x-7)*.035);
-  weather(W);
-  vines(W, new Set([T.BRICK, T.BRICKMOSS, T.WHITE]), .03, 3);
+  K.collapse(W, e => e.x >= 7 && e.x <= 15 && e.z <= 2 && e.y >= 7 && vnoise(e.x*.28, e.y*.28, e.z*.28) > .32 - (e.x - 7)*.035, RUBBLE);
+  // the candles, only where a floor is left under them
+  for (const [x, y, z, d] of candleAt) if (!W.get(x, y, z) && W.get(x, y - 1, z) && CE.blocks.fullSolid(W.get(x, y - 1, z)))
+    W.set(x, y, z, `candle[candles=${2 + Math.floor(hash3(x, y, z)*3)},lit=false]`, { awake:{ lit:true }, d });
+  K.vines(W, e => e.id === BRICK || e.id === WHITE, .03, 3);
   return { yb3 };
 }
-function manorPost(W) {
-  // courtyard after the terrain: gravel path, fountain, fence and gate, hedges, dead trees
-  for (let z = 11; z <= 36; z++) for (let x = -1; x <= 1; x++) { const r = Math.hypot(x, z-22); if (r > 4.5 && hash3(x, z, 6) > .08) W.set(x, -1, z, T.RUBBLE); }
-  for (let x = -7; x <= 7; x++) for (let z = 15; z <= 29; z++) { const r = Math.hypot(x, z-22);
-    if (r >= 4.5 && r < 6.2 && hash3(x, z, 6) > .1) W.set(x, -1, z, T.RUBBLE);
-    if (r >= 3 && r < 4) W.set(x, 0, z, T.WHITE);
-    else if (r < 3) { W.set(x, -1, z, T.WHITE); W.set(x, 0, z, T.WATER, 0, 4); } }
-  W.fb(-.4, 0, 21.6, .8, 2.7, .8, T.WHITE); W.fb(-1.25, 2.7, 20.75, 2.5, .38, 2.5, T.WHITE); W.fb(-1.05, 3.0, 20.95, 2.1, .1, 2.1, T.WATER, 0, 4.1);
+function manorGrounds(W) {     // after the terrain: gravel path, the fountain, fence and gate, hedges, dead trees
+  for (let z = 11; z <= 36; z++) for (let x = -1; x <= 1; x++) { const r = Math.hypot(x, z - 22); if (r > 4.5 && hash3(x, z, 6) > .08) W.set(x, -1, z, hash3(x, z, 7) > .3 ? 'gravel' : 'coarse_dirt'); }
+  for (let x = -7; x <= 7; x++) for (let z = 15; z <= 29; z++) { const r = Math.hypot(x, z - 22);
+    if (r >= 4.5 && r < 6.2 && hash3(x, z, 6) > .1) W.set(x, -1, z, 'gravel');
+    if (r >= 3 && r < 4) W.set(x, 0, z, 'calcite');
+    else if (r < 3) { W.set(x, -1, z, 'calcite'); W.set(x, 0, z, 'water', { awake:'crimson_eclipse:blood_water', d:4 }); } }
+  W.set(0, 0, 22, 'quartz_pillar'); W.set(0, 1, 22, 'quartz_pillar'); W.box(-1, 2, 21, 1, 2, 23, 'smooth_quartz');
+  for (let x = -1; x <= 1; x++) for (let z = 21; z <= 23; z++) W.set(x, 3, z, x || z !== 22 ? 'smooth_quartz_slab' : 'water', x || z !== 22 ? {} : { awake:'crimson_eclipse:blood_water', d:4.1 });
   for (let x = -24; x <= 23; x++) { if (x >= -2 && x <= 1) continue;
-    if (x === -3 || x === 2) { for (let y = 0; y <= 2; y++) W.set(x, y, 36, T.WHITE); W.fb(x+.3, 3, 36.3, .4, .55, .4, T.CANDLE, 0, 3.2); W.fb(x+.2, 3.55, 36.2, .6, .12, .6, T.BLACK); continue; }
-    if (x % 4 === 0) { W.set(x, 0, 36, T.BLACK); W.fb(x+.2, 1, 36.2, .6, .25, .6, T.BLACK); }
-    else if (hash3(x, 36, 1) > .12) { W.fb(x+.45, 0, 36.45, .1, 1.9, .1, T.IRON); W.fb(x, 1.6, 36.46, 1, .08, .08, T.IRON); } }
-  for (const [s, g] of [[-1, 3], [1, 4]]) { const h = s < 0 ? -2 : 2;
-    for (let k = 0; k < 2; k += .4) W.fb(h - s*(k+.25) - .05, 0, 36.45, .1, 2.1, .1, T.IRON, g);
-    W.fb(s < 0 ? -2 : 0, .3, 36.46, 2, .1, .08, T.IRON, g); W.fb(s < 0 ? -2 : 0, 1.85, 36.46, 2, .1, .08, T.IRON, g); }
-  for (const s of [-3, 3]) for (let z = 13; z <= 33; z++) { if (z > 16 && z < 28) continue; for (let y = 0; y <= 1; y++) if (hash3(s, y, z) > .25) W.set(s, y, z, T.LEAF); }
-  deadTree(W, -12, 25, 9, 7); deadTree(W, 13, 30, 8, 11); deadTree(W, -22, 14, 7, 13);
-  for (const [x, z, h] of [[-44,-18,12],[-36,-34,14],[36,-30,13],[46,-8,11],[-50,10,12],[24,-46,13],[-10,-46,12]]) pine(W, x, z, h);
-  figure(W, 2.6, 0, 31);
+    if (x === -3 || x === 2) { for (let y = 0; y <= 2; y++) W.set(x, y, 36, 'calcite'); W.set(x, 3, 36, 'candle[candles=4,lit=false]', { awake:{ lit:true }, d:x < 0 ? 3.2 : 3.25 }); continue; }
+    if (x % 4 === 0) { W.set(x, 0, 36, 'polished_blackstone_brick_wall'); W.set(x, 1, 36, 'polished_blackstone_brick_wall'); }
+    else if (hash3(x, 36, 1) > .12) { W.set(x, 0, 36, 'iron_bars'); W.set(x, 1, 36, 'iron_bars'); } }
+  for (let x = -2; x <= 1; x++) for (let y = 0; y <= 1; y++) W.set(x, y, 36, 'iron_bars', { g:x < 0 ? 3 : 4 });     // the gate's two leaves
+  for (const s of [-3, 3]) for (let z = 13; z <= 33; z++) { if (z > 16 && z < 28) continue; for (let y = 0; y <= 1; y++) if (hash3(s, y, z) > .25) W.set(s, y, z, 'azalea_leaves'); }
+  K.deadTree(W, -12, 25, 9, 7); K.deadTree(W, 13, 30, 8, 11); K.deadTree(W, -22, 14, 7, 13);
+  W.figure(2, 0, 31);
 }
 function manorMeta() {
   return {
-    key:'C', name:'Vigil Manor',
-    tag:'A three-storey brick manor with a clock tower, one wing burnt out, a corner fallen in, a dry fountain in an overgrown courtyard. <i>Under the blood moon:</i> the gate swings open, the lanterns catch, the windows light red one after the other as if someone walks from room to room, the fountain runs red and the clock turns backwards.',
+    tag:'A three-storey brick manor with a clock tower, one wing burnt out, a corner fallen in, a dry fountain in an overgrown courtyard. <i>Under the blood moon:</i> the gate swings open, the candles on the gate piers catch, then a candle behind each window, room after room, as if someone walks the house; the fountain runs red and the clock turns backwards.',
     cam:{ target:[0, 10, 6], dist:88, yaw:.45, pitch:.2 },
-    sun: norm([.45, .76, .55]), moon: dirFrom(.45 + Math.PI + .4, .24),
-    flat: (x, z) => Math.max(Math.abs(x) - 32, Math.abs(z-12) - 30, 0),
-    shakeAt: null,
+    sun:norm([.45, .76, .55]), moon:dirFrom(.45 + Math.PI + .4, .24),
+    flat:(x, z) => Math.max(Math.abs(x) - 32, Math.abs(z - 12) - 30, 0),
+    shakeAt:null,
     groups(nt, t) {
-      const g = [], C = [0, 21.45, 11.1], n = Math.max(0, nt - 5.5);
-      g[1] = about(C, RZ(-.3*0 + .35 + spinUp(n, 1)*2.4)); g[2] = about(C, RZ(-.15*0 + 1.1 + spinUp(n, 1)*.2));
-      const k = ss(3.2, 7.5, nt), a = .22 + k*1.35 + (1-k)*.03*Math.sin(t*.8);
+      const g = [], C = [.5, 21.5, 11.1], n = Math.max(0, nt - 5.5);
+      g[1] = about(C, RZ(.35 + spinUp(n, 1)*2.4)); g[2] = about(C, RZ(1.1 + spinUp(n, 1)*.2));
+      const k = ss(3.2, 7.5, nt), a = k*1.35 + (1 - k)*.03*Math.sin(t*.8);
       g[3] = about([-2, 0, 36.5], RY(a)); g[4] = about([2, 0, 36.5], RY(-a));
       return g;
     },
-    beams() { return []; },
+    lights(W) {
+      for (let i = 0; i < 140; i++) W.part(-18 + hash3(i,1,4)*36, .5 + hash3(i,2,4)*9, 10 + hash3(i,3,4)*26, 0, hash3(i,4,4), .07, 0, 0, 1,1,1);
+      for (let i = 0; i < 130; i++) W.part(.5, 3.6, 22.5, 2, hash3(i,5,4), .07, 4.3, 0, 3, .15, .12);
+      for (let i = 0; i < 110; i++) W.part(-26 + hash3(i,6,4)*10, 1, -5 + hash3(i,7,4)*9, 1, hash3(i,8,4), .09, 1, 6 + hash3(i,9,4)*6, 4, .8, .3);
+    },
+    trees:[[-44,-18,12], [-36,-34,14], [36,-30,13], [46,-8,11], [-50,10,12], [24,-46,13], [-10,-46,12]],
   };
 }
-function manorLights(W) {
-  W.light([0, 2.2, 12], [3.4, .5, .3], 8, 3.4);
-  W.light([0, 2.2, 22], [3.2, .2, .18], 7, 4);
-  W.light([-2.5, 3.4, 37.2], [3.2, 1.0, .35], 6, 3.2); W.light([2.5, 3.4, 37.2], [3.2, 1.0, .35], 6, 3.25);
-  W.light([-9, 3, 9], [2.4, .3, .2], 6, 4.6); W.light([9, 8, 9], [2.4, .3, .2], 6, 6.5); W.light([0, 13, 9.5], [2.4, .3, .2], 6, 8.2);
-  W.light([0, 21.5, 13], [2.6, .3, .22], 5, 5.5);
-  for (let i = 0; i < 140; i++) W.part(-18 + hash3(i,1,4)*36, .5 + hash3(i,2,4)*9, 10 + hash3(i,3,4)*26, 0, hash3(i,4,4), .07, 0, 0, 1,1,1);
-  for (let i = 0; i < 130; i++) W.part(0, 3.05, 22, 2, hash3(i,5,4), .07, 4.3, 0, 3, .15, .12);
-  for (let i = 0; i < 110; i++) W.part(-26 + hash3(i,6,4)*10, 1, -5 + hash3(i,7,4)*9, 1, hash3(i,8,4), .09, 1, 6 + hash3(i,9,4)*6, 4, .8, .3);
+
+// ================================================================ the page
+function variant(key, short, name, build) {
+  return { key, short, name, make(W) {
+    let meta = build(W);
+    if (build === manor) meta = manorMeta();
+    meta.size = K.sizeOf(W);
+    K.terrain(W, meta.flat);
+    if (build === manor) manorGrounds(W);
+    for (const [x, z, h] of meta.trees) K.spruce(W, x, z, h);
+    meta.lights(W);
+    meta.dayLabel = 'Day: a ruin';
+    return meta;
+  } };
 }
-
-// ---------------------------------------------------------------- build one candidate into GPU-ready arrays
-function finalize(W) {
-  const top = new Map(), TK = (x, z) => (x+1000)*2000 + (z+1000);
-  for (const e of W.M.values()) { const k = TK(e.x, e.z), v = top.get(k); if (v === undefined || e.y > v) top.set(k, e.y); }
-  const open = (x, y, z) => { const v = top.get(TK(x, z)); return v === undefined || y > v ? 1 : .13; };
-  const solid = (x, y, z, g) => { const e = W.get(x, y, z); return e && !CLEAR.has(e.t) && e.g === g; };
-  const out = [];
-  for (const e of W.M.values()) { const {x, y, z, g} = e;
-    if (!CLEAR.has(e.t) && solid(x+1,y,z,g) && solid(x-1,y,z,g) && solid(x,y+1,z,g) && solid(x,y-1,z,g) && solid(x,y,z+1,g) && solid(x,y,z-1,g)) continue;
-    out.push(x, y, z, 1, 1, 1, e.t, hash3(x, y, z), g, e.d, open(x+1,y,z), open(x-1,y,z), open(x,y+1,z), .1, open(x,y,z+1), open(x,y,z-1)); }
-  for (const f of W.F) { const s = open(Math.floor(f.x+f.sx/2), Math.floor(f.y+f.sy), Math.floor(f.z+f.sz/2));
-    out.push(f.x, f.y, f.z, f.sx, f.sy, f.sz, f.t, hash3(Math.floor(f.x*7), Math.floor(f.y*7), Math.floor(f.z*7)), f.g, f.d, s, s, s, .1, s, s); }
-  return new Float32Array(out);
-}
-function sizeOf(W) { let a = [1e9, 1e9, 1e9], b = [-1e9, -1e9, -1e9];
-  for (const e of W.M.values()) { if (e.t === T.GRASS || e.t === T.DIRT || e.t === T.LOG || e.t === T.PINE || e.t === T.LEAF || e.t === T.STONE) continue;
-    a = [Math.min(a[0], e.x), Math.min(a[1], e.y), Math.min(a[2], e.z)]; b = [Math.max(b[0], e.x), Math.max(b[1], e.y), Math.max(b[2], e.z)]; }
-  return [b[0]-a[0]+1, b[1]-Math.max(a[1], 0)+1, b[2]-a[2]+1]; }
-function buildVariant(i) {
-  const W = World(); let meta;
-  if (i === 0) { meta = buildChapel(W); chapelLights(W); }
-  else if (i === 1) { this_moon = dirFrom(-.62, .27); meta = buildObservatory(W); observatoryLights(W); }
-  else { buildManor(W); meta = manorMeta(); manorLights(W); }
-  const size = sizeOf(W);
-  terrain(W, meta.flat);
-  if (i === 2) manorPost(W);
-  if (i === 0) for (const [x, z, h] of [[-44,-28,12],[-50,0,14],[-40,34,11],[46,-38,12],[54,-6,13],[-14,-54,12],[16,-52,13],[-32,-46,10]]) pine(W, x, z, h);
-  meta.size = size; meta.inst = finalize(W); meta.lights = W.LIGHTS; meta.parts = new Float32Array(W.PARTS);
-  return meta;
-}
-
-// ---------------------------------------------------------------- GL
-const cv = document.getElementById('cv');
-const gl = cv.getContext('webgl2', { antialias:false, alpha:false, preserveDrawingBuffer:true });
-function fail(msg) { const e = document.getElementById('err'); e.style.display = 'grid'; e.textContent = msg; throw new Error(msg); }
-if (!gl) fail('WebGL2 is not available in this browser.');
-const HDR = !!gl.getExtension('EXT_color_buffer_float');
-function shader(type, src) { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) fail(gl.getShaderInfoLog(s) + '\n' + src.split('\n').map((l,i)=>(i+1)+': '+l).join('\n').slice(0, 6000)); return s; }
-function program(vs, fs) { const p = gl.createProgram(); gl.attachShader(p, shader(gl.VERTEX_SHADER, vs)); gl.attachShader(p, shader(gl.FRAGMENT_SHADER, fs));
-  gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) fail(gl.getProgramInfoLog(p));
-  const u = {}; const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
-  for (let i = 0; i < n; i++) { const a = gl.getActiveUniform(p, i); u[a.name] = gl.getUniformLocation(p, a.name); u[a.name.replace(/\[0\]$/, '')] = u[a.name]; }
-  return { p, u }; }
-
-const H2 = `float h2(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }`;
-const BLOCK_VS = `#version 300 es
-precision highp float; precision highp int;
-layout(location=0) in vec3 aLocal; layout(location=1) in vec3 aN;
-layout(location=2) in vec3 aPos; layout(location=3) in vec3 aSize; layout(location=4) in vec4 aI; layout(location=5) in vec3 aS0; layout(location=6) in vec3 aS1;
-uniform mat4 uVP; uniform mat4 uG[8];
-out vec3 vW; out vec3 vN; out vec3 vB; flat out vec3 vNL; flat out float vType; flat out float vRnd; flat out float vDelay; flat out vec3 vS0; flat out vec3 vS1;
-void main(){
-  vec3 b = aPos + (aLocal + .5)*aSize;
-  vec3 w = b, n = aN;
-  int g = int(aI.z + .5);
-  if (g > 0) { mat4 M = uG[g]; w = (M*vec4(b, 1.)).xyz; n = mat3(M)*aN; }
-  vW = w; vN = n; vB = b; vNL = aN; vType = aI.x; vRnd = aI.y; vDelay = aI.w; vS0 = aS0; vS1 = aS1;
-  gl_Position = uVP*vec4(w, 1.);
-}`;
-const BLOCK_FS = `#version 300 es
-precision highp float; precision highp int;
-in vec3 vW; in vec3 vN; in vec3 vB; flat in vec3 vNL; flat in float vType; flat in float vRnd; flat in float vDelay; flat in vec3 vS0; flat in vec3 vS1;
-uniform vec3 uCam, uSun, uMoon; uniform float uN, uAT, uTime;
-uniform vec4 uLP[8]; uniform vec4 uLC[8]; uniform int uNL;
-out vec4 o;
-${H2}
-float brick(vec2 px, float h, float w){ float row=floor(px.y/h); float bx=mod(px.x+mod(row,2.)*w*.5, w); float my=mod(px.y,h); return (bx<1.||my<1.)?0.:1.; }
-float crack(vec2 px, vec2 cell){ float c=8.+3.*sin(px.y*.55+cell.x*3.1+cell.y*1.7); return step(abs(px.x-c),.6)*step(3.,px.y)*step(px.y,13.); }
-void main(){
-  vec3 nl = vNL; vec2 uv;
-  if (abs(nl.y) > .5) uv = vB.xz; else if (abs(nl.x) > .5) uv = vec2(vB.z, vB.y); else uv = vec2(vB.x, vB.y);
-  vec2 px = floor(fract(uv)*16.), cell = floor(uv);
-  float n = h2(px + cell*17.13 + nl.xz*91.7 + nl.y*13.1), n2 = h2(floor(px/3.) + cell*7.7 + 3.1);
-  int t = int(vType + .5);
-  float e = smoothstep(vDelay, vDelay + 1.2, uAT)*uN;
-  float hb = .8 + .45*pow(max(sin(uTime*4.4), 0.), 14.) + .25*pow(max(sin(uTime*4.4 - .75), 0.), 14.);
-  float fl = .86 + .14*sin(uTime*11. + vRnd*60.) * sin(uTime*7.3 + vRnd*20.);
-  vec3 alb = vec3(.5), emi = vec3(0.); float glass = 0.;
-  if (t == 0) { vec3 gr = vec3(.16,.29,.08)*(.72+.5*n), di = vec3(.32,.21,.13)*(.78+.42*n);
-    alb = nl.y > .5 ? gr : nl.y < -.5 ? di : (px.y > 12. - floor(h2(vec2(px.x, cell.x+cell.y))*2.5) ? gr : di); }
-  else if (t == 1) alb = vec3(.32,.21,.13)*(.78+.42*n);
-  else if (t == 2 || t == 3 || t == 30) { alb = vec3(.66,.63,.58)*(.84+.24*n)*mix(.6, 1., brick(px, 4., 8.));
-    if (t == 3 && n2 > .42) alb = vec3(.22,.32,.12)*(.7+.5*n);
-    if (t == 30) alb *= 1. - .6*crack(px, cell); }
-  else if (t == 4 || t == 31) { alb = vec3(.25,.25,.29)*(.8+.3*n)*mix(.55, 1., brick(px, 4., 8.)); if (t == 31) alb *= 1. - .6*crack(px, cell); }
-  else if (t == 5) { alb = vec3(.17,.17,.21)*(.8+.3*n); float r = mod(px.y + (nl.y > .5 ? 0. : 0.), 4.); if (r < 1.) alb *= .55; if (mod(px.x + floor(px.y/4.)*2., 4.) < 1.) alb *= .8; }
-  else if (t == 6) alb = vec3(.30,.20,.12)*(.8+.3*n)*(mod(px.y, 4.) < 1. ? .6 : 1.);
-  else if (t == 7) { alb = abs(nl.y) > .5 ? vec3(.34,.24,.15)*(mod(floor(length(px-7.5)), 3.) < 1. ? .75 : 1.) : vec3(.21,.15,.09)*(.65+.45*h2(vec2(px.x, floor(px.y/3.) + cell.y))); }
-  else if (t == 8) { bool fr = px.x < 1. || px.x > 14. || px.y < 1. || px.y > 14. || abs(px.x-7.5) < 1. || abs(px.y-7.5) < 1.;
-    alb = fr ? vec3(.10,.09,.09) : vec3(.07,.09,.12); glass = fr ? 0. : 1.; if (!fr) emi = vec3(2.5,.34,.2)*e*fl; }
-  else if (t == 9) { bool ld = mod(px.x+px.y, 8.) < 1. || mod(px.x-px.y+16., 8.) < 1.;
-    alb = ld ? vec3(.05,.045,.045) : vec3(.40,.05,.06)*(.8+.4*n); glass = ld ? 0. : 1.;
-    if (!ld) emi = vec3(.12,.01,.01)*(1.-uN) + vec3(2.9,.26,.22)*e*(.7+.5*n)*hb; }
-  else if (t == 10 || t == 29) { if (n < .1) discard; alb = (t == 10 ? vec3(.13,.24,.08) : vec3(.07,.14,.08))*(.6+.6*n); }
-  else if (t == 11) alb = vec3(.45,.43,.40)*(.55+.6*n);
-  else if (t == 12) alb = vec3(.085,.08,.09)*(.8+.4*n);
-  else if (t == 13 || t == 27) { alb = vec3(.28,.52,.45)*(.75+.35*n); if (n2 > .62) alb = vec3(.17,.35,.32)*(.8+.3*n);
-    if (t == 13 && mod(px.y, 8.) < 1.) alb *= .7; if (t == 27 && mod(px.x, 4.) < 1.) alb *= .65; }
-  else if (t == 14) { alb = vec3(.74,.68,.6); emi = vec3(3.6,.8,.25)*e*fl; }
-  else if (t == 15) alb = vec3(.78,.58,.22)*(.8+.3*n);
-  else if (t == 16) alb = vec3(.46,.05,.06)*(.75+.4*n);
-  else if (t == 17 || t == 32) { alb = vec3(.34,.15,.12)*(.8+.3*n)*mix(.55, 1., brick(px, 4., 8.)); if (t == 32 && n2 > .45) alb = vec3(.2,.3,.11)*(.7+.5*n); }
-  else if (t == 33) { alb = vec3(.07,.06,.06)*(.7+.6*n); emi = vec3(1.4,.22,.05)*step(.94, n)*e*fl; }
-  else if (t == 18) alb = vec3(.80,.78,.73)*(.88+.15*n);
-  else if (t == 19) { alb = vec3(.10,.15,.2)*(.9+.2*n); glass = 1.; emi = vec3(2.,.07,.06)*e*(.8+.25*sin(uTime*2.+uv.x*2.+uv.y*3.)); }
-  else if (t == 20) { alb = vec3(.25,.03,.03); emi = vec3(6.5,.5,.35)*e*hb; }
-  else if (t == 21) alb = vec3(.16,.16,.17)*(.8+.3*n);
-  else if (t == 22) alb = vec3(.43,.43,.45)*(.68+.45*n);
-  else if (t == 23) { alb = vec3(.05,.06,.08); emi = vec3(10.,1.2,.8)*e*hb; }
-  else if (t == 24) { alb = vec3(.62,.46,.18)*(.8+.3*n); if (h2(floor(px/2.) + cell*3.3 + vRnd*40.) > .62) emi = vec3(4.,.4,.25)*e; }
-  else if (t == 25) alb = vec3(.05,.05,.06);
-  else if (t == 26) { alb = vec3(.30,.03,.05)*(.7+.5*n); float fa = step(.85, h2(floor(px/2.)+cell*5.1)); emi = vec3(.15,0.,0.)*(1.-uN) + vec3(4.4,.36,.3)*e*hb*(.6+.6*n+fa); }
-  else if (t == 28) { bool sh = px.y < 2. || px.y > 13. || abs(px.y-7.5) < 1.; float k = h2(vec2(floor(px.x/2.), cell.x+cell.y*3.+(px.y > 7.5 ? 9. : 0.)));
-    alb = sh ? vec3(.30,.20,.12) : (k < .3 ? vec3(.35,.06,.05) : k < .55 ? vec3(.10,.2,.1) : k < .8 ? vec3(.3,.2,.1) : vec3(.1,.12,.24))*(.7+.4*n); }
-  vec3 N = normalize(vN);
-  float s = abs(nl.y) > .5 ? (nl.y > 0. ? vS0.z : vS1.x) : (abs(nl.x) > .5 ? (nl.x > 0. ? vS0.x : vS0.y) : (nl.z > 0. ? vS1.y : vS1.z));
-  float face = abs(nl.y) > .5 ? (nl.y > 0. ? 1. : .5) : (abs(nl.x) > .5 ? .82 : .7);
-  vec3 sunD = normalize(uSun), moonD = normalize(uMoon);
-  vec3 day = alb*(vec3(.36,.42,.52)*(.14+.86*s)*face + vec3(1.15,1.0,.8)*max(dot(N, sunD), 0.)*(.1+.9*s));
-  vec3 nig = alb*(vec3(.045,.012,.016)*(.2+.8*s)*face + vec3(.42,.07,.055)*max(dot(N, moonD), 0.)*(.15+.85*s));
-  vec3 col = mix(day, nig, uN);
-  col += glass*mix(vec3(.10,.12,.15), vec3(.06,.01,.01), uN)*(.4+.6*s);
-  for (int i = 0; i < 8; i++) { if (i >= uNL) break;
-    vec4 lp = uLP[i], lc = uLC[i];
-    float le = smoothstep(lp.w, lp.w + 1.2, uAT)*uN; if (le <= 0.) continue;
-    vec3 L = lp.xyz - vW; float d = length(L);
-    float att = smoothstep(lc.w*2., lc.w*.3, d)/(1. + d*d/(lc.w*lc.w)*2.);
-    col += alb*lc.rgb*le*att*(.25 + .75*max(dot(N, L/d), 0.))*fl;
-  }
-  col += emi;
-  float dist = length(vW - uCam);
-  vec3 fogc = mix(vec3(.50,.56,.64), vec3(.055,.012,.016), uN);
-  col = mix(col, fogc, 1. - exp(-dist*mix(.0017, .0042, uN)));
-  o = vec4(col, 1.);
-}`;
-const FS_VS = `#version 300 es
-out vec2 vUv; void main(){ vec2 p=vec2((gl_VertexID<<1)&2, gl_VertexID&2); vUv=p; gl_Position=vec4(p*2.-1.,0.,1.); }`;
-const BG_FS = `#version 300 es
-precision highp float; precision highp int;
-in vec2 vUv; uniform mat4 uInvVP; uniform vec3 uCam, uSun, uMoon; uniform float uN, uTime;
-out vec4 o;
-${H2}
-void main(){
-  vec4 p = uInvVP*vec4(vUv*2.-1., 1., 1.); vec3 d = normalize(p.xyz/p.w - uCam); float y = d.y;
-  vec3 day = mix(vec3(.62,.66,.70), vec3(.30,.42,.60), smoothstep(0., .6, y));
-  float sd = max(dot(d, normalize(uSun)), 0.); day += vec3(1.,.9,.7)*(pow(sd, 400.)*4. + pow(sd, 8.)*.25);
-  vec3 M = normalize(uMoon); float md = acos(clamp(dot(d, M), -1., 1.));
-  vec3 nig = mix(vec3(.10,.02,.024), vec3(.015,.003,.006), smoothstep(0., .7, y));
-  nig += vec3(.9,.12,.08)*exp(-md*5.)*.6 + vec3(.5,.05,.04)*exp(-md*1.6)*.25;
-  float disc = smoothstep(.062, .056, md);
-  vec2 mq = floor(vec2(atan(d.x, d.z), d.y)*500.);
-  nig = mix(nig, vec3(2.4,.36,.24)*(.82+.18*h2(mq))*(1.-.35*smoothstep(.03,.06,md)), disc);
-  vec3 sq = floor(d*260.); float st = h2(sq.xy + sq.z*7.3);
-  nig += vec3(1.,.8,.75)*step(.9975, st)*smoothstep(0., .15, y)*(1.-disc);
-  vec3 col = mix(day, nig, uN);
-  vec3 fogc = mix(vec3(.50,.56,.64), vec3(.055,.012,.016), uN);
-  col = mix(col, fogc, smoothstep(.12, -.05, y));
-  o = vec4(col, 1.);
-}`;
-const P_VS = `#version 300 es
-precision highp float; precision highp int;
-layout(location=0) in vec2 aC; layout(location=1) in vec4 aA; layout(location=2) in vec4 aB; layout(location=3) in vec3 aCol;
-uniform mat4 uVP; uniform vec3 uR, uU; uniform float uTime, uAT, uN;
-out vec2 vC; out vec3 vCol; out float vA;
-void main(){
-  int k = int(aA.w + .5); float ph = aB.x, sz = aB.y, d = aB.z, ex = aB.w, t = uTime;
-  float e = smoothstep(d, d + 1.5, uAT)*uN;
-  vec3 p = aA.xyz, col = aCol; float a = 0.;
-  if (k == 0) { p += vec3(sin(t*.11+ph*6.3)*1.6, sin(t*.07+ph*4.1)*.9, cos(t*.09+ph*5.7)*1.6);
-    a = .3*(.6+.4*sin(t*.5+ph*20.)); col = mix(vec3(1.,.92,.75), vec3(1.4,.3,.22), uN); }
-  else if (k == 1) { float f = fract(t*.11*(.6+ph) + ph*7.); p += vec3(sin(f*5.+ph*9.)*.8, f*ex, cos(f*4.+ph*7.)*.8); a = sin(f*3.1416)*e; }
-  else if (k == 2) { float f = fract(t*.9 + ph*5.), an = ph*6.2832; p += vec3(cos(an)*(1.05+f*.7), -2.9*f*f, sin(an)*(1.05+f*.7)); a = e*(1.-f*.7); }
-  vC = aC; vCol = col; vA = a;
-  if (a <= .001) { gl_Position = vec4(2., 2., 2., 1.); return; }
-  gl_Position = uVP*vec4(p + (uR*aC.x + uU*aC.y)*sz, 1.);
-}`;
-const P_FS = `#version 300 es
-precision highp float; in vec2 vC; in vec3 vCol; in float vA; out vec4 o;
-void main(){ float m = max(0., 1. - dot(vC, vC)); m *= m; o = vec4(vCol*m*vA, 0.); }`;
-const BEAM_VS = `#version 300 es
-precision highp float; precision highp int;
-layout(location=0) in vec2 aC;
-uniform mat4 uVP; uniform vec3 uCam; uniform vec3 uBA[2]; uniform vec3 uBB[2]; uniform float uBW[2]; uniform float uBE[2];
-out vec2 vC; out float vE;
-void main(){ int i = gl_InstanceID; vec3 A = uBA[i], B = uBB[i], ax = B - A, q = mix(A, B, aC.y*.5 + .5);
-  vec3 side = normalize(cross(ax, uCam - q))*uBW[i];
-  vC = aC; vE = uBE[i]; gl_Position = uVP*vec4(q + side*aC.x, 1.); }`;
-const BEAM_FS = `#version 300 es
-precision highp float; in vec2 vC; in float vE; uniform float uTime; out vec4 o;
-void main(){ float x = abs(vC.x), k = vC.y*.5 + .5;
-  float m = pow(1.-x, 10.)*2.2 + pow(1.-x, 2.)*.45;
-  float along = (1. - k*.85)*(.85 + .15*sin(k*120. - uTime*9.));
-  o = vec4(vec3(3.,.34,.24)*m*along*vE, 0.); }`;
-const BRIGHT_FS = `#version 300 es
-precision highp float; in vec2 vUv; uniform sampler2D uS; uniform vec2 uPx; out vec4 o;
-void main(){ vec3 c = vec3(0.); for (int i = 0; i < 4; i++) { vec2 q = vec2(float(i&1), float(i>>1))*2.-1.; c += texture(uS, vUv + q*uPx).rgb; }
-  c *= .25; o = vec4(max(c - 1.15, 0.), 1.); }`;
-const BLUR_FS = `#version 300 es
-precision highp float; in vec2 vUv; uniform sampler2D uS; uniform vec2 uDir; out vec4 o;
-void main(){ float w[5] = float[](.227,.194,.121,.054,.016); vec3 c = texture(uS, vUv).rgb*w[0];
-  for (int i = 1; i < 5; i++) { c += texture(uS, vUv + uDir*float(i)).rgb*w[i]; c += texture(uS, vUv - uDir*float(i)).rgb*w[i]; } o = vec4(c, 1.); }`;
-const COMP_FS = `#version 300 es
-precision highp float; in vec2 vUv; uniform sampler2D uS, uB; uniform float uT; out vec4 o;
-vec3 aces(vec3 x){ return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14), 0., 1.); }
-void main(){ vec3 c = texture(uS, vUv).rgb + texture(uB, vUv).rgb*.75;
-  c = pow(aces(c*.95), vec3(1./2.2));
-  float vg = length(vUv - .5)*1.35; c *= mix(1., .5, smoothstep(.45, 1., vg));
-  c += (fract(sin(dot(vUv*1000. + uT, vec2(12.9898, 78.233)))*43758.5) - .5)*.02;
-  o = vec4(c, 1.); }`;
-const P_BLOCK = program(BLOCK_VS, BLOCK_FS), P_BG = program(FS_VS, BG_FS), P_PART = program(P_VS, P_FS), P_BEAM = program(BEAM_VS, BEAM_FS);
-const P_BRIGHT = program(FS_VS, BRIGHT_FS), P_BLUR = program(FS_VS, BLUR_FS), P_COMP = program(FS_VS, COMP_FS);
-
-const CUBE = (() => { const v = [];
-  const F = [[[1,0,0],[0,1,0],[0,0,1]],[[-1,0,0],[0,1,0],[0,0,-1]],[[0,1,0],[0,0,1],[1,0,0]],[[0,-1,0],[0,0,-1],[1,0,0]],[[0,0,1],[0,1,0],[-1,0,0]],[[0,0,-1],[0,1,0],[1,0,0]]];
-  for (const [n, u, w] of F) { const P = (a, b) => [n[0]*.5+u[0]*a+w[0]*b, n[1]*.5+u[1]*a+w[1]*b, n[2]*.5+u[2]*a+w[2]*b];
-    for (const p of [P(-.5,-.5), P(.5,-.5), P(.5,.5), P(-.5,-.5), P(.5,.5), P(-.5,.5)]) v.push(...p, ...n); }
-  return new Float32Array(v); })();
-const vaoB = gl.createVertexArray(), instBuf = gl.createBuffer();
-gl.bindVertexArray(vaoB);
-{ const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, CUBE, gl.STATIC_DRAW);
-  gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
-  gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
-  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf);
-  [[2,3,0],[3,3,12],[4,4,24],[5,3,40],[6,3,52]].forEach(([l, n, o]) => { gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 64, o); gl.vertexAttribDivisor(l, 1); }); }
-const quad = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
-const vaoP = gl.createVertexArray(), partBuf = gl.createBuffer();
-gl.bindVertexArray(vaoP);
-{ gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
-  gl.bindBuffer(gl.ARRAY_BUFFER, partBuf);
-  [[1,4,0],[2,4,16],[3,3,32]].forEach(([l, n, o]) => { gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 44, o); gl.vertexAttribDivisor(l, 1); }); }
-const vaoQ = gl.createVertexArray(); gl.bindVertexArray(vaoQ);
-gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 8, 0);
-const vaoE = gl.createVertexArray();
-
-// ---------------------------------------------------------------- render targets
-let W = 0, H = 0, fbS, texS, fbA, texA, fbB, texB, BW, BH;
-function tex(w, h) { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t);
-  gl.texImage2D(gl.TEXTURE_2D, 0, HDR ? gl.RGBA16F : gl.RGBA8, w, h, 0, gl.RGBA, HDR ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; }
-function fbo(t, depth) { const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
-  if (depth) gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depth); return f; }
-function resize() {
-  const dpr = Math.min(devicePixelRatio || 1, 1.5), w = Math.round(innerWidth*dpr), h = Math.round(innerHeight*dpr);
-  if (w === W && h === H) return; W = w; H = h; cv.width = w; cv.height = h;
-  texS = tex(W, H); const dep = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, dep);
-  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, W, H); fbS = fbo(texS, dep);
-  BW = Math.max(1, W >> 2); BH = Math.max(1, H >> 2); texA = tex(BW, BH); fbA = fbo(texA); texB = tex(BW, BH); fbB = fbo(texB);
-}
-
-// ---------------------------------------------------------------- camera
-const sub = (a,b) => [a[0]-b[0],a[1]-b[1],a[2]-b[2]], cross = (a,b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
-function perspective(fy, asp, n, f) { const t = 1/Math.tan(fy/2), m = new Float32Array(16); m[0] = t/asp; m[5] = t; m[10] = (f+n)/(n-f); m[11] = -1; m[14] = 2*f*n/(n-f); return m; }
-function lookAt(e, c, up) { const z = norm(sub(e,c)), x = norm(cross(up,z)), y = cross(z,x);
-  return new Float32Array([x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0, -(x[0]*e[0]+x[1]*e[1]+x[2]*e[2]), -(y[0]*e[0]+y[1]*e[1]+y[2]*e[2]), -(z[0]*e[0]+z[1]*e[1]+z[2]*e[2]), 1]); }
-function invert(a) { const inv = new Float32Array(16);
-  inv[0]=a[5]*a[10]*a[15]-a[5]*a[11]*a[14]-a[9]*a[6]*a[15]+a[9]*a[7]*a[14]+a[13]*a[6]*a[11]-a[13]*a[7]*a[10];
-  inv[4]=-a[4]*a[10]*a[15]+a[4]*a[11]*a[14]+a[8]*a[6]*a[15]-a[8]*a[7]*a[14]-a[12]*a[6]*a[11]+a[12]*a[7]*a[10];
-  inv[8]=a[4]*a[9]*a[15]-a[4]*a[11]*a[13]-a[8]*a[5]*a[15]+a[8]*a[7]*a[13]+a[12]*a[5]*a[11]-a[12]*a[7]*a[9];
-  inv[12]=-a[4]*a[9]*a[14]+a[4]*a[10]*a[13]+a[8]*a[5]*a[14]-a[8]*a[6]*a[13]-a[12]*a[5]*a[10]+a[12]*a[6]*a[9];
-  inv[1]=-a[1]*a[10]*a[15]+a[1]*a[11]*a[14]+a[9]*a[2]*a[15]-a[9]*a[3]*a[14]-a[13]*a[2]*a[11]+a[13]*a[3]*a[10];
-  inv[5]=a[0]*a[10]*a[15]-a[0]*a[11]*a[14]-a[8]*a[2]*a[15]+a[8]*a[3]*a[14]+a[12]*a[2]*a[11]-a[12]*a[3]*a[10];
-  inv[9]=-a[0]*a[9]*a[15]+a[0]*a[11]*a[13]+a[8]*a[1]*a[15]-a[8]*a[3]*a[13]-a[12]*a[1]*a[11]+a[12]*a[3]*a[9];
-  inv[13]=a[0]*a[9]*a[14]-a[0]*a[10]*a[13]-a[8]*a[1]*a[14]+a[8]*a[2]*a[13]+a[12]*a[1]*a[10]-a[12]*a[2]*a[9];
-  inv[2]=a[1]*a[6]*a[15]-a[1]*a[7]*a[14]-a[5]*a[2]*a[15]+a[5]*a[3]*a[14]+a[13]*a[2]*a[7]-a[13]*a[3]*a[6];
-  inv[6]=-a[0]*a[6]*a[15]+a[0]*a[7]*a[14]+a[4]*a[2]*a[15]-a[4]*a[3]*a[14]-a[12]*a[2]*a[7]+a[12]*a[3]*a[6];
-  inv[10]=a[0]*a[5]*a[15]-a[0]*a[7]*a[13]-a[4]*a[1]*a[15]+a[4]*a[3]*a[13]+a[12]*a[1]*a[7]-a[12]*a[3]*a[5];
-  inv[14]=-a[0]*a[5]*a[14]+a[0]*a[6]*a[13]+a[4]*a[1]*a[14]-a[4]*a[2]*a[13]-a[12]*a[1]*a[6]+a[12]*a[2]*a[5];
-  inv[3]=-a[1]*a[6]*a[11]+a[1]*a[7]*a[10]+a[5]*a[2]*a[11]-a[5]*a[3]*a[10]-a[9]*a[2]*a[7]+a[9]*a[3]*a[6];
-  inv[7]=a[0]*a[6]*a[11]-a[0]*a[7]*a[10]-a[4]*a[2]*a[11]+a[4]*a[3]*a[10]+a[8]*a[2]*a[7]-a[8]*a[3]*a[6];
-  inv[11]=-a[0]*a[5]*a[11]+a[0]*a[7]*a[9]+a[4]*a[1]*a[11]-a[4]*a[3]*a[9]-a[8]*a[1]*a[7]+a[8]*a[3]*a[5];
-  inv[15]=a[0]*a[5]*a[10]-a[0]*a[6]*a[9]-a[4]*a[1]*a[10]+a[4]*a[2]*a[9]+a[8]*a[1]*a[6]-a[8]*a[2]*a[5];
-  const det = a[0]*inv[0]+a[1]*inv[4]+a[2]*inv[8]+a[3]*inv[12]; for (let i = 0; i < 16; i++) inv[i] /= det; return inv; }
-
-// ---------------------------------------------------------------- state and UI
-const Q = new URLSearchParams(location.search);
-const CACHE = [];
-let V = Math.max(0, ['a','b','c'].indexOf((Q.get('v') || 'a').toLowerCase()));
-let night = Q.get('night') === '1', nt = night ? 12 : 0, spin = Q.get('spin') !== '0';
-let cur, NI = 0, NP = 0, yaw = 0, pitch = .2, dist = 80;
-if (Q.get('ui') === '0') document.body.classList.add('hide');
-const $ = id => document.getElementById(id);
-const NAMES = ['Chapel', 'Observatory', 'Manor'];
-NAMES.forEach((n, i) => { const b = document.createElement('button'); b.textContent = 'ABC'[i] + ' · ' + n; b.onclick = () => select(i); $('vars').appendChild(b); });
-function select(i) {
-  V = i; if (!CACHE[i]) CACHE[i] = buildVariant(i); cur = CACHE[i];
-  gl.bindBuffer(gl.ARRAY_BUFFER, instBuf); gl.bufferData(gl.ARRAY_BUFFER, cur.inst, gl.STATIC_DRAW); NI = cur.inst.length/16;
-  gl.bindBuffer(gl.ARRAY_BUFFER, partBuf); gl.bufferData(gl.ARRAY_BUFFER, cur.parts, gl.STATIC_DRAW); NP = cur.parts.length/11;
-  yaw = cur.cam.yaw; pitch = cur.cam.pitch; dist = cur.cam.dist;
-  $('vk').textContent = cur.key; $('vn').textContent = cur.name; $('vt').innerHTML = cur.tag;
-  $('vs').textContent = `About ${cur.size[0]} × ${cur.size[2]} blocks, ${cur.size[1]} high (the dark figure is a player).`;
-  [...$('vars').children].forEach((b, k) => b.classList.toggle('on', k === i));
-  const u = new URL(location); u.searchParams.set('v', 'abc'[i]); history.replaceState(null, '', u);
-}
-function setNight(on) { night = on; $('bDay').classList.toggle('on', !on); $('bNight').classList.toggle('on', on); }
-$('bDay').onclick = () => setNight(false); $('bNight').onclick = () => setNight(true);
-$('bSpin').onclick = () => { spin = !spin; $('bSpin').classList.toggle('on', spin); };
-$('bUi').onclick = () => document.body.classList.toggle('hide');
-addEventListener('keydown', e => { if (e.key === 'h' || e.key === 'H') document.body.classList.toggle('hide');
-  if (e.key === 'n' || e.key === 'N') setNight(true); if (e.key === 'd' || e.key === 'D') setNight(false);
-  if ('123'.includes(e.key)) select(+e.key - 1); });
-let drag = null;
-cv.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); cv.classList.add('drag'); });
-cv.addEventListener('pointermove', e => { if (!drag) return; yaw -= (e.clientX - drag[0])*.005; pitch = Math.min(1.3, Math.max(-.05, pitch + (e.clientY - drag[1])*.004)); drag = [e.clientX, e.clientY]; });
-const endDrag = () => { drag = null; cv.classList.remove('drag'); };
-cv.addEventListener('pointerup', endDrag); cv.addEventListener('pointercancel', endDrag);
-cv.addEventListener('wheel', e => { e.preventDefault(); dist = Math.min(170, Math.max(10, dist*Math.exp(e.deltaY*.001))); }, { passive:false });
-setNight(night); $('bSpin').classList.toggle('on', spin); select(V);
-
-// ---------------------------------------------------------------- frame
-const LP = new Float32Array(32), LC = new Float32Array(32), GB = new Float32Array(128);
-let last = performance.now(), time = 0;
-function phase() { if (nt <= .01) return 'Day: a ruin'; if (!night) return 'Dawn: falling asleep';
-  return nt < 3 ? 'Nightfall: the moon turns red' : nt < 9 ? 'Awakening' : 'Awake under the blood moon'; }
-function frame(now) {
-  const dt = Math.min(.05, (now - last)/1000); last = now; time += dt;
-  nt = night ? Math.min(nt + dt, 60) : Math.max(nt - dt*3, 0);
-  const uN = ss(0, 3, nt);
-  if (spin && !drag) yaw += dt*.05;
-  resize();
-  $('ph').textContent = phase();
-  // camera (with a short shake when something wakes)
-  const tg = cur.cam.target;
-  let eye = [tg[0] + dist*Math.cos(pitch)*Math.sin(yaw), tg[1] + dist*Math.sin(pitch), tg[2] + dist*Math.cos(pitch)*Math.cos(yaw)];
-  if (cur.shakeAt != null && night && nt > cur.shakeAt) { const a = .35*Math.exp(-(nt - cur.shakeAt)*2.2); eye = eye.map((v, i) => v + Math.sin(time*(37 + i*11))*a); }
-  eye[1] = Math.max(eye[1], 1.2);
-  const view = lookAt(eye, tg, [0,1,0]), proj = perspective(55*Math.PI/180, W/H, .1, 1500), VP = mul(proj, view);
-  const R = [view[0], view[4], view[8]], U = [view[1], view[5], view[9]];
-  // groups, lights, beams
-  const G0 = cur.groups(nt, time), G = Array.from({ length:8 }, (_, g) => G0[g] || I4());
-  for (let g = 0; g < 8; g++) GB.set(G[g], g*16);
-  const L = cur.lights; LP.fill(0); LC.fill(0);
-  L.slice(0, 8).forEach((l, i) => { const p = l.grp ? applyP(G[l.grp], l.p) : l.p; LP.set([p[0], p[1], p[2], l.d], i*4); LC.set([l.c[0], l.c[1], l.c[2], l.rad], i*4); });
-  const beams = cur.beams(nt, time, G);
-  // scene
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbS); gl.viewport(0, 0, W, H);
-  gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST); gl.depthMask(true);
-  gl.clear(gl.DEPTH_BUFFER_BIT);
-  gl.useProgram(P_BG.p); gl.bindVertexArray(vaoE);
-  gl.uniformMatrix4fv(P_BG.u.uInvVP, false, invert(VP)); gl.uniform3fv(P_BG.u.uCam, eye);
-  gl.uniform3fv(P_BG.u.uSun, cur.sun); gl.uniform3fv(P_BG.u.uMoon, cur.moon); gl.uniform1f(P_BG.u.uN, uN); gl.uniform1f(P_BG.u.uTime, time);
-  gl.drawArrays(gl.TRIANGLES, 0, 3);
-  gl.enable(gl.DEPTH_TEST);
-  gl.useProgram(P_BLOCK.p); gl.bindVertexArray(vaoB);
-  const u = P_BLOCK.u;
-  gl.uniformMatrix4fv(u.uVP, false, VP); gl.uniformMatrix4fv(u.uG, false, GB);
-  gl.uniform3fv(u.uCam, eye); gl.uniform3fv(u.uSun, cur.sun); gl.uniform3fv(u.uMoon, cur.moon);
-  gl.uniform1f(u.uN, uN); gl.uniform1f(u.uAT, nt); gl.uniform1f(u.uTime, time);
-  gl.uniform4fv(u.uLP, LP); gl.uniform4fv(u.uLC, LC); gl.uniform1i(u.uNL, Math.min(8, L.length));
-  gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, NI);
-  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); gl.depthMask(false);
-  gl.useProgram(P_PART.p); gl.bindVertexArray(vaoP);
-  gl.uniformMatrix4fv(P_PART.u.uVP, false, VP); gl.uniform3fv(P_PART.u.uR, R); gl.uniform3fv(P_PART.u.uU, U);
-  gl.uniform1f(P_PART.u.uTime, time); gl.uniform1f(P_PART.u.uAT, nt); gl.uniform1f(P_PART.u.uN, uN);
-  gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, NP);
-  if (beams.length) {
-    gl.useProgram(P_BEAM.p); gl.bindVertexArray(vaoQ);
-    const BA = new Float32Array(6), BB = new Float32Array(6), BWd = new Float32Array(2), BE = new Float32Array(2);
-    beams.slice(0, 2).forEach((b, i) => { BA.set(b.a, i*3); BB.set(b.b, i*3); BWd[i] = b.w; BE[i] = b.e*uN; });
-    gl.uniformMatrix4fv(P_BEAM.u.uVP, false, VP); gl.uniform3fv(P_BEAM.u.uCam, eye); gl.uniform1f(P_BEAM.u.uTime, time);
-    gl.uniform3fv(P_BEAM.u.uBA, BA); gl.uniform3fv(P_BEAM.u.uBB, BB); gl.uniform1fv(P_BEAM.u.uBW, BWd); gl.uniform1fv(P_BEAM.u.uBE, BE);
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.min(2, beams.length));
-  }
-  gl.depthMask(true); gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
-  // bloom
-  gl.bindVertexArray(vaoE);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, fbA); gl.viewport(0, 0, BW, BH);
-  gl.useProgram(P_BRIGHT.p); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texS);
-  gl.uniform1i(P_BRIGHT.u.uS, 0); gl.uniform2f(P_BRIGHT.u.uPx, 1/W, 1/H); gl.drawArrays(gl.TRIANGLES, 0, 3);
-  gl.useProgram(P_BLUR.p); gl.uniform1i(P_BLUR.u.uS, 0);
-  for (let k = 0; k < 2; k++) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbB); gl.bindTexture(gl.TEXTURE_2D, texA); gl.uniform2f(P_BLUR.u.uDir, (1.5+k)/BW, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, fbA); gl.bindTexture(gl.TEXTURE_2D, texB); gl.uniform2f(P_BLUR.u.uDir, 0, (1.5+k)/BH); gl.drawArrays(gl.TRIANGLES, 0, 3);
-  }
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
-  gl.useProgram(P_COMP.p);
-  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, texS); gl.uniform1i(P_COMP.u.uS, 0);
-  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, texA); gl.uniform1i(P_COMP.u.uB, 1);
-  gl.uniform1f(P_COMP.u.uT, time); gl.drawArrays(gl.TRIANGLES, 0, 3);
-  gl.activeTexture(gl.TEXTURE0);
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
+CE.viewer({ dayLabel:'Day: a ruin', variants:[
+  variant('A', 'Chapel', 'Chapel of the Eclipse', chapel),
+  variant('B', 'Observatory', 'Moonwatch Observatory', observatory),
+  variant('C', 'Manor', 'Vigil Manor', manor),
+] });
 </script>
 </body>
 </html>
