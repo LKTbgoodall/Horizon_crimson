@@ -78,7 +78,13 @@ Back: [[00 - Home]]
 - [x] 0.5.2: anchors found in loaded chunks and set again by command (2026-11-16)
 - [x] Bastien builds 0.5.2 and watches a colossus wake (2026-11-16): it lights; his verdict "just lit, that's all": the awakening needs a show
 - [x] Preview of the awakening, three stagings: `preview/colossus-awakening.html` (2026-11-16)
-- [ ] Bastien picks a staging; build it in the game
+- [x] Bastien picks D, without the souls (2026-11-16, [[ADR-023 The colossus awakening is staging D, built in steps]])
+- [x] Step 1, timing (0.6.0, 2026-11-16)
+- [ ] Bastien builds 0.6.0 and watches the light run down
+- [ ] Step 2, the moon's beam onto the crown
+- [ ] Step 3, sparks, embers, mist
+- [ ] Step 4, the ring on the dais
+- [ ] Step 5, heartbeat, head, shards
 - [ ] The colossus moves: head lifting, heart beating (block entity renderer); far terrain checked
 - [ ] The lantern tree as the second real structure
 - [ ] The first medium structure at full quality

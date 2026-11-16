@@ -85,13 +85,6 @@ function halo(W, d) {
 }
 // sparks rising along the blade as it fills (A), `delay(y)` for each height
 const bladeSparks = (W, delay) => { for (let y = Y; y <= Y + 25; y++) for (let k = 0; k < 3; k++) W.part(.5 + (hash3(y, k, 21) - .5)*2.4, y, 15.5 + (hash3(k, y, 22) - .5)*1.4, 1, hash3(y, k, 23), .08, delay(y), 3 + hash3(y, k, 24)*4, 4, .6, .3); };
-// souls streaming into the heart (B), through the air only: up from the ground before him, over the sword, in through the crack in the breastplate
-const SOUL_PATHS = [-14, -9, -4, 5, 10, 15].map((sx, i) => {
-  const s = [sx + .5, .5, 25 + (i % 3)*3], c = [[...s], [sx*.45 + .5, Y + 24, 27], [.5, Y + 33, 13], [.5, Y + 31.5, 4.5]];
-  const pts = []; for (let k = 0; k <= 90; k++) pts.push(CE.sk.bez(c, k/90));
-  for (let k = 1; k <= 12; k++) pts.push(lerp(c[3], HEART, k/12));
-  return pts; });
-const souls = (W, d) => SOUL_PATHS.forEach((pts, i) => pts.forEach((p, k) => W.part(p[0], p[1], p[2], 7, k/(pts.length - 1), .2, d + i*.25, 0, 2.6, .45, .4)));
 const thumpAfter = (beat, from) => nt => nt < from ? 0 : thump(beat(nt));
 // the beam from the red moon down onto the crown (B, Bastien's favourite): it reaches down from `from` over 2 s, then stays
 function moonBeam(meta, P, from, thin) {
@@ -123,10 +116,10 @@ CE.viewer({ dayLabel:'Day: a ruin', variants:[
   W.light([.5, Y + 10, 16.5], [3.5, .35, .25], 10, 12.5);
   W.light([.5, Y + 1, .5], [4, .4, .3], 22, 13.5);
   W.light(HEAD, [4, .4, .3], 14, 17.5, 1);
-  motes(W); souls(W, 8); mist(W, 13.5); bladeSparks(W, y => 12.5 + (Y + 25 - y)*.06);
+  motes(W); mist(W, 13.5); bladeSparks(W, y => 12.5 + (Y + 25 - y)*.06);
   P.fires.forEach((e, k) => { for (let i = 0; i < 26; i++) W.part(e.x + .5, e.y + .8, e.z + .5, 1, hash3(k, i, 3), .13, 16, 9 + hash3(i, k, 4)*7, 5, 1.1, .3); });
-  return { ...meta, tag:"<b>B's moon, A's heart, C's halo.</b> A beam comes down from the red moon onto the crown and stays all night; the light runs down him from the top. Souls rise from the ground before him, pass over the sword and go in through the crack in his breastplate, never through stone, to the heart, which takes the light in one great beat and keeps beating. The sword fills from the guard down, sparks running up the blade; the ring round the dais lights and red mist rolls over it; the braziers flare. Eight shards burst from his helm to circle his head in the beam, and he lifts his face to the moon.",
-    phases:[[0, 'Nightfall'], [3, 'The moon reaches down'], [5, 'Light pours into him'], [8, 'Souls come to him'], [10, 'His heart takes it'], [12.5, 'The sword fills'], [13.5, 'The ring wakes, the mist rolls'], [16, 'The braziers flare'], [17.5, 'The shards rise'], [19.5, 'Awake under the blood moon']],
+  return { ...meta, tag:"<b>B's moon, A's heart, C's halo.</b> A beam comes down from the red moon onto the crown and stays all night; the light runs down him from the top. It reaches the heart, which takes the light in one great beat and keeps beating. The sword fills from the guard down, sparks running up the blade; the ring round the dais lights and red mist rolls over it; the braziers flare. Eight shards burst from his helm to circle his head in the beam, and he lifts his face to the moon.",
+    phases:[[0, 'Nightfall'], [3, 'The moon reaches down'], [5, 'Light pours into him'], [10, 'His heart takes it'], [12.5, 'The sword fills'], [13.5, 'The ring wakes, the mist rolls'], [16, 'The braziers flare'], [17.5, 'The shards rise'], [19.5, 'Awake under the blood moon']],
     shakes:[[5, .3], [10, .6], [17.5, .3]],
     glow(nt, t) { return { g:.8 + .65*th(nt) + .1*Math.sin(t*2.2)*(nt < 10 ? 1 : 0) }; },
     groups(nt, t) { const g = [];

@@ -19,6 +19,17 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.6.0: the colossus wakes as staging D, step 1 (timing)
+Bastien picked staging D of `preview/colossus-awakening.html` ("The Moon's Gift", without the souls). Step 1 of 5
+(ADR-023 in the vault): only the timing of what lights, from the builder, 60 game ticks for each preview second.
+- About 15 s after the eclipse begins the crown lights, then the eyes, then the light runs **down** him: veins and
+  lanterns from the top. At about 30 s the heart, then the sword fills from the guard down (about 38 to 45 s), candles
+  at about 42 s, and all the braziers flare together at 48 s.
+- Not yet: the moon's beam, the sparks and mist, the ring on the dais, the heart beating, the head and the shards.
+
+**Test**: near a colossus, `/crimson start`; the eclipse begins about a minute later. Watch from the front for a
+minute: does the light come from the crown downward, the heart, then the sword from the top? Screenshots.
+
 ## New in 0.5.2 (Bastien's look at 0.5.1: still dark under the blood moon)
 - **Why 0.5.1 was still dark**: Horizon's worldgen keeps only vanilla block entities from a structure template
   (`structure_blocks.rs`, `generated_block_entity`): the anchor's was dropped again (the world save showed the

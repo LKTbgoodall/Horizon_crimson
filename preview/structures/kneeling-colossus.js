@@ -123,6 +123,19 @@ function colossus(W) {
   putOnFloor(W, 3, Y + 27, -4, 'barrel'); putOnFloor(W, -3, Y + 27, -1, 'candle[candles=4,lit=false]', LIT(4.2));
   spiral(W, SC[0], SC[1], -8, Y + 26, 'polished_blackstone_brick_stairs', 'polished_blackstone');
   K.vines(W, e => BODY.get(key(e.x, e.y, e.z)) === 'body', .03, 7);
+  // the awakening's timing, staging D "The Moon's Gift" (preview/colossus-awakening.html, Bastien's pick): the moon's
+  // light lands on the crown at 5 s and runs down him from the top, the heart takes it at 10, the sword fills from the
+  // guard down from 12.5, candles at 14, braziers flare at 16 (the game: tools/export-structure.mjs, 60 ticks a second)
+  { const all = [...W.M.values()], top = Math.max(...all.filter(e => e.g === 1).map(e => e.y)) + 1, down = e => 5 + (top - e.y)*.11;
+    for (const e of all) { if (!e.awake) continue; const r = hash3(e.x, e.y, e.z);
+      if (e.g === 2) e.d = 10;
+      else if (e.id === 'crimson_eclipse:helm_eye') e.d = 6.2;
+      else if (e.g === 1) e.d = 5 + r*.3;
+      else if (e.id === 'crimson_eclipse:crimson_crystal' && e.z === 15) e.d = 12.5 + (Y + 25 - e.y)*.06;
+      else if (e.id === 'crimson_eclipse:crimson_vein') e.d = down(e) + r*.4;
+      else if (e.id === 'crimson_eclipse:vigil_lantern') e.d = down(e);
+      else if (e.id === 'candle') e.d = 14 + r;
+      else if (e.id === 'campfire') e.d = 16; } }
   K.settle(W);                                   // nothing may hold to nothing (carpets over the stair hole, vines on carpets...)
   // for the game: a foundation under the dais rim (it may stand on a slope), and the air the template must carve
   // (the crypt, the stair shaft, a clearing over the dais); the preview ignores both
@@ -140,20 +153,20 @@ function colossus(W) {
     shakeAt:3.5,
     ground(W) {     // a pilgrims' camp left behind, south-west of the dais
       for (const [cx, cz] of [[-22, 26], [-29, 20]]) for (let z = cz; z <= cz + 4; z++) for (const [x, y] of [[-2, 0], [2, 0], [-1, 1], [1, 1], [0, 2]]) W.set(cx + x, y, z, hash3(cx + x, y, z) > .85 ? 'light_gray_wool' : 'white_wool');
-      W.set(-25, 0, 31, 'campfire[lit=false]', LIT(3.6)); W.set(-23, 0, 33, 'spruce_log[axis=x]'); W.set(-27, 0, 33, 'spruce_log[axis=z]');
+      W.set(-25, 0, 31, 'campfire[lit=false]', LIT(16)); W.set(-23, 0, 33, 'spruce_log[axis=x]'); W.set(-27, 0, 33, 'spruce_log[axis=z]');
       W.set(-20, 0, 32, 'barrel'); W.set(-20, 1, 32, 'barrel'); W.set(-19, 0, 32, 'chest[facing=west]'); W.set(-30, 0, 26, 'chest[facing=south]');
       W.figure(4, Y, 20);
     },
     groups(nt, t) {
-      const g = [], kh = ss(6, 9, nt);
-      g[1] = about([.5, Y + 39, .5], RX(-.34*kh + .015*kh*Math.sin(t*.9)));
-      const on = ss(4, 5, nt), beat = Math.pow(Math.max(Math.sin(t*4.2), 0), 10) + .6*Math.pow(Math.max(Math.sin(t*4.2 - .7), 0), 10);
+      const g = [], kh = ss(17.5, 21, nt);
+      g[1] = about([.5, Y + 39, .5], RX(-.2*ss(6.2, 8, nt) - .38*kh + .012*kh*Math.sin(t*.9)));
+      const on = ss(10, 11, nt), beat = Math.pow(Math.max(Math.sin(t*4.2), 0), 10) + .6*Math.pow(Math.max(Math.sin(t*4.2 - .7), 0), 10);
       g[2] = about([HEART[0] + .5, HEART[1] + .5, HEART[2] + .5], Sm(1 + .12*beat*on));
       return g;
     },
     lights(W) {
-      W.light([HEART[0] + .5, HEART[1] + .5, HEART[2] + .5], [5, .5, .35], 12, 4, 2);
-      W.light([.5, Y + 8, 16.5], [3, .3, .2], 9, 4.6);
+      W.light([HEART[0] + .5, HEART[1] + .5, HEART[2] + .5], [5, .5, .35], 12, 10, 2);
+      W.light([.5, Y + 8, 16.5], [3, .3, .2], 9, 12.5);
       for (let i = 0; i < 160; i++) W.part(-12 + hash3(i,1,6)*24, Y + 1 + hash3(i,2,6)*30, -10 + hash3(i,3,6)*28, 0, hash3(i,4,6), .07, 0, 0, 1,1,1);
       for (let i = 0; i < 140; i++) { const a = hash3(i,5,6)*6.283; W.part(.5 + Math.sin(a)*20, Y + 9, .5 + Math.cos(a)*20, 1, hash3(i,7,6), .1, 4.5, 4 + hash3(i,8,6)*5, 4, .7, .3); }
     },

@@ -21,5 +21,6 @@ updated: 2026-11-14
 | [[ADR-020 Structure previews in real blocks]] | One shared preview engine: real vanilla blocks and states, our own blocks, everything on the grid, Minecraft light, vanilla textures read from the player's jar, never committed | accepted | 2026-11-16 |
 | [[ADR-022 A structure wakes through its anchor]] | A hidden anchor block entity lights its structure's blocks (a generated wake table) under the blood moon; our blocks glow through `lit` states and emissive overlays | accepted | 2026-11-16 |
 | [[ADR-021 One builder for the preview and the game]] | A structure is one builder in `preview/structures/`, drawn by its page and exported to the game's template with full states, loot, air, and a support check | accepted | 2026-11-16 |
+| [[ADR-023 The colossus awakening is staging D, built in steps]] | The awakening is staging D (moon beam onto the crown, light running down, heartbeat, sword, ring, mist, braziers, halo; no souls or lasers); timing in the builder at 60 ticks a preview second; built in five tested steps | accepted | 2026-11-16 |
 
 ADRs 001 to 013 come from Cagebound (numbers kept, the Cagebound-specific ones left out).
