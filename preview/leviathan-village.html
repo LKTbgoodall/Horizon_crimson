@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Leviathan Village</title>
+<!--
+  The Leviathan's Rest (vault/04 - Design/Structures.md), kept from round 5. Bastien (2026-11-16) likes the skeleton and the
+  skull, not the village inside (empty, two houses on stilts, the bones not used). Two villages that live in the bones:
+  A grafted onto the bones, B the carcass closed into a great hall. Built by preview/structures/leviathan.js.
+  URL parameters: ?v=a|b  &night=1  &ui=0  &spin=0
+-->
+</head>
+<body>
+<script src="vanilla/textures.js" onerror="void 0"></script>
+<script src="lib/blocks.js"></script>
+<script src="lib/world.js"></script>
+<script src="lib/textures.js"></script>
+<script src="lib/viewer.js"></script>
+<script src="structures/kit.js"></script>
+<script src="structures/leviathan.js"></script>
+<script>
+'use strict';
+const K = CE.kit, build = CE.structures.leviathan;
+const variant = (key, short, name, village) => ({ key, short, name, make(W) {
+  const meta = build(W, { village });
+  const gone = K.settle(W, 0); if (gone) console.log(`[${key}] settle: ${gone} blocks held to nothing and were removed`);
+  meta.size = K.sizeOf(W);
+  K.terrain(W, meta.flat, meta.groundR);
+  meta.ground(W);
+  for (const [x, z, h] of meta.trees) K.spruce(W, x, z, h);
+  meta.lights(W);
+  return meta;
+} });
+CE.viewer({ dayLabel:'Day: a ruin', variants:[
+  variant('A', 'Grafted on the bones', 'The Leviathan\'s Rest: a village grafted onto the bones', 'A'),
+  variant('B', 'The great hall', 'The Leviathan\'s Rest: the carcass turned into a great hall', 'B'),
+] });
+</script>
+</body>
+</html>
