@@ -66,6 +66,8 @@ Back: [[00 - Home]]
 - [x] Round 2, three imposing candidates with furnished insides: `preview/grand-structures.html` (A Citadel of the Vigil, B The Kneeling Colossus, C Temple of the Red Moon) (2026-11-16)
 - [x] Bastien's look at round 2 (2026-11-16): temple and citadel empty and plain; the colossus liked (more inside, new face)
 - [x] Round 3: `preview/structures-round-3.html` (A the colossus deeper with a new face, B Wreck of the Sky Galleon, C The Lantern Tree) (2026-11-16)
+- [x] Bastien's look at round 3: the colossus head and the tree kept, the galleon dropped
+- [x] Round 4: `preview/structures-round-4.html` (the colossus centred with a round helm; the lantern tree with its blooming crystal crown) (2026-11-16)
 - [ ] Bastien loads his real textures (button on the page) and picks one (or mixes), then we refine it on the page
 - [ ] Pipeline proof: one NBT template from our own tool, generating in a new world, one anchor block inside that wakes under the blood moon; far terrain checked
 - [ ] The first medium structure at full quality

@@ -29,12 +29,19 @@ He first wanted a separate structures mod, then: "we'll do it all in Crimson, th
   - **A · The Kneeling Colossus, deeper**: a new face (great helm, T-shaped visor, eyes burning deep in the slit, a crown of gold with crystal points) and a dungeon inside: a door between the knees, a stair tower, a spiral from a crypt under the dais (tombs, a treasure room behind iron bars, chests, barrels, eternal soul lanterns) up through a reliquary in the pelvis (shelves, chests, a table) to the heart chamber; a pilgrims' camp left behind outside.
   - **B · Wreck of the Sky Galleon**: a galleon of the old moon-watchers that fell from the sky, aground in a cradle of rock, foremast broken, port side torn open, cargo spilled. Hold of barrels, chests and moon crystal; gun deck with hammocks, tables, sea chests; captain's cabin behind gold-framed stern windows; a crow's nest with a chest. Awakening: crystal keel and figurehead light, lanterns, the bell, the whole ship lifts off its rocks and strains at its anchor chains.
   - **C · The Lantern Tree**: a colossal pale oak on arched roots, hung with dozens of iron lanterns; stairs wind up to two ring platforms with plank huts (a chest in each), a watch bell, cages hanging from the branches with loot; a hall inside the trunk; a ladder down to a crypt where the roots hold a crimson heart. Awakening: leaves turn blood red from the trunk outwards, lanterns light, eyeblossoms open, the heart beats, the bell rings.
+- **His look at round 3 (2026-11-16, with screenshots)**: the colossus' head is not straight, and square on a round body; the galleon, no; the lantern tree he likes a lot, but wants "something mad at the top".
+- **Round 4** in `preview/structures-round-4.html`:
+  - **A · The Kneeling Colossus**: the whole statue now sits on one column of blocks (it was centred between two, so the T visor and the eyes were half a block off); a round helm (barbute) with the T visor, eyes deep in the slit (our helm eye block, eye on its front face only), a gold circlet with twelve crystal points set symmetrically, the tallest over the visor.
+  - **B · The Lantern Tree** with its crown: a sealed pod of pale wood on top of a taller trunk; under the blood moon it turns to crystal and blooms, eight petals opening one after the other into a lotus, and in its heart an orb of crystal with one great iris that rises, turns its pupil to the moon and fires at it.
 
-## What Bastien wants in a structure (learned from rounds 1 to 3)
+## What Bastien wants in a structure (learned from rounds 1 to 4)
 - **Imposing**: big, a strong silhouette, readable from far (round 1 was too small and plain).
 - **Never plain**: no wide walls of one block; mix materials, depth (pillars, buttresses, trims, recesses), details everywhere ("unis c'est nul").
 - **Full inside, things to search**: rooms that make sense, chests, barrels, a treasure room, loot in odd places (cages, a crow's nest). An empty shell is a fail.
 - A figure (the colossus) works for him; its face must look designed, not two red dots in a band.
+- **Symmetric things are symmetric on the grid**: a figure or a face is centred on one column of blocks (odd width), so a visor, eyes or a crown line up. He notices half a block.
+- **Shapes agree**: no square head on a round body.
+- **A crowning moment**: the top of a big structure must be something mad (the tree's blooming crystal lotus).
 
 ## The idea that ties them to the mod (proposed)
 **By day they are ruins; under the blood moon they wake up.** The Overworld's structures are what is left of the people who watched the red moon before us: quiet, mossy, cracked by day. When the moon turns red they come alive with it (crystals rise, eyes open, bells toll, beams reach for the moon) and fall asleep again at dawn's cleansing. The Pale Realm's structures (the Spire, monoliths, ribs) are the other side: always alive, and seen through the broken sky before they are reached.

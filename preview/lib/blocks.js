@@ -394,7 +394,8 @@ ours('crimson_crystal', { tex:'ce:crimson_crystal', glow:.12, glowAwake:2.2, lig
 ours('crimson_crystal_cluster', { shape:S.cross, tex:'ce:crimson_crystal_cluster', render:'cutout', ...nonFull, glow:.15, glowAwake:2.6, lightAwake:9 });
 ours('eclipse_glass', { tex:'ce:eclipse_glass', render:'translucent', opaque:false, cullSame:true, glow:.05, glowAwake:1.8, lightAwake:9 });
 ours('eclipse_eye', { tex:'ce:eclipse_eye', glow:.05, glowAwake:4.5, lightAwake:15 });
-ours('moon_lens', { tex:'ce:moon_lens', glow:.05, glowAwake:6, lightAwake:12 });
+ours('helm_eye', { tex:{ south:'ce:eclipse_eye', side:'block/black_concrete', top:'block/black_concrete', bottom:'block/black_concrete' }, glow:.05, glowAwake:4.5, lightAwake:10 });
+ours('moon_lens',{ tex:'ce:moon_lens', glow:.05, glowAwake:6, lightAwake:12 });
 ours('blood_leaves', { tex:'ce:blood_leaves', render:'cutout', opaque:false, damp:1, glow:.25 });
 ours('vigil_lantern',{ shape:S.lantern, tex:'ce:vigil_lantern', render:'cutout', ...nonFull, glowAwake:2.4, lightAwake:13 });
 ours('crimson_vein', { tex:'ce:crimson_vein', glow:.05, glowAwake:2.2, lightAwake:5 });
