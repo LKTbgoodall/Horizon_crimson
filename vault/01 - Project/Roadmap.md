@@ -69,6 +69,9 @@ Back: [[00 - Home]]
 - [x] Bastien's look at round 3: the colossus head and the tree kept, the galleon dropped
 - [x] Round 4: `preview/structures-round-4.html` (the colossus centred with a round helm; the lantern tree with its blooming crystal crown) (2026-11-16)
 - [ ] Bastien loads his real textures (button on the page) and picks one (or mixes), then we refine it on the page
-- [ ] Pipeline proof: one NBT template from our own tool, generating in a new world, one anchor block inside that wakes under the blood moon; far terrain checked
+- [x] The colossus kept, its real structure: template from the preview's builder, our blocks, loot, worldgen (0.4.0, [[ADR-021 One builder for the preview and the game]], 2026-11-16)
+- [ ] Bastien builds 0.4.0 and looks at the colossus in a new world (test in `mod/README.md`)
+- [ ] The colossus wakes: anchor code (head, heart, eyes, crown, candles, lanterns, braziers) under the blood moon; far terrain checked
+- [ ] The lantern tree as the second real structure
 - [ ] The first medium structure at full quality
 - [ ] A first immense one

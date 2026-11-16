@@ -11,6 +11,7 @@ updated: 2026-11-16
 - ✅ **S-3 Who builds**: both. Claude proposes structures, they are refined together, Claude codes them, Bastien edits in game when needed or says what to change.
 - ✅ **S-4 First pick**: "a stylish structure, for example an abandoned building, but quite big, to start".
 - ✅ **S-5 Vanilla villages**: allowed, but the start is something of our own.
+- **0.4.0 in game (2026-11-16), to confirm**: `minecraft:iron_chain` is 26.3's chain name; our Vigil Lantern texture fits vanilla's `template_lantern` layout; `horizon:start_checks`' fields (to keep the colossus off slopes); how often it shows up (spacing 40 chunks).
 - **Real textures for the previews** (2026-11-16): where does Horizon keep the vanilla client jar on the dev PC? The page's "Load real textures…" button takes any 26.3 client jar (the vanilla launcher's `%APPDATA%\.minecraft\versions\26.3\26.3.jar` works); `node tools/extract-textures.mjs <jar>` makes a lasting `preview/vanilla/textures.js`.
 - To check: Horizon's structure block saves templates in game; jigsaw size limits; far terrain shows our structures; when `structure_template` gets numbered.
 

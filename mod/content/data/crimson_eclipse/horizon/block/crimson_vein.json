@@ -1,0 +1,7 @@
+{
+  "template": "minecraft:polished_deepslate",
+  "properties": {
+    "light": 2
+  },
+  "item": true
+}

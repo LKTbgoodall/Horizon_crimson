@@ -391,13 +391,13 @@ REG.open_eyeblossom.glowAwake = 0; REG.open_eyeblossom.glow = .8;
 // ------------------------------------------------------------------ ours (crimson_eclipse:)
 const ours = (id, def) => reg('crimson_eclipse:' + id, { lightColor:'red', ...def });
 ours('crimson_crystal', { tex:'ce:crimson_crystal', glow:.12, glowAwake:2.2, lightAwake:13 });
-ours('crimson_crystal_cluster', { shape:S.cross, tex:'ce:crimson_crystal_cluster', render:'cutout', ...nonFull, glow:.15, glowAwake:2.6, lightAwake:9 });
+ours('crimson_crystal_cluster', { gameProps:{ facing:'up' }, shape:S.cross, tex:'ce:crimson_crystal_cluster', render:'cutout', ...nonFull, glow:.15, glowAwake:2.6, lightAwake:9 });
 ours('eclipse_glass', { tex:'ce:eclipse_glass', render:'translucent', opaque:false, cullSame:true, glow:.05, glowAwake:1.8, lightAwake:9 });
 ours('eclipse_eye', { tex:'ce:eclipse_eye', glow:.05, glowAwake:4.5, lightAwake:15 });
-ours('helm_eye', { tex:{ south:'ce:eclipse_eye', side:'block/black_concrete', top:'block/black_concrete', bottom:'block/black_concrete' }, glow:.05, glowAwake:4.5, lightAwake:10 });
+ours('helm_eye', { gameProps:{ facing:'south' }, tex:{ south:'ce:eclipse_eye', side:'block/black_concrete', top:'block/black_concrete', bottom:'block/black_concrete' }, glow:.05, glowAwake:4.5, lightAwake:10 });
 ours('moon_lens',{ tex:'ce:moon_lens', glow:.05, glowAwake:6, lightAwake:12 });
 ours('blood_leaves', { tex:'ce:blood_leaves', render:'cutout', opaque:false, damp:1, glow:.25 });
-ours('vigil_lantern',{ shape:S.lantern, tex:'ce:vigil_lantern', render:'cutout', ...nonFull, glowAwake:2.4, lightAwake:13 });
+ours('vigil_lantern', { gameProps:{ lit:false }, shape:S.lantern, tex:'ce:vigil_lantern', render:'cutout', ...nonFull, glowAwake:2.4, lightAwake:13 });
 ours('crimson_vein', { tex:'ce:crimson_vein', glow:.05, glowAwake:2.2, lightAwake:5 });
 ours('rune_stone',{ tex:'ce:rune_stone', glowAwake:2.5, lightAwake:7 });
 ours('blood_water', { shape:S.liquid, tex:'ce:blood_water', render:'translucent', opaque:false, cullSame:true, glow:.4, light:8, damp:1 });
@@ -416,5 +416,22 @@ function parseState(s) {
 function stateString(id, props) { const k = Object.keys(props || {}); const ns = id.includes(':') ? id : 'minecraft:' + id;
   return k.length ? `${ns}[${k.map(x => x + '=' + props[x]).join(',')}]` : ns; }
 
-CE.blocks = { REG, S, FACES, DIRV, HORIZ, OPP, bake, parseState, stateString, fullSolid, DYES, GRASS, FOLIAGE };
+// the full state a structure template must hold: a template places its blocks as they are, with no neighbour update,
+// so stairs corners, fence / pane / wall connections and leaf persistence are written out here, as the previews draw them
+function gameState(W, e) {
+  const d = REG[e.id], p = { ...(d.gameProps || {}), ...e.p }, ctx = { nb: dir => { const v = DIRV[dir]; return W.get(e.x + v[0], e.y + v[1], e.z + v[2]); } };
+  if (d.shape === S.stairs) { p.facing = p.facing || 'north'; p.half = p.half || 'bottom'; p.shape = p.shape || stairsShape(p, ctx); }
+  else if (d.shape === S.fence) for (const dir of armDirs) p[dir] = connects(ctx, dir, nd => nd.fam === d.fam || nd.shape === S.gate);
+  else if (d.shape === S.pane) for (const dir of armDirs) p[dir] = connects(ctx, dir, nd => nd.shape === S.pane || nd.shape === S.wall);
+  else if (d.shape === S.wall) { const C = {};
+    for (const dir of armDirs) C[dir] = connects(ctx, dir, nd => nd.shape === S.pane || nd.shape === S.wall || nd.shape === S.gate);
+    const straight = (C.north && C.south && !C.east && !C.west) || (C.east && C.west && !C.north && !C.south), up = ctx.nb('up');
+    p.up = !straight || !!(up && REG[up.id] && REG[up.id].shape !== S.cross);
+    const tall = !!(up && (REG[up.id].shape === S.wall || fullSolid(up)));
+    for (const dir of armDirs) p[dir] = C[dir] ? (tall ? 'tall' : 'low') : 'none'; }
+  else if (/_leaves$/.test(e.id)) p.persistent = true;
+  return p;
+}
+
+CE.blocks = { REG, S, FACES, DIRV, HORIZ, OPP, bake, parseState, stateString, fullSolid, gameState, DYES, GRASS, FOLIAGE };
 })();

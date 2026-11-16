@@ -172,6 +172,9 @@ Read in `ext/src-9f42064/docs/mods.md`, `native-mods.md`, `modpacks.md`, `graphi
 - ❌ A **world's data pack** worldgen does not run (`mod-browser.md`): structures must ship in the mod's content, not as a separate data pack.
 - **Far terrain (LOD)** generates chunks with "supported carvers, structures and decoration" (`graphics.md` 99): a giant structure should be **visible from far away**. ❓ to see in game.
 
+- ✅ Read in Horizon's docs at `1453e0e` (`Horizon_quest/ext/horizon`, 2026-11-16; the pin is `9f42064`): 26.3 is **data version 5023** (`docs/world-data.md`); a template is vanilla's NBT (`size`, `palette` or `palettes`, `blocks` with `state`, `pos`, `nbt`, `entities`) and is looked up in the world's `generated/`, then the game's and the content mods' `data/<ns>/structure/` (`docs/native-mods.md` § Structure templates). Block declarations: `template`, `properties`, `state_properties`, `default_state`, `state_light` (per-state light, e.g. a `lit` we declare), `shapes`, `render_shape`, `occludes` (`docs/mods.md` § Content mods). ❓ The schema of `horizon:start_checks` is not in the docs (only `terrain_radius`, `terrain_range` named): not used yet.
+- ❓ Whether 26.3 names the chain `minecraft:iron_chain` (renamed in 1.21.9, assumed): the colossus uses four.
+
 ## D2. Code side
 - ✅ `native_edit_blocks(dimension, edit)` (API 126): writes columns straight into chunks (fast, big edits). `native_spawn_falling_block` (API 81): real falling blocks. `native_set_block(dimension, pos, state, flags)`.
 - ✅ `chunk_load` (listen, server, version 1): a chunk with one of our structures arrives (find our marker blocks, wake their logic).

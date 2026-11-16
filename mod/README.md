@@ -3,7 +3,10 @@
 - `crimson_eclipse/`: the native bundle (typed API). `api/src` holds only the hand-written glue
   (`glue.rs`, `server.rs`, `client.rs`, `sky_pass.rs`); the build adds the pure core (`crates/crimson-core/src`)
   and writes `lib.rs`.
-- `content/`: the content mod: its manifest and the sounds (no block, item or texture yet).
+- `content/`: the content mod: its manifest, the sounds, our blocks (declarations, models, textures), loot tables and
+  the Kneeling Colossus (template `data/crimson_eclipse/structure/kneeling_colossus.nbt` and its worldgen files).
+  These are generated: `node tools/export-structure.mjs`, `node tools/make-block-textures.mjs`,
+  `node tools/write-colossus-content.mjs` (from `preview/structures/`, the builder the preview draws).
 - `compatibility.json`: the Horizon pin (Nightly `9f42064`, hooks 415).
 
 ## Build and install (Bastien runs it, game closed)
@@ -15,6 +18,26 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 `-NoBuild` installs without building, `-Uninstall` takes it out, `-Combined` installs the one `.hmod`.
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
+
+## New in 0.4.0: the Kneeling Colossus generates in the world
+The first real structure, block for block as `preview/kneeling-colossus.html` draws it (day state: nothing moves
+yet, candles out, lanterns dark; the blood moon's awakening needs the mod's code, next step).
+- **Where**: rare (one chance per 40 × 40 chunks, at least 16 apart), in plains, sunflower plains, meadows, savannas,
+  savanna plateaus and snowy plains; new chunks only (an explored area keeps its land).
+- **Inside**: a door between the knees, a spiral stair from a crypt under the dais (tombs, a treasure room behind
+  iron bars) up through a reliquary in the pelvis to the heart chamber; 31 chests and barrels with our loot tables
+  (`colossus_treasure`, `crypt`, `supplies`, `reliquary`, `heart`, `camp`).
+- **Our blocks**: Crimson Crystal, Crimson Crystal Cluster, Crimson Vein, Helm Eye, Vigil Lantern (in the creative
+  search; 16 px textures from the preview's painters).
+
+**Test** (after the build, in a new world or far from explored land):
+1. `/locate structure crimson_eclipse:kneeling_colossus`, then go there; or `/place structure crimson_eclipse:kneeling_colossus`
+   on flat ground near you.
+2. Look: is it whole and standing on the ground (the dais flat, no floating part, nothing buried)? Are our blocks
+   textured (no purple and black)? The four little chains holding the crypt lanterns (`iron_chain`, a name to confirm)?
+   The Vigil Lanterns' cage drawn right? The two eyes in the visor looking forward?
+3. Go in: the door between the knees, down the spiral to the crypt, up to the reliquary and the heart; open chests.
+4. Screenshots, and `latest.log` if a line says "content mods not loaded".
 
 ## New in 0.3.4 (Bastien's screenshot of the moon rising in 0.3.3)
 - **The pale rectangle under the rising moon** should be gone (to confirm in game). Reading of the screenshot,

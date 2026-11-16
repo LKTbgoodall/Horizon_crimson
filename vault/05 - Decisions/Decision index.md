@@ -19,5 +19,6 @@ updated: 2026-11-14
 | [[ADR-018 The Pale Realm lives in the far End]] | No custom dimension in Horizon: the Pale Realm is a mod-generated region of the End, reached by a real level change | proposed | 2026-11-14 |
 | [[ADR-019 Structures for the blood moon]] | Structures join the mod: vanilla-format structures animated by our anchor blocks, ruins by day and awake under the blood moon | proposed | 2026-11-15 |
 | [[ADR-020 Structure previews in real blocks]] | One shared preview engine: real vanilla blocks and states, our own blocks, everything on the grid, Minecraft light, vanilla textures read from the player's jar, never committed | accepted | 2026-11-16 |
+| [[ADR-021 One builder for the preview and the game]] | A structure is one builder in `preview/structures/`, drawn by its page and exported to the game's template with full states, loot, air, and a support check | accepted | 2026-11-16 |
 
 ADRs 001 to 013 come from Cagebound (numbers kept, the Cagebound-specific ones left out).

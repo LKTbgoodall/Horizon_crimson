@@ -1,0 +1,21 @@
+{
+  "template": "minecraft:lantern",
+  "state_properties": {
+    "lit": {
+      "type": "boolean"
+    }
+  },
+  "default_state": {
+    "lit": "false"
+  },
+  "state_light": {
+    "properties": [
+      "lit"
+    ],
+    "values": {
+      "false": 0,
+      "true": 13
+    }
+  },
+  "item": true
+}

@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "hanging=false,lit=false": {
+      "model": "crimson_eclipse:block/vigil_lantern"
+    },
+    "hanging=true,lit=false": {
+      "model": "crimson_eclipse:block/vigil_lantern_hanging"
+    },
+    "hanging=false,lit=true": {
+      "model": "crimson_eclipse:block/vigil_lantern_lit"
+    },
+    "hanging=true,lit=true": {
+      "model": "crimson_eclipse:block/vigil_lantern_hanging_lit"
+    }
+  }
+}

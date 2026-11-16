@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "crimson_eclipse:block/crimson_crystal"
+  }
+}

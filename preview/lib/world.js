@@ -85,6 +85,25 @@ K.spruce = (W, x, z, h) => { const y0 = W.get(x, 0, z) ? 1 : 0;
   for (let y = 3; y <= h+1; y++) { const r = Math.max(0, Math.round((h+1-y)*.42));
     for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++)
       if ((dx || dz || y > h-1) && Math.abs(dx)+Math.abs(dz) <= r + (y % 2) && hash3(x+dx, y, z+dz) > .12 && !W.get(x+dx, y0+y, z+dz)) W.set(x+dx, y0+y, z+dz, 'spruce_leaves'); } };
+// what holds a block up, as the game checks it on a neighbour update: [direction, test] pairs it needs
+const OFF = { north:[0,0,-1], south:[0,0,1], east:[1,0,0], west:[-1,0,0], up:[0,1,0], down:[0,-1,0] }, BACK = { north:'south', south:'north', east:'west', west:'east' };
+const holds = b => !!b && !/carpet|candle|lantern|torch|campfire|banner|vine|ladder|cobweb|short_grass|fern|flower|chain/.test(b.id);
+K.needs = e => { const id = e.id, p = e.p, n = [];
+  if (/lantern/.test(id)) n.push(p.hanging ? ['up', b => holds(b) || /chain/.test(b?.id || '')] : ['down', holds]);
+  else if (/candle|campfire|carpet|_cluster$/.test(id) || (/_door$/.test(id) && p.half === 'lower')) n.push(['down', holds]);
+  else if (/_wall_banner$/.test(id)) n.push([BACK[p.facing || 'south'], holds]);
+  else if (id === 'ladder') n.push([BACK[p.facing || 'north'], holds]);
+  else if (id === 'bell') n.push([p.attachment === 'ceiling' ? 'up' : 'down', holds]);
+  else if (id === 'vine') for (const d of ['north', 'south', 'east', 'west']) if (p[d]) n.push([d, holds]);
+  return n; };
+// the needs it lacks; `groundY`: cells at that height stand on the natural ground (not in the build)
+K.unsupported = (W, e, groundY = null) => K.needs(e).filter(([dir, ok]) => { if (dir === 'down' && e.y === groundY) return false;
+  const o = OFF[dir]; return !ok(W.get(e.x + o[0], e.y + o[1], e.z + o[2])); }).map(([dir]) => dir);
+// take away whatever holds to nothing (repeat: a vine may hang from a carpet that goes)
+K.settle = (W, groundY = null) => { let gone = 0;
+  for (let changed = true; changed;) { changed = false;
+    for (const e of [...W.M.values()]) if (K.unsupported(W, e, groundY).length) { W.del(e.x, e.y, e.z); gone++; changed = true; } }
+  return gone; };
 // size of what was built so far (call it before the terrain): [x, y, z] in blocks
 K.sizeOf = W => { const a = [1e9, 1e9, 1e9], b = [-1e9, -1e9, -1e9];
   for (const e of W.M.values()) { if (e.y < 0) continue; for (const [k, v] of [[0, e.x], [1, e.y], [2, e.z]]) { a[k] = Math.min(a[k], v); b[k] = Math.max(b[k], v); } }

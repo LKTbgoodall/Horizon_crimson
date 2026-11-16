@@ -1,0 +1,7 @@
+{
+  "template": "minecraft:black_glazed_terracotta",
+  "properties": {
+    "light": 9
+  },
+  "item": true
+}

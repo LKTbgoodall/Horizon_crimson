@@ -122,12 +122,17 @@ const OURS = {
     return mix([255, 230, 220], [200, 40, 40], Math.min(1, r/7)) .map((v, i) => v*(Math.floor(r) % 2 ? .85 : 1)); }),
   blood_leaves: () => paint(16, 16, (x, y) => { const v = hash3(x, y, 31); if (v < .2) return null;
     return v > .93 ? [255, 90, 70] : sh([150, 18, 24], .55 + .6*hash3(x >> 1, y >> 1, 32)); }),
-  vigil_lantern: () => paint(16, 16, (x, y) => { const iron = [44, 40, 46], glass = [196, 66, 58];
-    if (x < 6 && y >= 2 && y < 9) return (x === 0 || x === 5 || y === 2 || y === 8 || x === 3) ? iron : sh(glass, .85 + .3*hash3(x, y, 3));
-    if (x < 6 && y >= 9 && y < 15) return sh(iron, .9 + .2*hash3(x, y, 4)); if (x >= 1 && x < 5 && y < 2) return iron;
-    if (x >= 11 && x < 14 && ((y >= 1 && y < 3) || (y >= 10 && y < 12))) return iron; return null; }),
+  vigil_lantern: () => vigilLantern([196, 66, 58]),
+  vigil_lantern_lit: () => vigilLantern([255, 104, 80]),
   crimson_vein: () => paint(16, 16, (x, y) => { const v = Math.abs(x - 7.5 - 3.5*Math.sin(y*.55) - 1.5*Math.sin(y*1.3 + 1)) < .9 || (y === 4 && x > 8 && x < 14) || (Math.abs(y - 11 - (x - 9)*.5) < .7 && x > 8);
     return v ? [235, 44, 38] : sh([62, 60, 68], .82 + .3*hash3(x, y, 12)); }),
+};
+// the lantern sheet, laid out as vanilla's lantern texture (body sides, top and bottom, cap, handle)
+function vigilLantern(glass) { return paint(16, 16, (x, y) => { const iron = [44, 40, 46];
+    if (x < 6 && y >= 2 && y < 9) return (x === 0 || x === 5 || y === 2 || y === 8 || x === 3) ? iron : sh(glass, .85 + .3*hash3(x, y, 3));
+    if (x < 6 && y >= 9 && y < 15) return sh(iron, .9 + .2*hash3(x, y, 4)); if (x >= 1 && x < 5 && y < 2) return iron;
+    if (x >= 11 && x < 14 && ((y >= 1 && y < 3) || (y >= 10 && y < 12))) return iron; return null; }); }
+Object.assign(OURS, {
   rune_stone: () => paint(16, 16, (x, y) => { const rune = (x === 7 && y > 2 && y < 13) || (y === 5 && x > 4 && x < 11) || (x - y === 2 && x > 6 && x < 12) || (x + y === 20 && x > 7 && x < 12);
     if (x === 0 || y === 0 || x === 15 || y === 15) return [32, 28, 36]; return rune ? [230, 46, 40] : sh([46, 40, 50], .85 + .3*hash3(x, y, 5)); }),
   blood_water: () => paint(16, 16, (x, y) => { const v = .5 + .5*Math.sin((x + y*.5)*.9 + hash3(x, y, 8)*2); return [120 + 70*v, 8 + 14*v, 14 + 10*v, 210]; }),
@@ -136,7 +141,7 @@ const OURS = {
   brass: () => paint(16, 16, (x, y) => sh([196, 150, 64], .75 + .4*hash3(x, y, 11) + (y % 5 === 0 ? -.15 : 0))),
   figure: () => paint(16, 16, (x, y) => sh([34, 32, 40], .85 + .3*hash3(x, y, 2))),
   missing: () => paint(16, 16, (x, y) => ((x >> 3) + (y >> 3)) % 2 ? [255, 0, 220] : [10, 10, 10]),
-};
+});
 
 // ------------------------------------------------------------------ the vanilla pack: textures.js, or read from the player's jar in the page
 // Reading a jar here: the player picks their own client.jar; the textures are kept in this browser (IndexedDB), never uploaded.

@@ -1,0 +1,7 @@
+{
+  "template": "minecraft:amethyst_cluster",
+  "properties": {
+    "light": 5
+  },
+  "item": true
+}

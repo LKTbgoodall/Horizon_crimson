@@ -21,7 +21,13 @@ Three layers, from what Horizon offers at `9f42064` (read, nothing tried yet).
 ## 3. Change: runtime edits
 - Awakenings (the chapel's doors, the fault opening): `native_edit_blocks`, falling blocks, `set_block`. Later, `structure_template` (⏳) to place a template block by block.
 
-## Authoring the shapes (to decide with Bastien)
+## Authoring: decided ([[ADR-021 One builder for the preview and the game]])
+1. Write or change the builder `preview/structures/<name>.js` (helpers in `structures/kit.js`), check its preview page.
+2. `node tools/export-structure.mjs <builder> <name>`: the template, read back and support-checked (it refuses a block that holds to nothing).
+3. `node tools/make-block-textures.mjs` and the content writer (`tools/write-colossus-content.mjs` for the colossus: our blocks, loot, worldgen).
+4. Bastien builds and looks in game (`mod/README.md` § the version's test).
+
+## Authoring the shapes (the options as first listed)
 - **A. Bastien builds in game** with structure blocks (if Horizon saves them, ❓), Claude adds anchors, pools and JSON.
 - **B. Claude generates** templates from code (a generator in `tools/` writing NBT): parametric, good for huge or regular shapes (rings, towers, a colossus from primitives).
 - **C. Both**: generator for big geometry, hand detailing in game.
