@@ -63,7 +63,7 @@ void main(){
 const BLOCK_FS = `#version 300 es
 precision highp float; precision highp sampler2DArray;
 in vec3 vW; in vec3 vUV; in vec3 vN; in float vShade; in vec4 vL; in vec4 vM; in vec2 vX;
-uniform sampler2DArray uTex; uniform int uPass; uniform vec3 uCam, uSun, uMoon; uniform float uN, uAT, uTime;
+uniform sampler2DArray uTex; uniform int uPass; uniform vec3 uCam, uSun, uMoon; uniform float uN, uAT, uTime, uSee;
 uniform vec4 uLP[8]; uniform vec4 uLC[8]; uniform int uNL;
 out vec4 o;
 float lv(float l){ float x = clamp(l/15., 0., 1.); return x/(4. - 3.*x); }
@@ -82,6 +82,7 @@ void main(){
   vec3 lit = sky*mix(day, nig, uN);
   lit += lv(vL.y)*on(vL.z)*vec3(1.4, .98, .58)*fl;
   lit += lv(vL.w)*on(vM.x)*vec3(2., .24, .17)*(.85 + .15*fl);
+  lit += vec3(.035 + uSee);              // a floor of light, more while the cut is used, so insides can be read
   lit *= vShade;
   for (int i = 0; i < 8; i++) { if (i >= uNL) break;
     vec4 lp = uLP[i], lc = uLC[i]; float le = smoothstep(lp.w, lp.w + 1.2, uAT)*uN; if (le <= 0.) continue;
@@ -374,7 +375,7 @@ CE.viewer = function (opts) {
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D_ARRAY, cur.tex); gl.uniform1i(u.uTex, 0);
     gl.uniformMatrix4fv(u.uVP, false, VP); gl.uniformMatrix4fv(u.uG, false, GB);
     gl.uniform3fv(u.uCam, eye); gl.uniform3fv(u.uSun, cur.sun); gl.uniform3fv(u.uMoon, cur.moon);
-    gl.uniform1f(u.uN, uN); gl.uniform1f(u.uAT, nt); gl.uniform1f(u.uTime, time); gl.uniform1f(u.uCut, cutY);
+    gl.uniform1f(u.uN, uN); gl.uniform1f(u.uAT, nt); gl.uniform1f(u.uTime, time); gl.uniform1f(u.uCut, cutY); gl.uniform1f(u.uSee, cutY < 1e8 ? .3 : 0);
     gl.uniform4fv(u.uLP, LP); gl.uniform4fv(u.uLC, LC); gl.uniform1i(u.uNL, Math.min(8, L.length));
     gl.uniform1i(u.uPass, 0);
     for (const m of [cur.ground, cur.solid]) if (m && m.n) { gl.bindVertexArray(m.vao); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0); }

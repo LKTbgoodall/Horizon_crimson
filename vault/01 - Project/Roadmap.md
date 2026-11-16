@@ -64,6 +64,8 @@ Back: [[00 - Home]]
 - [x] Shared preview engine in real blocks, on the grid, with Minecraft light; the three candidates rebuilt in it; block palette page ([[ADR-020 Structure previews in real blocks]], 2026-11-16)
 - [x] Bastien's look at round 1 (2026-11-16): none kept (observatory disliked, chapel not good enough, manor empty and not imposing)
 - [x] Round 2, three imposing candidates with furnished insides: `preview/grand-structures.html` (A Citadel of the Vigil, B The Kneeling Colossus, C Temple of the Red Moon) (2026-11-16)
+- [x] Bastien's look at round 2 (2026-11-16): temple and citadel empty and plain; the colossus liked (more inside, new face)
+- [x] Round 3: `preview/structures-round-3.html` (A the colossus deeper with a new face, B Wreck of the Sky Galleon, C The Lantern Tree) (2026-11-16)
 - [ ] Bastien loads his real textures (button on the page) and picks one (or mixes), then we refine it on the page
 - [ ] Pipeline proof: one NBT template from our own tool, generating in a new world, one anchor block inside that wakes under the blood moon; far terrain checked
 - [ ] The first medium structure at full quality

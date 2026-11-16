@@ -191,7 +191,9 @@ S.vine = (p, ctx, d) => { const t = texOf(d, 'side'), els = [], o = .8;
   if (p.east) els.push(Q([[16-o,16,16],[16-o,16,0],[16-o,0,0],[16-o,0,16]], [-1,0,0]));
   if (p.up) els.push(Q([[0,16-o,0],[16,16-o,0],[16,16-o,16],[0,16-o,16]], [0,-1,0]));
   return { els }; };
-S.liquid = (p, ctx, d) => { const up = ctx.nb('up'), top = up && up.id === d.id ? 16 : 14, t = texOf(d, 'side');
+S.ladder = (p, ctx, d) => { const t = texOf(d, 'side');     // on the far side of its cell, against the block it faces away from
+  return { els:[{ quad:[[16,16,15.2], [0,16,15.2], [0,0,15.2], [16,0,15.2]], uv:[[0,0],[16,0],[16,16],[0,16]], t, n:[0,0,-1] }], y: YROT[p.facing || 'north'] }; };
+S.liquid =(p, ctx, d) => { const up = ctx.nb('up'), top = up && up.id === d.id ? 16 : 14, t = texOf(d, 'side');
   return { els:[B([0,0,0], [16,top,16], six(t))] }; };
 S.lantern = (p, ctx, d) => { const t = texOf(d, 'side'), h = p.hanging ? 1 : 0, els = [
   B([5,h,5], [11,7+h,11], { down:{ t, uv:[0,9,6,15] }, up:{ t, uv:[0,9,6,15] }, north:{ t, uv:[0,2,6,9] }, south:{ t, uv:[0,2,6,9] }, west:{ t, uv:[0,2,6,9] }, east:{ t, uv:[0,2,6,9] } }),
@@ -372,7 +374,8 @@ reg('wall_torch', { shape:S.torch, tex:'block/torch', render:'cutout', ...nonFul
 reg('soul_torch', { shape:S.torch, tex:'block/soul_torch', render:'cutout', ...nonFull, light:10, glow:1.6 });
 reg('campfire', { shape:S.campfire, tex:{ log:'block/campfire_log', lit:'block/campfire_log_lit', fire:'block/campfire_fire' }, render:'cutout', ...nonFull, light:p => p.lit === false ? 0 : 15 });
 reg('soul_campfire', { shape:S.campfire, tex:{ log:'block/campfire_log', lit:'block/soul_campfire_log_lit', fire:'block/soul_campfire_fire' }, render:'cutout', ...nonFull, light:p => p.lit === false ? 0 : 10 });
-reg('barrel', { tex:{ top:'block/barrel_top', side:'block/barrel_side', bottom:'block/barrel_bottom' } });
+reg('ladder', { shape:S.ladder, tex:'block/ladder', render:'cutout', ...nonFull });
+reg('barrel',{ tex:{ top:'block/barrel_top', side:'block/barrel_side', bottom:'block/barrel_bottom' } });
 reg('chest', { shape:S.chest, tex:{ entity:'entity/chest/normal' }, ...nonFull });
 reg('bell', { shape:S.bell, tex:{ body:'entity/bell/bell_body', post:'block/stone', bar:'block/dark_oak_planks' }, ...nonFull });
 reg('cobweb', { shape:S.cross, tex:'block/cobweb', render:'cutout', ...nonFull });
@@ -392,7 +395,8 @@ ours('crimson_crystal_cluster', { shape:S.cross, tex:'ce:crimson_crystal_cluster
 ours('eclipse_glass', { tex:'ce:eclipse_glass', render:'translucent', opaque:false, cullSame:true, glow:.05, glowAwake:1.8, lightAwake:9 });
 ours('eclipse_eye', { tex:'ce:eclipse_eye', glow:.05, glowAwake:4.5, lightAwake:15 });
 ours('moon_lens', { tex:'ce:moon_lens', glow:.05, glowAwake:6, lightAwake:12 });
-ours('vigil_lantern', { shape:S.lantern, tex:'ce:vigil_lantern', render:'cutout', ...nonFull, glowAwake:2.4, lightAwake:13 });
+ours('blood_leaves', { tex:'ce:blood_leaves', render:'cutout', opaque:false, damp:1, glow:.25 });
+ours('vigil_lantern',{ shape:S.lantern, tex:'ce:vigil_lantern', render:'cutout', ...nonFull, glowAwake:2.4, lightAwake:13 });
 ours('crimson_vein', { tex:'ce:crimson_vein', glow:.05, glowAwake:2.2, lightAwake:5 });
 ours('rune_stone',{ tex:'ce:rune_stone', glowAwake:2.5, lightAwake:7 });
 ours('blood_water', { shape:S.liquid, tex:'ce:blood_water', render:'translucent', opaque:false, cullSame:true, glow:.4, light:8, damp:1 });

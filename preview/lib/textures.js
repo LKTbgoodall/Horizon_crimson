@@ -57,6 +57,7 @@ function standIn(name) {
   if (/_fire/.test(n)) { const soul = /soul/.test(n);
     return paint(16, 16, (x, y) => { const h = 4 + 10*hash3(x >> 1, 0, s), k = (16 - y)/h; if (k > 1 || ((x + 1) % 5 === 0)) return null;
       return mix(soul ? [60, 200, 230] : [255, 110, 20], soul ? [200, 255, 255] : [255, 236, 150], 1 - k); }); }
+  if (/ladder/.test(n)) return paint(16, 16, (x, y) => (x === 2 || x === 3 || x === 12 || x === 13 || (y % 4 === 1 && x > 1 && x < 14)) ? sh([140, 104, 60], .85 + .25*N(x, y)) : null);
   if (/barrel/.test(n)) return paint(16, 16, (x, y) => /top|bottom/.test(n) ? ((x === 0 || y === 0 || x === 15 || y === 15) ? [92, 64, 34] : sh([130, 94, 52], (y % 4 === 3 ? .75 : 1)*(.9 + .2*N(x, y))))
     : (y === 2 || y === 13) ? [70, 70, 74] : sh([122, 86, 48], (x % 4 === 3 ? .72 : 1)*(.9 + .2*N(x, y))));
   if (/lava|magma/.test(n)) return paint(16, 16, (x, y) => { const v = N(x >> 1, y >> 1); return v > .7 ? [255, 190, 70] : sh(c, .7 + .5*v); });
@@ -119,6 +120,8 @@ const OURS = {
     if (r < 5.5) return mix([255, 60, 50], [255, 190, 150], Math.max(0, 1 - r/5.5) * (.7 + .3*hash3(x, y, 3))); return [120, 10, 16]; }),
   moon_lens: () => paint(16, 16, (x, y) => { const r = Math.hypot(x - 7.5, y - 7.5); if (r > 7.2) return [60, 50, 40];
     return mix([255, 230, 220], [200, 40, 40], Math.min(1, r/7)) .map((v, i) => v*(Math.floor(r) % 2 ? .85 : 1)); }),
+  blood_leaves: () => paint(16, 16, (x, y) => { const v = hash3(x, y, 31); if (v < .2) return null;
+    return v > .93 ? [255, 90, 70] : sh([150, 18, 24], .55 + .6*hash3(x >> 1, y >> 1, 32)); }),
   vigil_lantern: () => paint(16, 16, (x, y) => { const iron = [44, 40, 46], glass = [196, 66, 58];
     if (x < 6 && y >= 2 && y < 9) return (x === 0 || x === 5 || y === 2 || y === 8 || x === 3) ? iron : sh(glass, .85 + .3*hash3(x, y, 3));
     if (x < 6 && y >= 9 && y < 15) return sh(iron, .9 + .2*hash3(x, y, 4)); if (x >= 1 && x < 5 && y < 2) return iron;
