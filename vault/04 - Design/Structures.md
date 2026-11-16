@@ -41,6 +41,7 @@ He first wanted a separate structures mod, then: "we'll do it all in Crimson, th
 - A figure (the colossus) works for him; its face must look designed, not two red dots in a band.
 - **Symmetric things are symmetric on the grid**: a figure or a face is centred on one column of blocks (odd width), so a visor, eyes or a crown line up. He notices half a block.
 - **Shapes agree**: no square head on a round body.
+- **Everything stands on something**: no cluster, point or plant floating or set on the wrong block; check it in code, not only by eye.
 - **A crowning moment**: the top of a big structure must be something mad (the tree's blooming crystal lotus).
 
 ## The idea that ties them to the mod (proposed)

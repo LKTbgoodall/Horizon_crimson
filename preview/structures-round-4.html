@@ -90,16 +90,21 @@ function colossus(W) {
     W.del(x, y, z); W.set(x, y, z - 1, y === EY && Math.abs(x) === 2 ? 'crimson_eclipse:helm_eye' : 'black_concrete', { g:1, d:4.8 }); }
   for (let x = -4; x <= 4; x++) for (let y = Y + 38; y <= EY + 1; y++) { const s = x + ',' + y; if (SL.has(s)) continue;
     const near = [[1,0], [-1,0], [0,1], [0,-1]].some(([a, b]) => SL.has((x + a) + ',' + (y + b))), z = FR[s]; if (near && z != null) W.set(x, y, z, 'gilded_blackstone', { g:1 }); }
-  // the crown: a gold circlet round the brow, twelve crystal points set symmetrically, the tallest over the visor
-  const CRY = Y + 46, HZ = 2.2, ring = [...W.M.values()].filter(e => e.g === 1 && e.y === CRY && [[1,0], [-1,0], [0,1], [0,-1]].some(([a, b]) => !W.get(e.x + a, CRY, e.z + b)));
-  for (const e of ring) e.id = 'gold_block';
-  for (let k = 0; k < 12; k++) { const a = Math.PI/2 + k*Math.PI/6; let best = null, bd = 9;
-    for (const e of ring) { let d = Math.atan2(e.z - HZ, e.x) - a; d = Math.abs(Math.atan2(Math.sin(d), Math.cos(d))); if (d < bd - 1e-6 || (Math.abs(d - bd) < 1e-6 && e.x === 0)) { bd = d; best = e; } }
-    if (!best) continue;
-    const ox = Math.round(Math.cos(a)), oz = Math.round(Math.sin(a)); let x = best.x, z = best.z; if (W.get(x, CRY + 1, z)) { x += ox; z += oz; }
-    const h = k === 0 ? 3 : k === 1 || k === 11 ? 2 : 1;
-    for (let j = 1; j <= h; j++) put(W, x, CRY + j, z, 'crimson_eclipse:crimson_crystal', { g:1, d:5 });
-    put(W, x, CRY + h + 1, z, 'crimson_eclipse:crimson_crystal_cluster', { g:1, d:5 }); }
+  // the crown: a gold circlet worn round the brow (one cell outside the helm, so nothing sits over it),
+  // twelve crystal points set symmetrically, each standing on the gold, the tallest over the visor; a point with no room is left out
+  const CRY = Y + 46, HZ = 1.7, outside = ell(P(0,43.8,2.2), [5.4,6.2,5.9]), ring = [];
+  for (let x = -8; x <= 8; x++) for (let z = -6; z <= 10; z++) {
+    if (W.get(x, CRY, z) || outside([x, CRY + .5, z + .5]) <= 0) continue;
+    if ([[1,0], [-1,0], [0,1], [0,-1]].some(([p, q]) => { const e = W.get(x + p, CRY, z + q); return e && e.g === 1; })) ring.push([x, z]); }
+  for (const [x, z] of ring) W.set(x, CRY, z, 'gold_block', { g:1 });
+  const used = new Set();
+  for (let k = 0; k < 12; k++) { const ang = Math.PI/2 + k*Math.PI/6; let best = null, bd = 9;
+    for (const [x, z] of ring) { let d = Math.atan2(z - HZ, x) - ang; d = Math.abs(Math.atan2(Math.sin(d), Math.cos(d)));
+      if (d < bd - 1e-6 || (Math.abs(d - bd) < 1e-6 && x === 0)) { bd = d; best = [x, z]; } }
+    if (!best || used.has(best + '')) continue; used.add(best + '');
+    const [x, z] = best, h = k === 0 ? 2 : 1; let y = CRY + 1;
+    for (let j = 0; j < h && !W.get(x, y, z); j++, y++) W.set(x, y, z, 'crimson_eclipse:crimson_crystal', { g:1, d:5 });
+    if (y > CRY + 1 && !W.get(x, y, z)) W.set(x, y, z, 'crimson_eclipse:crimson_crystal_cluster', { g:1, d:5 }); }
   // the cape
   for (let y = Y + 3; y <= Y + 36; y++) { const t = Y + 36 - y, w = 10 + t*.12, zc = -9.2 - t*.32;
     for (let x = Math.floor(-w); x <= Math.ceil(w); x++) { const zf = Math.round(zc + 1.1*Math.sin(x*.45)); if (y < Y + 4 + 6*hash3(x, 0, 21)) continue;
