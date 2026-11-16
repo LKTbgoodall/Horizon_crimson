@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grand Structures</title>
+<!--
+  Second round of the first big structure (vault/04 - Design/Structures.md), after Bastien's look at the first three
+  (2026-11-16: observatory disliked, chapel not good enough, manor empty and school-like, not imposing).
+  Three imposing candidates with furnished insides, each by day (a ruin) and under the blood moon (it wakes up).
+  Real Minecraft blocks only, each in one cell (preview/lib). Use the Cut slider to look inside.
+  URL parameters: ?v=a|b|c  &night=1  &ui=0  &spin=0
+-->
+</head>
+<body>
+<script src="vanilla/textures.js" onerror="void 0"></script>
+<script src="lib/blocks.js"></script>
+<script src="lib/world.js"></script>
+<script src="lib/textures.js"></script>
+<script src="lib/viewer.js"></script>
+<script>
+'use strict';
+const { hash3, vnoise, ss } = CE.math, K = CE.kit;
+const { M4, Tm, Sm, RX, RY, RZ, about, applyP, applyD, spinUp, norm, dirFrom } = CE.m;
+const pick = (list, r) => list[Math.floor(r*list.length) % list.length];
+const RUBBLE = e => pick(['cobbled_deepslate', 'cobblestone', 'gravel', 'cobbled_deepslate', 'mossy_cobblestone'], hash3(e.x, e.y*3, e.z));
+const facingIn = (dx, dz) => Math.abs(dx) >= Math.abs(dz) ? (dx < 0 ? 'east' : 'west') : (dz < 0 ? 'south' : 'north');
+const LIT = d => ({ awake:{ lit:true }, d });
+// round wall: cells at distance [r - th, r) from (cx, cz)
+function cylinder(W, cx, cz, r, th, y0, y1, block, opts) { const R = Math.ceil(r);
+  for (let dx = -R; dx <= R; dx++) for (let dz = -R; dz <= R; dz++) { const d = Math.hypot(dx, dz); if (d >= r || d < r - th) continue;
+    for (let y = y0; y <= y1; y++) W.set(cx + dx, y, cz + dz, typeof block === 'function' ? block(cx + dx, y, cz + dz, d) : block, opts); } }
+function clearDisc(W, cx, cz, r, y0, y1) { const R = Math.ceil(r);
+  for (let dx = -R; dx <= R; dx++) for (let dz = -R; dz <= R; dz++) if (Math.hypot(dx, dz) < r) for (let y = y0; y <= y1; y++) W.del(cx + dx, y, cz + dz); }
+// witch-hat roof: rings of tiles, the outer cells stairs facing in (their corners shape themselves)
+function cone(W, cx, cz, r, y0, levels, tile, stairs, tip) {
+  for (let k = 0; k < levels; k++) { const rk = r*(1 - k/levels);
+    if (rk < .8) { W.set(cx, y0 + k, cz, tile); continue; }
+    const R = Math.ceil(rk);
+    for (let dx = -R; dx <= R; dx++) for (let dz = -R; dz <= R; dz++) { const d = Math.hypot(dx, dz); if (d >= rk || d < rk - 1.6) continue;
+      W.set(cx + dx, y0 + k, cz + dz, d >= rk - 1 ? `${stairs}[facing=${facingIn(dx, dz)}]` : tile); } }
+  if (tip) tip.forEach((b, i) => W.set(cx, y0 + levels + i, cz, b[0], b[1] || {}));
+}
+
+// ================================================================ A · the citadel of the vigil
+function citadel(W) {
+  const B = 9, WALL = 'deepslate_bricks', TRIM = 'polished_blackstone_bricks', TILE = 'deepslate_tiles', TS = 'deepslate_tile_stairs', GLASS = 'crimson_eclipse:eclipse_glass';
+  const H = B + 13, KH = B + 34, merlon = 'polished_blackstone_bricks';
+  // curtain walls: 3 thick, a walkway, a crenellated parapet, arrow slits
+  for (let x = -24; x <= 24; x++) for (let z = -24; z <= 24; z++) { const m = Math.max(Math.abs(x), Math.abs(z)); if (m < 22) continue;
+    for (let y = 0; y <= H; y++) W.set(x, y, z, y === B - 1 || y === H ? TRIM : WALL);
+    if (m === 24) { W.set(x, H + 1, z, WALL); if (((x + z) & 1) === 0) W.set(x, H + 2, z, merlon);
+      const u = Math.abs(x) === 24 ? z : x; if (u % 5 === 0 && Math.abs(u) < 20) for (let y = B + 6; y <= B + 8; y++) W.del(x, y, z); } }
+  // corner towers: round, witch-hat roofs, eclipse-glass slits that light at night
+  const towers = [[-24, -24], [24, -24], [-24, 24], [24, 24]];
+  towers.forEach(([cx, cz], i) => {
+    cylinder(W, cx, cz, 6.5, 2, 0, B + 21, (x, y) => y === B + 21 || y === H ? TRIM : WALL);
+    clearDisc(W, cx, cz, 4.5, B, B + 22);
+    cylinder(W, cx, cz, 4.5, 4.5, B - 1, B - 1, 'spruce_planks');
+    for (const [dx, dz] of [[6, 0], [-6, 0], [0, 6], [0, -6]]) for (const y0 of [B + 5, B + 13]) for (let y = y0; y <= y0 + 2; y++) W.set(cx + dx, y, cz + dz, GLASS, { d:4.4 + i*.5 + (y0 > B + 6 ? .3 : 0) });
+    if (i !== 1) cone(W, cx, cz, 7.6, B + 22, 14, TILE, TS, [['polished_blackstone_wall'], ['crimson_eclipse:crimson_crystal_cluster', { d:4.2 + i*.5 }]]);
+  });
+  // gatehouse: two square towers, a portcullis (group 1) that rises at night, banners, braziers
+  for (const s of [-1, 1]) { for (let x = s*5; Math.abs(x) <= 11; x += s) for (let z = 21; z <= 27; z++) for (let y = 0; y <= B + 19; y++) W.set(x, y, z, y === B + 19 || y === B - 1 ? TRIM : WALL);
+    K.pyramid(W, s*8, 24, B + 20, [4, 3, 3, 2, 2, 1, 1, 0, 0], TILE, TS);
+    W.set(s*8, B + 15, 28, 'red_wall_banner[facing=south]'); W.set(s*4, B, 29, 'polished_blackstone_wall'); W.set(s*4, B + 1, 29, 'campfire[lit=false]', LIT(3.5)); }
+  for (let x = -4; x <= 4; x++) for (let z = 21; z <= 27; z++) for (let y = 0; y <= B + 15; y++) W.set(x, y, z, y === B + 15 ? TRIM : WALL);
+  for (let x = -4; x <= 4; x++) if (((x + 27) & 1) === 0) W.set(x, B + 16, 27, merlon);
+  const arch = (x, y) => Math.abs(x) <= 3 && y >= B && (y <= B + 5 || (y === B + 6 && Math.abs(x) <= 2) || (y === B + 7 && Math.abs(x) <= 1));
+  for (let x = -3; x <= 3; x++) for (let y = B; y <= B + 7; y++) if (arch(x, y)) for (let z = 20; z <= 27; z++) W.del(x, y, z);
+  for (let x = -3; x <= 3; x++) for (let y = B; y <= B + 7; y++) if (arch(x, y)) W.set(x, y, 25, 'iron_bars', { g:1 });
+  W.set(0, B + 12, 28, 'black_wall_banner[facing=south]');
+  // the keep: four floors, corner turrets with roofs, eclipse-glass windows, crenellated roof
+  for (let x = -12; x <= 12; x++) for (let z = -12; z <= 12; z++) { const m = Math.max(Math.abs(x), Math.abs(z));
+    if (m >= 11) { for (let y = B - 1; y <= KH; y++) W.set(x, y, z, [B - 1, B + 13, B + 24, KH].includes(y) ? TRIM : WALL);
+      if (m === 12) { W.set(x, KH + 1, z, WALL); if (((x + z) & 1) === 0) W.set(x, KH + 2, z, merlon); } }
+    else { W.set(x, B - 1, z, ((x + z) & 1) ? 'polished_deepslate' : 'polished_blackstone'); W.set(x, B + 13, z, 'dark_oak_planks'); W.set(x, B + 24, z, 'dark_oak_planks'); W.set(x, KH, z, TILE); } }
+  for (const [cx, cz] of [[-12, -12], [12, -12], [-12, 12], [12, 12]]) { cylinder(W, cx, cz, 3.7, 1.3, B - 1, KH + 8, (x, y) => y === KH + 8 ? TRIM : WALL);
+    clearDisc(W, cx, cz, 2.4, KH + 1, KH + 8); cone(W, cx, cz, 4.6, KH + 9, 9, TILE, TS, [['iron_chain']]); }
+  const faces = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  for (const [fx, fz] of faces) for (const u of [-6, 0, 6]) for (const [y0, y1, d0] of [[B + 4, B + 10, 4.6], [B + 16, B + 21, 5.4], [B + 27, B + 31, 6.2]]) {
+    if (fz === 1 && u === 0 && y0 === B + 4) continue;
+    for (let y = y0; y <= y1; y++) for (let v = -1; v <= 1; v++) { if (y === y1 && v) continue;
+      const x = fx ? fx*12 : u + v, z = fz ? fz*12 : u + v, xi = fx ? fx*11 : x, zi = fz ? fz*11 : z;
+      if (hash3(x, y0, z) > .82) W.del(x, y, z); else W.set(x, y, z, GLASS, { d:d0 + (u + 6)*.04 }); W.del(xi, y, zi); } }
+  // keep door: a pair of doors that swing open at night, braziers on each side
+  for (let y = B; y <= B + 3; y++) for (const x of [-1, 0]) W.del(x, y, 11);
+  W.door(-1, B, 12, 'dark_oak_door', { facing:'south', hinge:'left' }, { awake:{ open:true }, d:4.2 });
+  W.door(0, B, 12, 'dark_oak_door', { facing:'south', hinge:'right' }, { awake:{ open:true }, d:4.2 });
+  for (const x of [-2, 1]) for (let y = B; y <= B + 4; y++) W.set(x, y, 13, TRIM); W.set(-1, B + 4, 13, TRIM); W.set(0, B + 4, 13, TRIM);
+  for (const s of [-1, 1]) { W.set(s*4 - (s < 0 ? 0 : 1), B, 14, 'polished_blackstone_wall'); W.set(s*4 - (s < 0 ? 0 : 1), B + 1, 14, 'campfire[lit=false]', LIT(4)); }
+  // the great hall: pillars and beams, two long tables with chairs and candles, a red carpet to the throne, chandeliers, a fireplace
+  for (const x of [-7, 7]) for (const z of [-6, -1, 4, 9]) { for (let y = B; y <= B + 11; y++) W.set(x, y, z, 'polished_deepslate'); W.set(x, B + 12, z, 'chiseled_deepslate'); }
+  for (const z of [-6, -1, 4, 9]) for (let x = -10; x <= 10; x++) if (Math.abs(x) !== 7) W.set(x, B + 12, z, 'dark_oak_log[axis=x]');
+  for (const [t0, c0, c1] of [[-4, -5, -2], [3, 2, 5]]) for (let z = -5; z <= 7; z++) {
+    for (const x of [t0, t0 + 1]) W.set(x, B, z, 'dark_oak_slab[type=top]');
+    if (z % 3 === 0) W.set(t0 + (z & 1), B + 1, z, 'candle[candles=3,lit=false]', LIT(4.5 + (z + 5)*.05));
+    if ((z & 1) === 0) { if (hash3(c0, z, 1) > .2) W.set(c0, B, z, `dark_oak_stairs[facing=${c0 < t0 ? 'west' : 'east'}]`); if (hash3(c1, z, 1) > .2) W.set(c1, B, z, `dark_oak_stairs[facing=${c1 < t0 ? 'west' : 'east'}]`); } }
+  for (let z = -6; z <= 10; z++) for (let x = -1; x <= 1; x++) W.set(x, B, z, 'red_carpet');
+  for (let x = -4; x <= 4; x++) { for (let z = -10; z <= -8; z++) W.set(x, B, z, 'polished_blackstone'); W.set(x, B, -7, 'polished_blackstone_stairs[facing=north]'); }
+  for (let x = -1; x <= 1; x++) for (let z = -9; z <= -8; z++) W.set(x, B + 1, z, 'red_carpet');
+  W.set(0, B + 1, -9, 'polished_blackstone_stairs[facing=north]'); W.set(-1, B + 1, -9, 'polished_blackstone_wall'); W.set(1, B + 1, -9, 'polished_blackstone_wall');
+  for (let y = B + 1; y <= B + 3; y++) W.set(0, y, -10, 'chiseled_polished_blackstone'); W.set(0, B + 4, -10, 'gold_block');
+  for (const x of [-4, 0, 4]) W.set(x, B + 9, -10, `${x ? 'black' : 'red'}_wall_banner[facing=south]`);
+  for (const s of [-1, 1]) { W.set(s*3, B + 1, -9, 'polished_blackstone_wall'); W.set(s*3, B + 2, -9, 'polished_blackstone_wall'); W.set(s*3, B + 3, -9, 'crimson_eclipse:vigil_lantern', { d:4.3 }); }
+  for (const z of [-4, 1, 6]) { for (let y = B + 10; y <= B + 12; y++) W.set(0, y, z, 'iron_chain'); W.set(0, B + 9, z, 'crimson_eclipse:vigil_lantern[hanging=true]', { d:4.6 + (6 - z)*.05 }); }
+  for (const s of [-1, 1]) for (const z of [-4, 3]) W.set(s*10, B + 7, z, `red_wall_banner[facing=${s < 0 ? 'east' : 'west'}]`);
+  for (let y = B; y <= B + 2; y++) for (let z = -1; z <= 1; z++) W.del(11, y, z);
+  W.set(11, B, 0, 'campfire[lit=false]', LIT(4.4));
+  for (let z = -2; z <= 2; z++) W.set(10, B + 3, z, TRIM); for (let y = B; y <= B + 2; y++) { W.set(10, y, -2, TRIM); W.set(10, y, 2, TRIM); }
+  // the staircase up along the west wall, a hole in the floor above it
+  for (let k = 0; k <= 13; k++) for (const x of [-10, -9]) { const z = 10 - k; for (let y = B; y < B + k; y++) W.set(x, y, z, WALL); W.set(x, B + k, z, `${TS}[facing=north]`); }
+  for (const x of [-10, -9]) for (let z = -2; z <= 1; z++) W.del(x, B + 13, z);
+  // second floor: library and armoury
+  for (const s of [-1, 1]) for (let z = -10; z <= 10; z++) for (let y = B + 14; y <= B + 15; y++) if (!(s < 0 && z > -4)) W.set(s*10, y, z, 'bookshelf');
+  for (let x = -6; x <= 6; x++) for (let y = B + 14; y <= B + 16; y++) if (Math.abs(x) > 1) W.set(x, y, -10, 'bookshelf');
+  for (const [x, z] of [[8, 8], [9, 8], [8, 9], [9, 9], [8, 7], [-6, 9]]) W.set(x, B + 14, z, 'barrel'); W.set(9, B + 15, 9, 'barrel');
+  W.set(6, B + 14, 9, 'chest[facing=north]'); W.set(-5, B + 14, -9, 'chest[facing=south]');
+  for (let x = -1; x <= 1; x++) W.set(x, B + 14, 2, 'dark_oak_slab[type=top]'); W.set(0, B + 15, 2, 'candle[candles=2,lit=false]', LIT(5.2));
+  // third floor: the crystal chamber; a ring of runes, the crown of crystal (group 2) through the roof
+  for (let x = -4; x <= 4; x++) for (let z = -4; z <= 4; z++) { const d = Math.hypot(x, z); if (d >= 3 && d < 4.3) W.set(x, B + 24, z, 'crimson_eclipse:rune_stone', { d:5.6 }); }
+  for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) W.del(x, KH, z);
+  const CR = 'crimson_eclipse:crimson_crystal', CL = 'crimson_eclipse:crimson_crystal_cluster', g2 = { g:2, d:5.5 };
+  const spike = (x, z, y1) => { for (let y = B + 25; y <= y1; y++) W.set(x, y, z, CR, g2); W.set(x, y1 + 1, z, CL, g2); };
+  spike(0, 0, KH + 8); spike(1, 0, KH + 4); spike(-1, 0, KH + 5); spike(0, 1, KH + 3); spike(0, -1, KH + 6); spike(1, 1, KH); spike(-1, -1, KH + 1);
+  W.set(3, B + 25, 0, 'chest[facing=west]');
+  for (const [x, z] of [[-2, 2], [2, -2], [-2, -2], [2, 2]]) W.set(x, B + 25, z, 'candle[candles=4,lit=false]', LIT(5.3));
+  // courtyard: a roofed well, stables along the west wall, barrels, hay
+  for (let x = 16; x <= 18; x++) for (let z = -11; z <= -9; z++) { if (x === 17 && z === -10) { W.set(x, B - 1, z, 'water'); W.set(x, B - 2, z, 'water'); W.del(x, B, z); continue; }
+    W.set(x, B, z, 'mossy_cobblestone'); W.set(x, B + 4, z, 'spruce_slab'); }
+  for (const x of [16, 18]) for (const z of [-11, -9]) for (let y = B + 1; y <= B + 3; y++) W.set(x, y, z, 'spruce_fence');
+  for (let z = -16; z <= 10; z++) { for (let x = -21; x <= -18; x++) W.set(x, B + 4 + (-18 - x) + 3, z, `spruce_stairs[facing=west]`);
+    if (z % 5 === 0) for (let y = B; y <= B + 6; y++) W.set(-18, y, z, 'spruce_fence'); }
+  for (let z = -15; z <= 9; z++) { const r = hash3(-20, z, 3); if (r > .55) W.set(-20, B, z, 'hay_block'); else if (r > .4) W.set(-21, B, z, 'barrel'); if (r > .85) W.set(-20, B + 1, z, 'hay_block'); }
+  for (const [x, z] of [[14, 15], [15, 15], [14, 16], [-15, 18], [-16, 18]]) W.set(x, B, z, 'barrel');
+  W.set(15, B + 1, 15, 'barrel'); W.set(-14, B, 17, 'crafting_table');
+  // braziers along the walkway: they catch one after the other round the walls
+  const walk = []; for (let u = -16; u <= 16; u += 8) walk.push([u, -23], [23, u], [-u, 23], [-23, -u]);
+  walk.forEach(([x, z], i) => { if (Math.abs(x) < 12 && z > 0) return; W.set(x, H + 1, z, 'campfire[lit=false]', LIT(4 + Math.atan2(z, x)/Math.PI*1.6 + 1.6)); });
+  // ruin: the north-east tower lost its roof and top, a breach in the east wall, merlons gone, a broken keep window
+  K.collapse(W, e => Math.hypot(e.x - 24, e.z + 24) < 8 && e.y > B + 11 + 5*vnoise(e.x*.3, e.y*.2, e.z*.3), RUBBLE, .3);
+  K.collapse(W, e => e.x >= 21 && e.z >= -2 && e.z <= 7 && e.y > B + 2 + 7*vnoise(e.x*.3 + 4, e.y*.2, e.z*.35) + Math.abs(e.z - 2.5)*.9, RUBBLE, .45);
+  K.collapse(W, e => e.id === merlon && e.y >= H + 2 && hash3(e.x, e.y, e.z) > .8, RUBBLE, .2);
+  K.weather(W, { deepslate_bricks:(e, n, r) => r > .86 ? 'cracked_deepslate_bricks' : n > .74 ? 'cobbled_deepslate' : null,
+    polished_blackstone_bricks:(e, n, r) => r > .85 ? 'cracked_polished_blackstone_bricks' : null });
+  K.vines(W, e => e.id === WALL || e.id === 'cracked_deepslate_bricks', .02, 5);
+  for (const e of [...W.M.values()]) if (e.y === B + 11 && !W.get(e.x, e.y - 1, e.z) && Math.abs(e.x) <= 10 && Math.abs(e.z) <= 10 && hash3(e.x, 4, e.z) > .9) W.set(e.x, e.y - 1, e.z, 'cobweb');
+  return {
+    tag:'A fortress on its hill: crenellated walls, four round towers, a gatehouse with a portcullis, and a 45-block keep (a great hall with its throne, a library, a crystal chamber). <i>Under the blood moon:</i> the portcullis rises, braziers catch one after the other round the walls, the keep doors swing open, its lanterns and windows light floor by floor, and the crystal crown on the roof lifts and fires at the sky. <i>Cut slider: look inside.</i>',
+    cam:{ target:[0, 22, 4], dist:118, yaw:.62, pitch:.22 },
+    sun:norm([.45, .78, .5]), moon:dirFrom(.62 + Math.PI + .35, .3),
+    flat:(x, z) => Math.max(Math.hypot(x, z > 0 ? z*.62 : z) - 50, 0),
+    shakeAt:3.4,
+    ground(W) {     // the hill, under and around the castle; a path up to the gate
+      const hr = (x, z) => Math.hypot(x, z > 0 ? z*.62 : z) - 2.5*(vnoise(x*.08, 0, z*.08) - .5)*2, hh = (x, z) => Math.round(B*(1 - ss(37, 50, hr(x, z))));
+      for (let x = -56; x <= 56; x++) for (let z = -56; z <= 75; z++) { const h = hh(x, z); if (h <= 0) continue;
+        let lo = h; for (const [dx, dz] of [[1,0], [-1,0], [0,1], [0,-1]]) lo = Math.min(lo, hh(x + dx, z + dz));
+        for (let y = Math.max(0, lo - 2); y < h; y++) if (!W.get(x, y, z)) { const top = y === h - 1, inside = Math.max(Math.abs(x), Math.abs(z)) < 22;
+          W.set(x, y, z, top ? (inside ? pick(['coarse_dirt', 'gravel', 'grass_block', 'coarse_dirt', 'podzol'], hash3(x, 7, z)) : Math.abs(x) <= 2 && z > 27 ? 'dirt_path' : 'grass_block') : y > h - 3 ? 'dirt' : 'stone'); } }
+      K.deadTree(W, -14, -15, 7, 21);
+      W.figure(1, B, 34);
+    },
+    groups(nt, t) {
+      const g = [];
+      g[1] = Tm(0, 7.6*ss(3.6, 6.5, nt), 0);
+      const kc = ss(5.5, 7.5, nt); g[2] = M4(Tm(0, kc*2.5 + kc*.2*Math.sin(t*1.2), 0), about([.5, 0, .5], RY(spinUp(nt - 5.5, 2)*.5)));
+      return g;
+    },
+    beams(nt, t, G) { const p = applyP(G[2], [.5, KH + 10, .5]); return [{ a:p, b:[p[0], 260, p[2]], w:1, e:ss(6.5, 8, nt) }]; },
+    lights(W) {
+      W.light([.5, KH + 4, .5], [5, .5, .35], 16, 5.5, 2);
+      W.light([.5, B + 28, .5], [3.5, .4, .3], 10, 5.6, 2);
+      for (let i = 0; i < 150; i++) W.part(-9 + hash3(i,1,5)*18, B + 1 + hash3(i,2,5)*10, -9 + hash3(i,3,5)*18, 0, hash3(i,4,5), .06, 0, 0, 1,1,1);
+      for (let i = 0; i < 160; i++) { const a = hash3(i,5,5)*6.283, r = hash3(i,6,5)*1.5;
+        W.part(.5 + Math.cos(a)*r, KH + 1, .5 + Math.sin(a)*r, 1, hash3(i,7,5), .12, 6, 10 + hash3(i,8,5)*12, 4, .5, .3); }
+    },
+    trees:[[-60,-30,12], [-66,8,14], [-58,40,11], [62,-36,12], [66,4,13], [-20,-66,12], [22,-64,13], [56,48,12]],
+  };
+}
+
+// ================================================================ B · the kneeling colossus
+function colossus(W) {
+  const Y = 4, sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]], dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2], len = a => Math.hypot(a[0], a[1], a[2]);
+  const cap = (a, b, r) => p => { const pa = sub(p, a), ba = sub(b, a), h = Math.max(0, Math.min(1, dot(pa, ba)/dot(ba, ba))); return len([pa[0]-ba[0]*h, pa[1]-ba[1]*h, pa[2]-ba[2]*h]) - r; };
+  const ell = (c, r) => p => (len([(p[0]-c[0])/r[0], (p[1]-c[1])/r[1], (p[2]-c[2])/r[2]]) - 1)*Math.min(...r);
+  const box = (c, h) => p => { const q = [Math.abs(p[0]-c[0]) - h[0], Math.abs(p[1]-c[1]) - h[1], Math.abs(p[2]-c[2]) - h[2]]; return len(q.map(v => Math.max(v, 0))) + Math.min(Math.max(...q), 0); };
+  const P = (x, y, z) => [x, y + Y, z];
+  // the plinth: a round dais, bevelled edge, a ring of pillars with braziers
+  for (let x = -26; x <= 26; x++) for (let z = -26; z <= 26; z++) { const r = Math.hypot(x, z); if (r > 24.5) continue;
+    for (let y = 0; y < Y; y++) W.set(x, y, z, 'polished_blackstone_bricks');
+    if (r > 23) W.set(x, Y - 1, z, `polished_blackstone_brick_stairs[facing=${facingIn(x, z)}]`);
+    else W.set(x, Y - 1, z, Math.floor(r) % 5 === 0 ? 'chiseled_polished_blackstone' : r < 9 ? 'polished_blackstone' : 'polished_blackstone_bricks'); }
+  for (let i = 0; i < 10; i++) { const a = i/10*Math.PI*2 + .31, x = Math.round(Math.sin(a)*20), z = Math.round(Math.cos(a)*20), fallen = i === 3 || i === 7, h = 6 + Math.floor(hash3(i, 1, 9)*4);
+    if (fallen) { W.set(x, Y, z, 'chiseled_polished_blackstone'); const dx = Math.sign(Math.round(Math.sin(a)*2)), dz = Math.sign(Math.round(Math.cos(a)*2));
+      for (let k = 1; k <= h - 2; k++) W.set(x + dx*k, Y, z + dz*k, `polished_blackstone_bricks`); continue; }
+    W.set(x, Y, z, 'chiseled_polished_blackstone'); for (let y = Y + 1; y < Y + h; y++) W.set(x, y, z, 'polished_blackstone_bricks'); W.set(x, Y + h, z, 'chiseled_polished_blackstone');
+    W.set(x, Y + h + 1, z, 'campfire[lit=false]', LIT(3.8 + i*.22)); }
+  // the body: a kneeling knight, hands on the pommel of a crystal sword, head bowed; a shell of stone and copper armour
+  const parts = [
+    ['body', cap(P(-6,16,-3), P(-6,16,8), 4.3)], ['armor', ell(P(-6,16,9.5), [4.7,4.7,4.7])], ['body', cap(P(-6,15,10), P(-6,3,10.5), 3.7)], ['armor', box(P(-6,1.6,12.5), [3,1.6,4.6])],
+    ['body', cap(P(6,16,-3), P(6,4,4), 4.3)], ['armor', ell(P(6,3.8,5), [4.6,4.4,4.6])], ['body', cap(P(6,3.4,4), P(6,3.4,-10), 3.4)], ['armor', box(P(6,1.7,-12.6), [2.8,1.7,3.3])],
+    ['body', ell(P(0,17,-3), [10.5,5,6.5])], ['gold', ell(P(0,20.2,-2.6), [10.2,1.6,7.1])], ['body', ell(P(0,23.5,-2.5), [8.6,5.6,6.1])],
+    ['armor', ell(P(0,31,-1.5), [11.6,7.6,7.6])], ['armor', ell(P(-11.6,35,-1), [5.6,4.3,5.6])], ['armor', ell(P(11.6,35,-1), [5.6,4.3,5.6])],
+    ['body', cap(P(-11.5,33,-1), P(-11,25,6), 3.4)], ['body', cap(P(11.5,33,-1), P(11,25,6), 3.4)], ['armor', ell(P(-11,25,6), [3.9,3.9,3.9])], ['armor', ell(P(11,25,6), [3.9,3.9,3.9])],
+    ['body', cap(P(-11,25,6), P(-3,24,12), 3.1)], ['body', cap(P(11,25,6), P(3,24,12), 3.1)], ['body', ell(P(-2.7,24,12.7), [2.7,2.9,2.9])], ['body', ell(P(2.7,24,12.7), [2.7,2.9,2.9])],
+    ['body', cap(P(0,37,-1), P(0,40,1), 3.3)], ['helm', ell(P(0,43.5,2.6), [5.3,5.7,5.9])],
+  ];
+  const HEART = P(0, 30, -1), chamber = ell(HEART, [6, 4.6, 5]);
+  const mat = (k, x, y, z) => { const n = vnoise(x*.2, y*.2, z*.2), r = hash3(x, y, z);
+    if (k === 'gold') return r > .5 ? 'gilded_blackstone' : 'polished_blackstone';
+    if (k === 'armor' || k === 'helm') return n > .7 ? 'oxidized_copper' : r > .9 ? 'deepslate_tiles' : 'polished_deepslate';
+    return r > .8 ? 'cobbled_deepslate' : n > .6 ? 'tuff' : 'polished_tuff'; };
+  const BODY = new Map();
+  for (let x = -18; x <= 18; x++) for (let y = Y; y <= Y + 50; y++) for (let z = -18; z <= 18; z++) {
+    const p = [x + .5, y + .5, z + .5]; let best = 1e9, k = null;
+    for (const [kk, f] of parts) { const d = f(p); if (d < best) { best = d; k = kk; } }
+    if (best > 0 || best < -2.3) continue;
+    if (chamber(p) < 0) continue;
+    const head = k === 'helm';
+    W.set(x, y, z, mat(k, x, y, z), head ? { g:1 } : {}); BODY.set(x + ',' + y + ',' + z, k);
+  }
+  // the head: a visor slit with two eyes, a red crest; all of it is group 1 (it lifts towards the moon)
+  const front = (x, y) => { for (let z = 18; z >= -10; z--) { const e = W.get(x, y, z); if (e && e.g === 1) return z; } return null; };
+  for (let x = -4; x <= 4; x++) { const z = front(x, Y + 43); if (z != null) W.set(x, Y + 43, z, Math.abs(x) === 2 ? 'crimson_eclipse:eclipse_eye' : 'polished_blackstone', { g:1, d:4.8 }); }
+  for (let z = -3; z <= 8; z++) { let top = null; for (let y = Y + 52; y >= Y + 38; y--) { const e = W.get(0, y, z); if (e && e.g === 1) { top = y; break; } }
+    if (top != null) { W.set(0, top + 1, z, 'red_wool', { g:1 }); if (z > -2 && z < 7) W.set(0, top + 2, z, 'red_wool', { g:1 }); } }
+  // the cape, red wool falling from the shoulders, torn at the bottom
+  for (let y = Y + 3; y <= Y + 36; y++) { const t = Y + 36 - y, w = 10 + t*.12, zc = -9.2 - t*.32;
+    for (let x = Math.floor(-w); x <= Math.ceil(w); x++) { const zf = Math.round(zc + 1.1*Math.sin(x*.45));
+      if (y < Y + 4 + 6*hash3(x, 0, 21)) continue;
+      for (const z of [zf, zf - 1]) if (!W.get(x, y, z)) W.set(x, y, z, hash3(x, y, z) > .8 ? 'red_terracotta' : 'red_wool'); } }
+  // the heart chamber: a floor, the crystal heart (group 2: it beats), a crack in the breastplate to see it, loot
+  for (let x = -5; x <= 5; x++) for (let z = -5; z <= 3; z++) if (chamber([x + .5, Y + 26.5, z + .5]) < 0 && !W.get(x, Y + 26, z)) W.set(x, Y + 26, z, 'polished_blackstone');
+  for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) <= 2)
+    W.set(HEART[0] + dx, HEART[1] + dy, HEART[2] + dz, 'crimson_eclipse:crimson_crystal', { g:2, d:4 });
+  for (const e of [...W.M.values()]) if (e.z >= 2 && Math.abs(e.x + .5) < 3.5 + 1.5*vnoise(e.x*.5, e.y*.5, 2) && e.y >= Y + 28 && e.y <= Y + 34 && e.g === 0 && BODY.get(e.x + ',' + e.y + ',' + e.z) === 'armor') W.del(e.x, e.y, e.z);
+  W.set(3, Y + 27, -1, 'chest[facing=west]'); W.set(-3, Y + 27, -2, 'candle[candles=4,lit=false]', LIT(4.2)); W.set(-3, Y + 27, 0, 'candle[candles=2,lit=false]', LIT(4.3));
+  // the crystal sword planted in the dais: crossguard, grip, pommel; it lights from the point up
+  for (let y = Y - 1; y <= Y + 16; y++) for (let x = -1; x <= 1; x++) W.set(x, y, 15, 'crimson_eclipse:crimson_crystal', { d:4.4 + (y - Y)*.09 });
+  for (let x = -5; x <= 5; x++) W.set(x, Y + 17, 15, 'gold_block'); W.set(0, Y + 17, 14, 'gold_block'); W.set(0, Y + 17, 16, 'gold_block');
+  for (let y = Y + 18; y <= Y + 23; y++) W.set(0, y, 15, 'polished_blackstone');
+  for (let x = -1; x <= 1; x++) W.set(x, Y + 24, 15, 'gold_block'); W.set(0, Y + 25, 15, 'crimson_eclipse:crimson_crystal', { d:6.2 });
+  for (const [x, z] of [[-3, 14], [3, 16], [-2, 17], [2, 13], [-3, 16]]) W.set(x, Y, z, `candle[candles=${1 + ((x + z) & 3)},lit=false]`, LIT(3.9 + (x + 3)*.05));
+  // red veins on the stone, spreading from the heart at night; moss on top, vines
+  for (const e of [...W.M.values()]) { const k = BODY.get(e.x + ',' + e.y + ',' + e.z); if (!k || k === 'gold') continue;
+    if (!W.get(e.x, e.y + 1, e.z) && e.y > Y + 6 && hash3(e.x, e.y, e.z) < .3 && e.g === 0) W.set(e.x, e.y + 1, e.z, 'moss_carpet');
+    if (k === 'body' && Math.abs(vnoise(e.x*.11, e.y*.11, e.z*.11) - .5) < .017) e.id = 'crimson_eclipse:crimson_vein', e.d = 4 + Math.hypot(e.x - HEART[0], e.y - HEART[1], e.z - HEART[2])*.07; }
+  K.collapse(W, e => Math.hypot(e.x + 15, e.y - Y - 37, e.z + 1) < 2.6 + 1.6*vnoise(e.x*.4, e.y*.4, e.z*.4), RUBBLE, .5);
+  K.vines(W, e => BODY.get(e.x + ',' + e.y + ',' + e.z) === 'body', .03, 7);
+  return {
+    tag:'A 55-block stone knight kneeling on a round dais, both hands on a sword of crimson crystal planted before him, head bowed; a crystal heart inside his chest, seen through a crack in the breastplate (loot inside). <i>Under the blood moon:</i> the braziers catch round the dais, the heart starts beating, red veins spread from it over the stone, the sword lights from the point to the pommel, the eyes open and the colossus raises his head to the moon.',
+    cam:{ target:[0, 26, 0], dist:96, yaw:.55, pitch:.12 },
+    sun:norm([.4, .78, .55]), moon:dirFrom(.55 + Math.PI + .1, .42),
+    flat:(x, z) => Math.max(Math.hypot(x, z) - 30, 0),
+    shakeAt:3.5,
+    ground(W) { W.figure(4, Y, 20); },
+    groups(nt, t) {
+      const g = [], kh = ss(6, 9, nt);
+      g[1] = about([.5, Y + 39, .5], RX(-.34*kh + .015*kh*Math.sin(t*.9)));
+      const on = ss(4, 5, nt), beat = Math.pow(Math.max(Math.sin(t*4.2), 0), 10) + .6*Math.pow(Math.max(Math.sin(t*4.2 - .7), 0), 10);
+      g[2] = about([HEART[0] + .5, HEART[1] + .5, HEART[2] + .5], Sm(1 + .12*beat*on));
+      return g;
+    },
+    lights(W) {
+      W.light([HEART[0] + .5, HEART[1] + .5, HEART[2] + .5], [5, .5, .35], 12, 4, 2);
+      W.light([.5, Y + 8, 16.5], [3, .3, .2], 9, 4.6);
+      for (let i = 0; i < 160; i++) W.part(-12 + hash3(i,1,6)*24, Y + 1 + hash3(i,2,6)*30, -10 + hash3(i,3,6)*28, 0, hash3(i,4,6), .07, 0, 0, 1,1,1);
+      for (let i = 0; i < 140; i++) { const a = hash3(i,5,6)*6.283; W.part(.5 + Math.sin(a)*20, Y + 9, .5 + Math.cos(a)*20, 1, hash3(i,7,6), .1, 4.5, 4 + hash3(i,8,6)*5, 4, .7, .3); }
+    },
+    trees:[[-44,-28,12], [-50,0,14], [-40,34,11], [46,-38,12], [54,-6,13], [-14,-54,12], [16,-52,13], [44,40,12]],
+  };
+}
+
+// ================================================================ C · the temple of the red moon
+function temple(W) {
+  const TB = 'polished_blackstone_bricks', TP = 'polished_blackstone', TC = 'chiseled_polished_blackstone', HW = [28, 23, 18, 13, 8], TOP = 29;
+  // five tiers, black and gold
+  HW.forEach((hw, k) => { const y0 = 6*k, y1 = y0 + 5;
+    for (let x = -hw; x <= hw; x++) for (let z = -hw; z <= hw; z++) { const m = Math.max(Math.abs(x), Math.abs(z));
+      for (let y = y0; y <= y1; y++) {
+        if (m >= hw - 3) W.set(x, y, z, Math.abs(x) === hw && Math.abs(z) === hw ? TC : y === y1 ? TC : (y === y0 + 3 && m === hw && ((x + z) & 3) === 0) ? 'gold_block' : TB);
+        else if (y === y1 && (k === 4 || m > hw - 6)) W.set(x, y, z, TP); } } });
+  // braziers on every terrace corner: they catch tier by tier, upwards
+  HW.slice(1).forEach((hw, k) => { for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) W.set(sx*(hw + 2), 6*(k + 1), sz*(hw + 2), 'campfire[lit=false]', LIT(4 + k*.7)); });
+  // the hypostyle hall inside: pillars, sarcophagi, an altar of runes, lanterns, cobwebs, loot
+  for (let x = -19; x <= 19; x++) for (let z = -19; z <= 19; z++) { W.set(x, 0, z, ((x + z) & 1) ? 'polished_deepslate' : TP); W.set(x, 9, z, TP);
+    for (let y = 1; y <= 8; y++) if (Math.max(Math.abs(x), Math.abs(z)) === 19) W.set(x, y, z, TB); else W.del(x, y, z); }
+  for (const x of [-15, -9, -3, 3, 9, 15]) for (const z of [-15, -9, -3, 3, 9, 15]) { if (Math.abs(x) < 5 && Math.abs(z) < 5) continue;
+    for (let y = 1; y <= 7; y++) W.set(x, y, z, TB); W.set(x, 8, z, TC); W.set(x, 1, z, TC); }
+  for (const x of [-12, 12]) for (const z of [-13, -7, -1, 5, 11]) { W.set(x, 1, z, 'polished_deepslate'); W.set(x, 1, z + 1, 'polished_deepslate');
+    W.set(x, 2, z, 'polished_deepslate_slab'); W.set(x, 2, z + 1, 'polished_deepslate_slab');
+    if (hash3(x, z, 3) > .4) W.set(x + Math.sign(x), 1, z, 'candle[candles=3,lit=false]', LIT(4.5 + (z + 13)*.03)); }
+  for (let x = -2; x <= 2; x++) for (let z = -2; z <= 2; z++) W.set(x, 0, z, 'crimson_eclipse:rune_stone', { d:4.6 + Math.hypot(x, z)*.2 });
+  W.set(0, 1, 0, 'chest[facing=south]'); W.set(-1, 1, -1, 'candle[candles=4,lit=false]', LIT(4.4)); W.set(1, 1, -1, 'candle[candles=4,lit=false]', LIT(4.45));
+  for (const x of [-12, -6, 0, 6, 12]) for (const z of [-12, -6, 0, 6, 12]) if (x || z) W.set(x, 8, z, 'crimson_eclipse:vigil_lantern[hanging=true]', { d:4.6 + Math.hypot(x, z)*.04 });
+  for (let i = 0; i < 40; i++) { const x = Math.floor(hash3(i, 1, 4)*37) - 18, z = Math.floor(hash3(i, 2, 4)*37) - 18, y = hash3(i, 3, 4) > .5 ? 8 : 1;
+    if (!W.get(x, y, z)) W.set(x, y, z, y === 8 ? 'cobweb' : hash3(i, 4, 4) > .5 ? 'bone_block' : 'cobweb'); }
+  W.set(-16, 1, 16, 'chest[facing=north]'); W.set(16, 1, -16, 'chest[facing=south]');
+  // the grand stairway up the south face, balustrades with braziers that climb at night; a passage under it into the hall
+  for (let i = 0; i <= TOP; i++) { const z = 8 + i, top = TOP - i;
+    for (let x = -6; x <= 6; x++) { for (let y = z <= 19 ? 10 : 0; y < top; y++) W.set(x, y, z, TB);
+      if (Math.abs(x) === 6) { W.set(x, top, z, TB); W.set(x, top + 1, z, i % 4 === 2 ? TC : 'polished_blackstone_brick_wall'); if (i % 4 === 2) W.set(x, top + 2, z, 'campfire[lit=false]', LIT(4 + (TOP - i)*.07)); }
+      else W.set(x, top, z, 'polished_blackstone_brick_stairs[facing=north]'); } }
+  for (const s of [-1, 1]) {     // the hall's two doors, east and west
+    for (let z = -2; z <= 2; z++) for (let y = 1; y <= 4; y++) if (y < 4 || Math.abs(z) <= 1) for (let a = 19; a <= 28; a++) W.del(s*a, y, z);
+    for (let z = -2; z <= 2; z++) for (let a = 19; a <= 29; a++) W.set(s*a, 0, z, TP);
+    for (const z of [-3, 3]) for (let y = 1; y <= 5; y++) W.set(s*29, y, z, TC); for (let z = -2; z <= 2; z++) W.set(s*29, 5, z, TC); }
+  // the shrine on the summit: pillars, an open pyramid roof, the altar crystal (group 2) that fires up through it
+  for (const sx of [-5, 5]) for (const sz of [-5, 5]) { for (let y = TOP + 1; y <= TOP + 6; y++) W.set(sx, y, sz, TB); W.set(sx, TOP + 7, sz, TC); }
+  for (let x = -5; x <= 5; x++) for (let z = -5; z <= 5; z++) if (Math.max(Math.abs(x), Math.abs(z)) === 5) W.set(x, TOP + 8, z, TB);
+  K.pyramid(W, 0, 0, TOP + 9, [6, 5, 4, 3], TB, 'polished_blackstone_brick_stairs');
+  for (let x = -4; x <= 4; x++) for (let z = -4; z <= 4; z++) if (Math.max(Math.abs(x), Math.abs(z)) === 3) W.set(x, TOP, z, 'crimson_eclipse:rune_stone', { d:5 });
+  W.set(0, TOP + 1, -1, TC); W.set(-1, TOP + 1, -1, 'polished_blackstone_slab'); W.set(1, TOP + 1, -1, 'polished_blackstone_slab');
+  const g2 = { g:2, d:5.4 };
+  for (let y = TOP + 2; y <= TOP + 5; y++) W.set(0, y, -1, 'crimson_eclipse:crimson_crystal', g2);
+  W.set(0, TOP + 6, -1, 'crimson_eclipse:crimson_crystal_cluster', g2); W.set(0, TOP + 2, -2, 'crimson_eclipse:crimson_crystal_cluster', g2); W.set(0, TOP + 2, 0, 'crimson_eclipse:crimson_crystal_cluster', g2);
+  W.set(0, TOP + 1, 2, 'chest[facing=south]');
+  // the moon gate: a great ring floating above the shrine (group 1: it turns once the beam reaches it)
+  const RC = TOP + 27;
+  for (let x = -12; x <= 12; x++) for (let y = RC - 12; y <= RC + 12; y++) { const d = Math.hypot(x, y - RC); if (d < 9.6 || d >= 11.6) continue;
+    const a = Math.atan2(y - RC, x), seg = Math.abs(Math.sin(a*6)) < .2;
+    for (const z of [-1, 0]) W.set(x, y, z, seg ? 'crimson_eclipse:rune_stone' : d >= 10.8 ? 'gold_block' : TB, { g:1, d:6.4 }); }
+  // ruin: the south-east corner of the tiers fell, a few steps broke, moss and vines
+  K.collapse(W, e => Math.max(Math.abs(e.x), Math.abs(e.z)) >= HW[Math.min(4, Math.floor(e.y/6))] - 2 && e.x > 10 && e.z > 8 && e.z < 29 && e.g === 0 && e.y > 3 + 9*vnoise(e.x*.15, 3, e.z*.15) && e.y < TOP && Math.abs(e.x) > 7, RUBBLE, .25);
+  K.collapse(W, e => e.id.includes('stairs') && e.z > 8 && hash3(e.x, e.y, e.z) > .93, RUBBLE, .5);
+  K.weather(W, { [TB]:(e, n, r) => r > .87 ? 'cracked_polished_blackstone_bricks' : n > .72 ? 'blackstone' : null });
+  for (const e of [...W.M.values()]) if (e.id === TP && e.y > 0 && !W.get(e.x, e.y + 1, e.z) && hash3(e.x, e.y, e.z) < .12) W.set(e.x, e.y + 1, e.z, 'moss_carpet');
+  K.vines(W, e => e.id === TB || e.id === 'blackstone', .015, 9);
+  return {
+    tag:'A black-and-gold stepped temple, 57 blocks wide and 30 high, a grand stairway up its face, an avenue of obelisks between two long pools, a hall of pillars and tombs inside, a shrine on the summit and a great ring floating above it. <i>Under the blood moon:</i> the obelisk tips light from the far end towards the temple, the pools turn to blood, the braziers climb the stairs and the tiers, the altar crystal fires through the shrine roof into the ring, and the ring starts turning and sends the beam on to the moon.',
+    cam:{ target:[0, 26, 16], dist:128, yaw:.32, pitch:.16 },
+    sun:norm([.5, .76, .45]), moon:dirFrom(Math.PI + .12, .3),
+    flat:(x, z) => Math.max(Math.abs(x) - 38, z < 0 ? -z - 38 : z - 82, 0),
+    shakeAt:3.6,
+    ground(W) {    // the avenue, its obelisks and the two pools, after the terrain
+      for (let z = 38; z <= 78; z++) for (let x = -4; x <= 4; x++) W.set(x, -1, z, ((x + z) & 3) === 0 ? TC : TP);
+      for (let z = 42; z <= 74; z += 8) for (const s of [-1, 1]) { const x = s*7, d = 3.6 + (78 - z)*.035;
+        for (const dx of [0, s]) for (const dz of [0, 1]) for (let y = 0; y <= 1; y++) W.set(x + dx, y, z + dz, TB);
+        for (let y = 2; y <= 9; y++) W.set(x, y, z, y === 9 ? TC : TP); W.set(x, 10, z, 'crimson_eclipse:crimson_crystal', { d }); W.set(x, 11, z, 'crimson_eclipse:crimson_crystal_cluster', { d }); }
+      for (const s of [-1, 1]) for (let x = 11; x <= 18; x++) for (let z = 40; z <= 76; z++) { const X = s*x, edge = x === 11 || x === 18 || z === 40 || z === 76;
+        W.set(X, -2, z, TP); W.set(X, -1, z, edge ? TC : 'water', edge ? {} : { awake:'crimson_eclipse:blood_water', d:4.2 + (76 - z)*.03 }); W.del(X, 0, z); }
+      W.figure(1, 0, 44);
+    },
+    groups(nt, t) {
+      const g = [], kc = ss(5.4, 7, nt), kr = ss(7, 9.5, nt);
+      g[2] = M4(Tm(0, kc*1.2 + kc*.15*Math.sin(t*1.4), 0), about([.5, 0, -.5], RY(spinUp(nt - 5.4, 2)*.6)));
+      g[1] = about([.5, RC + .5, 0], RZ(spinUp(nt - 7, 2.5)*.35));
+      return g;
+    },
+    beams(nt, t, G) { const p = applyP(G[2], [.5, TOP + 7, -.5]), c = [.5, RC + .5, 0], m = dirFrom(Math.PI + .12, .3);
+      return [{ a:p, b:c, w:.9, e:ss(6.2, 7.2, nt) }, { a:c, b:[c[0] + m[0]*300, c[1] + m[1]*300, c[2] + m[2]*300], w:1.3, e:ss(9, 10.5, nt) }]; },
+    lights(W) {
+      W.light([.5, TOP + 4, -.5], [5, .5, .35], 12, 5.4, 2);
+      W.light([.5, RC + .5, 0], [4, .4, .3], 16, 9);
+      for (let i = 0; i < 160; i++) W.part(-16 + hash3(i,1,7)*32, 1 + hash3(i,2,7)*7, -16 + hash3(i,3,7)*32, 0, hash3(i,4,7), .06, 0, 0, 1,1,1);
+      for (let i = 0; i < 150; i++) W.part(-6 + hash3(i,5,7)*12, 3 + hash3(i,6,7)*20, 10 + hash3(i,7,7)*18, 1, hash3(i,8,7), .09, 5, 3 + hash3(i,9,7)*4, 4, .7, .3);
+    },
+    trees:[[-50,-40,12], [-56,0,14], [-48,40,11], [50,-44,12], [58,-4,13], [-30,-60,12], [30,-58,13], [50,40,12]],
+  };
+}
+
+// ================================================================ the page
+function variant(key, short, name, build) {
+  return { key, short, name, make(W) {
+    const meta = build(W);
+    meta.size = K.sizeOf(W);
+    if (meta.ground && build === citadel) meta.ground(W);
+    K.terrain(W, meta.flat);
+    if (meta.ground && build !== citadel) meta.ground(W);
+    for (const [x, z, h] of meta.trees) K.spruce(W, x, z, h);
+    meta.lights(W);
+    return meta;
+  } };
+}
+CE.viewer({ dayLabel:'Day: a ruin', variants:[
+  variant('A', 'Citadel', 'Citadel of the Vigil', citadel),
+  variant('B', 'Colossus', 'The Kneeling Colossus', colossus),
+  variant('C', 'Temple', 'Temple of the Red Moon', temple),
+] });
+</script>
+</body>
+</html>

@@ -17,7 +17,12 @@ He first wanted a separate structures mod, then: "we'll do it all in Crimson, th
 - Awake under the blood moon or always alive: **both, depending on the structure**.
 - Gameplay to start: **scenery and loot**.
 - Workflow: Claude proposes, we refine together, Claude codes, Bastien edits in game or says what to change.
-- **First structure: a stylish abandoned building, quite big.** Candidates in `preview/abandoned-building.html`.
+- **First structure: a stylish abandoned building, quite big.** Round 1 in `preview/abandoned-building.html`.
+- **His look at round 1 (2026-11-16)**: the observatory, he does not much like; the chapel is not good enough; the manor is empty and looks like a school, not imposing. "Propose other things."
+- **Round 2** in `preview/grand-structures.html` (imposing, furnished inside, real blocks on the grid):
+  - **A · Citadel of the Vigil**: a fortress on a hill, 63 × 63, 62 high: crenellated walls, four round towers with witch-hat roofs, a gatehouse with a portcullis, a 45-block keep (great hall with long tables, throne, chandeliers, fireplace; library and armoury; a crystal chamber). Awakening: portcullis rises, braziers catch round the walls, keep doors open, lanterns and windows light floor by floor, the crystal crown on the roof lifts and fires at the sky.
+  - **B · The Kneeling Colossus**: a 55-block stone knight kneeling on a round dais, hands on a crimson crystal sword, a crystal heart in his chest seen through a crack (loot inside), a red cape. Awakening: braziers round the dais, the heart beats, red veins spread from it, the sword lights from point to pommel, the eyes open, the head lifts to the moon.
+  - **C · Temple of the Red Moon**: a black-and-gold stepped temple, 57 wide and 30 high, a grand stairway, an avenue of obelisks between two long pools, a hall of pillars and tombs inside, a shrine on the summit, a great ring floating above. Awakening: obelisk tips light towards the temple, pools turn to blood, braziers climb the stairs and tiers, the altar crystal fires through the shrine into the ring, the ring turns and sends the beam to the moon.
 - Vanilla villages allowed later; first something of our own.
 
 ## The idea that ties them to the mod (proposed)

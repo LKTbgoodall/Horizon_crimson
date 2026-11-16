@@ -54,6 +54,11 @@ function standIn(name) {
   if (n === 'entity/bell/bell_body') return paint(32, 32, (x, y) => sh(hex('e3b545'), .78 + .35*N(x, y)));
   if (n === 'entity/banner_base') return paint(64, 64, (x, y) => y >= 42 ? sh(hex('6b4f2f'), .9 + .2*N(x, y)) : [236, 236, 236 - 20*N(x, y)]);
   if (/water_still/.test(n)) return paint(16, 16, (x, y) => { const v = 150 + 50*Math.sin((x + y*.5)*.9 + N(x, y)*2); return [v, v, v, 185]; });
+  if (/_fire/.test(n)) { const soul = /soul/.test(n);
+    return paint(16, 16, (x, y) => { const h = 4 + 10*hash3(x >> 1, 0, s), k = (16 - y)/h; if (k > 1 || ((x + 1) % 5 === 0)) return null;
+      return mix(soul ? [60, 200, 230] : [255, 110, 20], soul ? [200, 255, 255] : [255, 236, 150], 1 - k); }); }
+  if (/barrel/.test(n)) return paint(16, 16, (x, y) => /top|bottom/.test(n) ? ((x === 0 || y === 0 || x === 15 || y === 15) ? [92, 64, 34] : sh([130, 94, 52], (y % 4 === 3 ? .75 : 1)*(.9 + .2*N(x, y))))
+    : (y === 2 || y === 13) ? [70, 70, 74] : sh([122, 86, 48], (x % 4 === 3 ? .72 : 1)*(.9 + .2*N(x, y))));
   if (/lava|magma/.test(n)) return paint(16, 16, (x, y) => { const v = N(x >> 1, y >> 1); return v > .7 ? [255, 190, 70] : sh(c, .7 + .5*v); });
   if (/glass_pane_top/.test(n)) return paint(16, 16, (x, y) => x >= 7 && x <= 8 ? sh(c, .85) : null);
   if (/stained_glass/.test(n)) return paint(16, 16, (x, y) => (x === 0 || y === 0 || x === 15 || y === 15) ? [...sh(c, .8), 220] : [...c, 120]);
@@ -114,6 +119,12 @@ const OURS = {
     if (r < 5.5) return mix([255, 60, 50], [255, 190, 150], Math.max(0, 1 - r/5.5) * (.7 + .3*hash3(x, y, 3))); return [120, 10, 16]; }),
   moon_lens: () => paint(16, 16, (x, y) => { const r = Math.hypot(x - 7.5, y - 7.5); if (r > 7.2) return [60, 50, 40];
     return mix([255, 230, 220], [200, 40, 40], Math.min(1, r/7)) .map((v, i) => v*(Math.floor(r) % 2 ? .85 : 1)); }),
+  vigil_lantern: () => paint(16, 16, (x, y) => { const iron = [44, 40, 46], glass = [196, 66, 58];
+    if (x < 6 && y >= 2 && y < 9) return (x === 0 || x === 5 || y === 2 || y === 8 || x === 3) ? iron : sh(glass, .85 + .3*hash3(x, y, 3));
+    if (x < 6 && y >= 9 && y < 15) return sh(iron, .9 + .2*hash3(x, y, 4)); if (x >= 1 && x < 5 && y < 2) return iron;
+    if (x >= 11 && x < 14 && ((y >= 1 && y < 3) || (y >= 10 && y < 12))) return iron; return null; }),
+  crimson_vein: () => paint(16, 16, (x, y) => { const v = Math.abs(x - 7.5 - 3.5*Math.sin(y*.55) - 1.5*Math.sin(y*1.3 + 1)) < .9 || (y === 4 && x > 8 && x < 14) || (Math.abs(y - 11 - (x - 9)*.5) < .7 && x > 8);
+    return v ? [235, 44, 38] : sh([62, 60, 68], .82 + .3*hash3(x, y, 12)); }),
   rune_stone: () => paint(16, 16, (x, y) => { const rune = (x === 7 && y > 2 && y < 13) || (y === 5 && x > 4 && x < 11) || (x - y === 2 && x > 6 && x < 12) || (x + y === 20 && x > 7 && x < 12);
     if (x === 0 || y === 0 || x === 15 || y === 15) return [32, 28, 36]; return rune ? [230, 46, 40] : sh([46, 40, 50], .85 + .3*hash3(x, y, 5)); }),
   blood_water: () => paint(16, 16, (x, y) => { const v = .5 + .5*Math.sin((x + y*.5)*.9 + hash3(x, y, 8)*2); return [120 + 70*v, 8 + 14*v, 14 + 10*v, 210]; }),

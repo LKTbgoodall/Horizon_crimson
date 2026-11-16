@@ -240,6 +240,11 @@ S.bell = (p, ctx, d) => { const bt = d.tex.body, ts = 32, att = p.attachment || 
 S.banner = (p, ctx, d) => { const t = d.tex.entity, ts = 64;
   const flag = cuboid(0, 0, 20, 40, 1, ts, t, false), bar = cuboid(0, 42, 20, 2, 2, ts, t, false);
   return { els:[B([-2,-26,1], [18,14,2], flag), B([-2,14,0], [18,16,2], bar)], y: ({ south:0, west:90, north:180, east:270 })[p.facing || 'south'] }; };
+S.campfire = (p, ctx, d) => { const lit = p.lit !== false, log = lit ? d.tex.lit : d.tex.log;
+  const els = [B([1,0,0], [5,4,16], six(log)), B([11,0,0], [15,4,16], six(log)), B([0,3,1], [16,7,5], six(log)), B([0,3,11], [16,7,15], six(log)), B([5,0,0], [11,1,16], six(d.tex.log))];
+  if (lit) { const t = d.tex.fire, g = 2.6, q = (a, b, n) => ({ quad:[[a[0],16,a[1]], [b[0],16,b[1]], [b[0],0,b[1]], [a[0],0,a[1]]], uv:[[0,0],[16,0],[16,16],[0,16]], t, n, glow:g });
+    els.push(q([.8,.8], [15.2,15.2], [.7,0,-.7]), q([.8,15.2], [15.2,.8], [.7,0,.7])); }
+  return { els, y: YROT[p.facing || 'north'] }; };
 // our anchors: models that move are parts; the anchor block itself sits in one cell
 S.armillary = (p, ctx, d) => { const t = d.tex.ring, els = [B([5,5,5], [11,11,11], six(d.tex.core), { glowAwake:3 })];
   const ring = (rad, plane, part, n) => { for (let i = 0; i < n; i++) { const a = i/n*Math.PI*2, c = 8 + Math.cos(a)*rad, s = Math.sin(a)*rad, q = 1.5;
@@ -365,6 +370,9 @@ reg('candle', { shape:S.candle, tex:{ side:'block/candle', lit:'block/candle_lit
 reg('torch', { shape:S.torch, tex:'block/torch', render:'cutout', ...nonFull, light:14, glow:1.6 });
 reg('wall_torch', { shape:S.torch, tex:'block/torch', render:'cutout', ...nonFull, light:14, glow:1.6 });
 reg('soul_torch', { shape:S.torch, tex:'block/soul_torch', render:'cutout', ...nonFull, light:10, glow:1.6 });
+reg('campfire', { shape:S.campfire, tex:{ log:'block/campfire_log', lit:'block/campfire_log_lit', fire:'block/campfire_fire' }, render:'cutout', ...nonFull, light:p => p.lit === false ? 0 : 15 });
+reg('soul_campfire', { shape:S.campfire, tex:{ log:'block/campfire_log', lit:'block/soul_campfire_log_lit', fire:'block/soul_campfire_fire' }, render:'cutout', ...nonFull, light:p => p.lit === false ? 0 : 10 });
+reg('barrel', { tex:{ top:'block/barrel_top', side:'block/barrel_side', bottom:'block/barrel_bottom' } });
 reg('chest', { shape:S.chest, tex:{ entity:'entity/chest/normal' }, ...nonFull });
 reg('bell', { shape:S.bell, tex:{ body:'entity/bell/bell_body', post:'block/stone', bar:'block/dark_oak_planks' }, ...nonFull });
 reg('cobweb', { shape:S.cross, tex:'block/cobweb', render:'cutout', ...nonFull });
@@ -384,7 +392,9 @@ ours('crimson_crystal_cluster', { shape:S.cross, tex:'ce:crimson_crystal_cluster
 ours('eclipse_glass', { tex:'ce:eclipse_glass', render:'translucent', opaque:false, cullSame:true, glow:.05, glowAwake:1.8, lightAwake:9 });
 ours('eclipse_eye', { tex:'ce:eclipse_eye', glow:.05, glowAwake:4.5, lightAwake:15 });
 ours('moon_lens', { tex:'ce:moon_lens', glow:.05, glowAwake:6, lightAwake:12 });
-ours('rune_stone', { tex:'ce:rune_stone', glowAwake:2.5, lightAwake:7 });
+ours('vigil_lantern', { shape:S.lantern, tex:'ce:vigil_lantern', render:'cutout', ...nonFull, glowAwake:2.4, lightAwake:13 });
+ours('crimson_vein', { tex:'ce:crimson_vein', glow:.05, glowAwake:2.2, lightAwake:5 });
+ours('rune_stone',{ tex:'ce:rune_stone', glowAwake:2.5, lightAwake:7 });
 ours('blood_water', { shape:S.liquid, tex:'ce:blood_water', render:'translucent', opaque:false, cullSame:true, glow:.4, light:8, damp:1 });
 ours('armillary', { shape:S.armillary, tex:{ ring:'ce:brass', core:'ce:crimson_crystal' }, ...nonFull, lightAwake:12 });
 ours('vigil_clock', { shape:S.clockHands, tex:{ hand:'block/black_concrete', face:'block/calcite' }, ...nonFull });
