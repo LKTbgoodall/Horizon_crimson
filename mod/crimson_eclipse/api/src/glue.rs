@@ -6,9 +6,10 @@ use crate::client;
 use crate::server::{self, Shared};
 use crate::sky_pass::Sky;
 use horizon_client::mod_api::{
-    BlockEntityEvent, BlockEntityTickEvent, BlockEntityTicksEvent, CameraShakeEvent, Compound,
-    ComputeFogColorEvent, EmissiveEvent, Flow, Hooks, Host, LevelTickPostEvent,
-    PerformCommandEvent, RegisterCommandsEvent, RenderFogEvent, RenderHooks, TickEvent,
+    BlockEntityEvent, BlockEntityTickEvent, BlockEntityTicksEvent, CameraShakeEvent,
+    ChunkLoadEvent, Compound, ComputeFogColorEvent, EmissiveEvent, Flow, Hooks, Host,
+    LevelTickPostEvent, PerformCommandEvent, RegisterCommandsEvent, RenderFogEvent, RenderHooks,
+    TickEvent,
 };
 use std::sync::Arc;
 
@@ -38,6 +39,10 @@ impl Hooks for CrimsonEclipse {
 
     fn perform_command(&self, host: &mut dyn Host, event: &mut PerformCommandEvent<'_>) -> Flow {
         server::perform_command(&self.shared, host, event)
+    }
+
+    fn chunk_load(&self, _host: &mut dyn Host, event: &mut ChunkLoadEvent<'_>) {
+        server::chunk_load(&self.shared, event.dimension, event.chunk);
     }
 
     fn level_tick_post(&self, host: &mut dyn Host, event: &mut LevelTickPostEvent<'_>) {

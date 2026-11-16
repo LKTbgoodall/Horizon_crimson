@@ -74,7 +74,9 @@ Back: [[00 - Home]]
 - [x] The colossus wakes: an anchor block entity lights 293 blocks in a wave, emissive glow, 64 px textures (0.5.0, [[ADR-022 A structure wakes through its anchor]], 2026-11-16)
 - [x] Bastien builds 0.5.0 (2026-11-16): chests floating in the reliquary and heart chamber, no light at night
 - [x] 0.5.1: the anchor's block entity in the template, chests on the floor (2026-11-16)
-- [ ] Bastien builds 0.5.1 and watches a new colossus wake (`mod/README.md` § New in 0.5.1)
+- [x] Bastien builds 0.5.1 (2026-11-16): still dark (worldgen drops mod block entities)
+- [x] 0.5.2: anchors found in loaded chunks and set again by command (2026-11-16)
+- [ ] Bastien builds 0.5.2 and watches a colossus wake (`mod/README.md` § New in 0.5.2)
 - [ ] The colossus moves: head lifting, heart beating (block entity renderer); far terrain checked
 - [ ] The lantern tree as the second real structure
 - [ ] The first medium structure at full quality

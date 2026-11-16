@@ -19,6 +19,18 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.5.2 (Bastien's look at 0.5.1: still dark under the blood moon)
+- **Why 0.5.1 was still dark**: Horizon's worldgen keeps only vanilla block entities from a structure template
+  (`structure_blocks.rs`, `generated_block_entity`): the anchor's was dropped again (the world save showed the
+  anchor block, facing east, and no block entity). `/place` keeps it, worldgen does not.
+- **The fix**: each chunk that loads in the overworld is read 32 blocks under its surface (`read_columns`); an
+  anchor found there is set again by console command (`setblock` air, then the anchor with its facing), which
+  gives it its block entity. It works on colossi already generated (0.4.0 to 0.5.1) too: just go near one.
+  `latest.log` says `anchor at X Y Z set again (facing ...): done`.
+
+**Test**: go back to the colossus you saw (or `/locate`, any colossus), check `latest.log` for the line above,
+then `/crimson start` next to it. Screenshots at night.
+
 ## New in 0.5.1 (Bastien's first look at 0.5.0: floating chests, no light at night)
 - **The colossus lights up now**: the anchor in its heart had no block entity in the template, and worldgen and
   `/place` only make the block entities a template carries (Horizon makes a mod's block entity by itself only when a

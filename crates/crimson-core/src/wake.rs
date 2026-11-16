@@ -54,6 +54,61 @@ pub fn lit(awake: Option<i64>, delay: u16) -> bool {
     awake.is_some_and(|ticks| ticks >= i64::from(delay))
 }
 
+/// How far under a column's surface (the world-surface height, one above its
+/// top block) the search for anchors looks. The colossus' anchor is 19 under
+/// its column's surface (the helm and the crown above it); the rest is room
+/// for what grows or is built on top.
+pub const ANCHOR_SEARCH_DEPTH: u32 = 32;
+
+/// The 256 columns of chunk `chunk` (`[x, z]` in chunks), as block `(x, z)`.
+pub fn chunk_columns(chunk: [i32; 2]) -> Vec<(i32, i32)> {
+    let (bx, bz) = (chunk[0] * 16, chunk[1] * 16);
+    (0..16)
+        .flat_map(|z| (0..16).map(move |x| (bx + x, bz + z)))
+        .collect()
+}
+
+/// Where block `name` is in a read of `columns`: for each column, its surface
+/// height in `bases` (None where not loaded) and `depth` block indexes into
+/// `palette`, bottom first, starting `depth` under the surface.
+pub fn find_in_columns(
+    name: &str,
+    palette: &[String],
+    blocks: &[u16],
+    columns: &[(i32, i32)],
+    bases: &[Option<i32>],
+    depth: u32,
+) -> Vec<[i32; 3]> {
+    let Some(wanted) = palette.iter().position(|n| n == name) else {
+        return Vec::new();
+    };
+    let per = depth as usize;
+    let mut found = Vec::new();
+    for (i, (&(x, z), base)) in columns.iter().zip(bases).enumerate() {
+        let (Some(base), Some(cells)) = (base, blocks.get(i * per..(i + 1) * per)) else {
+            continue;
+        };
+        let bottom = base - depth as i32;
+        for (k, &b) in cells.iter().enumerate() {
+            if usize::from(b) == wanted {
+                found.push([x, bottom + k as i32, z]);
+            }
+        }
+    }
+    found
+}
+
+/// The console commands that set an anchor again where it stands (air, then
+/// the anchor facing as it did): a block placed by a command gets its block
+/// entity, which a structure generated in the world does not give it.
+pub fn reseat_commands(name: &str, pos: [i32; 3], facing: &str) -> [String; 2] {
+    let [x, y, z] = pos;
+    [
+        format!("setblock {x} {y} {z} minecraft:air"),
+        format!("setblock {x} {y} {z} {name}[facing={facing}]"),
+    ]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -100,6 +155,45 @@ mod tests {
         assert!(!lit(None, 0));
         assert!(!lit(Some(99), 100));
         assert!(lit(Some(100), 100));
+    }
+
+    #[test]
+    fn a_chunk_has_its_256_columns() {
+        let columns = chunk_columns([-2, 3]);
+        assert_eq!(columns.len(), 256);
+        assert_eq!(columns[0], (-32, 48));
+        assert_eq!(columns[255], (-17, 63));
+    }
+
+    #[test]
+    fn an_anchor_is_found_where_it_stands_in_the_read() {
+        let palette = ["minecraft:air", "crimson_eclipse:colossus_anchor"].map(String::from);
+        let columns = [(5, 7), (6, 7), (7, 7)];
+        let bases = [Some(100), None, Some(90)];
+        // depth 3: the first column reads y 97..100, the last 87..90
+        let blocks = [0, 1, 0, 0, 0, 0, 0, 0, 1];
+        let found = find_in_columns(palette[1].as_str(), &palette, &blocks, &columns, &bases, 3);
+        assert_eq!(found, vec![[5, 98, 7], [7, 89, 7]]);
+        assert!(find_in_columns(
+            "crimson_eclipse:other",
+            &palette,
+            &blocks,
+            &columns,
+            &bases,
+            3
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn the_anchor_is_set_again_facing_as_it_did() {
+        let [clear, set] =
+            reseat_commands("crimson_eclipse:colossus_anchor", [-1180, 112, 95], "east");
+        assert_eq!(clear, "setblock -1180 112 95 minecraft:air");
+        assert_eq!(
+            set,
+            "setblock -1180 112 95 crimson_eclipse:colossus_anchor[facing=east]"
+        );
     }
 
     #[test]

@@ -7,7 +7,7 @@ use crate::wake;
 use crate::moon::{day_of, time_of_day};
 use crate::night::{Night, Phase};
 use horizon_client::mod_api::{
-    Flow, Host, NativeCommand, PerformCommandEvent, RegisterCommandsEvent, Text,
+    Flow, Host, NativeCommand, NativeHeightmap, PerformCommandEvent, RegisterCommandsEvent, Text,
 };
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -33,6 +33,8 @@ pub struct Shared {
     sound_tick: AtomicI64,
     /// Tonight's break and the day it was planned for.
     shell: Mutex<Option<(i64, Arc<Plan>)>>,
+    /// Overworld chunks loaded since the last look for anchors.
+    loaded_chunks: Mutex<Vec<[i32; 2]>>,
 }
 
 impl Default for Shared {
@@ -43,6 +45,7 @@ impl Default for Shared {
             clock: Mutex::new(None),
             sound_tick: AtomicI64::new(NO_DAY),
             shell: Mutex::new(None),
+            loaded_chunks: Mutex::new(Vec::new()),
         }
     }
 }
@@ -180,10 +183,65 @@ pub fn anchor_tick(shared: &Shared, host: &mut dyn Host, pos: [i32; 3]) {
     }
 }
 
+/// The most loaded chunks looked through for anchors in one tick.
+const CHUNKS_PER_TICK: usize = 8;
+
+/// A chunk came into the world: its anchors are looked for on a later tick
+/// (the chunk's blocks are there, but the world is changed from a tick).
+pub fn chunk_load(shared: &Shared, dimension: &str, chunk: [i32; 2]) {
+    if dimension == OVERWORLD {
+        lock(&shared.loaded_chunks).push(chunk);
+    }
+}
+
+/// A structure generated in the world carries its anchor block but not the
+/// anchor's block entity (Horizon's worldgen keeps vanilla block entities
+/// only), so the anchor never ticks. Each loaded chunk is read near its
+/// surface; an anchor found there is set again by command, which gives it its
+/// block entity (it carries no data, so setting it again loses nothing).
+fn reseat_anchors(shared: &Shared, host: &mut dyn Host) {
+    let chunks: Vec<[i32; 2]> = {
+        let mut loaded = lock(&shared.loaded_chunks);
+        let keep = loaded.len().saturating_sub(CHUNKS_PER_TICK);
+        loaded.split_off(keep)
+    };
+    for chunk in chunks {
+        let columns = wake::chunk_columns(chunk);
+        let depth = wake::ANCHOR_SEARCH_DEPTH;
+        let Ok(read) =
+            host.read_columns(OVERWORLD, &columns, NativeHeightmap::WorldSurface, (depth, 0))
+        else {
+            continue;
+        };
+        for pos in
+            wake::find_in_columns(ANCHOR, &read.palette, &read.blocks, &columns, &read.bases, depth)
+        {
+            let Some(facing) = host.block_property(pos, "facing") else {
+                continue;
+            };
+            let [clear, set] = wake::reseat_commands(ANCHOR, pos, &facing);
+            let done = host.run_command(&clear) && host.run_command(&set);
+            log::info!(
+                target: TARGET,
+                "crimson_eclipse: anchor at {} {} {} set again (facing {facing}): {}",
+                pos[0],
+                pos[1],
+                pos[2],
+                if done { "done" } else { "FAILED" }
+            );
+        }
+    }
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 pub fn level_tick_post(shared: &Shared, host: &mut dyn Host, dimension: &str) {
     if dimension != OVERWORLD {
         return;
     }
+    reseat_anchors(shared, host);
     let Some(day_time) = host.level(OVERWORLD).and_then(|level| host.level_day_time(level)) else {
         return;
     };
