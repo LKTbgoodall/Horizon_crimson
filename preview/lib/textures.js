@@ -24,7 +24,7 @@ const seedOf = s => { let h = 7; for (const ch of s) h = Math.imul(h ^ ch.charCo
 // ------------------------------------------------------------------ stand-ins for vanilla textures (approximations)
 const DYE = { white:'E9ECEC', orange:'F07613', magenta:'BD44B3', light_blue:'3AAFD9', yellow:'F8C527', lime:'70B919', pink:'ED8DAC', gray:'3E4447',
   light_gray:'8E8E86', cyan:'158991', purple:'792AAC', blue:'35399D', brown:'724728', green:'546D1B', red:'A12722', black:'141519' };
-const MAT = [['crying_obsidian','2a0d48'],['obsidian','15101f'],['gilded_blackstone','3a2c26'],['blackstone','2d272c'],['deepslate','4a4a50'],['tuff','6d6e66'],
+const MAT = [['raw_iron','a68a6e'],['raw_gold','dda92e'],['raw_copper','9a6a4f'],['blast_furnace','4f4f55'],['furnace','6e6e6e'],['smithing','3b3044'],['anvil','474749'],['cauldron','3b3b3e'],['crying_obsidian','2a0d48'],['obsidian','15101f'],['gilded_blackstone','3a2c26'],['blackstone','2d272c'],['deepslate','4a4a50'],['tuff','6d6e66'],
   ['calcite','dfe0dc'],['dripstone','866b5c'],['mossy','6f7d55'],['cobblestone','7b7b7b'],['smooth_stone','a0a0a0'],['andesite','888a8a'],['diorite','c4c4c4'],
   ['granite','9a6a55'],['red_nether','4a0a0c'],['nether_brick','30161a'],['mud_brick','8b6b52'],['resin','d9701c'],['quartz','ebe5de'],
   ['red_sandstone','b5621f'],['sandstone','d9cc9d'],['end_stone','dcdd9f'],['purpur','a87aa8'],['prismarine','5ea595'],['oxidized','52a386'],['weathered','6c996e'],

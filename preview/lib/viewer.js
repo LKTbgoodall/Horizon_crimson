@@ -1,4 +1,5 @@
 // Crimson Eclipse preview engine: the viewer (WebGL2, HDR + bloom, day and blood moon, inspection, layer cut).
+// Particle kinds (W.part): 0 motes, 1 rising embers (ex = height), 2 drips falling from a ring, 3 a shockwave ring every 3.3 s (ex = last radius, ph = angle).
 // A page calls CE.viewer({ variants:[{ key, name, make(W) -> meta }] }). meta: tag, cam {target, dist, yaw, pitch}, sun, moon,
 // size, shakeAt, groups(nt, t) -> [mat4 by group], beams(nt, t, G) -> [{a, b, w, e}].
 'use strict';
@@ -130,6 +131,7 @@ void main(){
   if (k == 0) { p += vec3(sin(t*.11+ph*6.3)*1.6, sin(t*.07+ph*4.1)*.9, cos(t*.09+ph*5.7)*1.6);
     a = .3*(.6+.4*sin(t*.5+ph*20.)); col = mix(vec3(1.,.92,.75), vec3(1.4,.3,.22), uN); }
   else if (k == 1) { float f = fract(t*.11*(.6+ph) + ph*7.); p += vec3(sin(f*5.+ph*9.)*.8, f*ex, cos(f*4.+ph*7.)*.8); a = sin(f*3.1416)*e; }
+  else if (k == 3) { float f = fract(t*.3), an = ph*6.2832; p += vec3(cos(an)*f*ex, .6*sin(f*3.1416), sin(an)*f*ex); sz *= 1. + f*5.; a = e*(1.-f)*(1.-f)*1.6; }
   else if (k == 2) { float f = fract(t*.9 + ph*5.), an = ph*6.2832; p += vec3(cos(an)*(1.05+f*.7), -2.9*f*f, sin(an)*(1.05+f*.7)); a = e*(1.-f*.7); }
   vC = aC; vCol = col; vA = a;
   if (a <= .001) { gl_Position = vec4(2., 2., 2., 1.); return; }

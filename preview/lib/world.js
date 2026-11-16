@@ -69,11 +69,12 @@ K.vines = (W, test, chance, seed) => { const D = [[1,0,'west'], [-1,0,'east'], [
       break; } } };
 K.terrain = (W, flat, R = 76, plants = .1) => {
   const hgt = (x, z) => { const v = 1.3*Math.sin(x*.09+z*.05) + .9*Math.sin(z*.13-x*.07+2) + .5*Math.sin(x*.31+z*.23);
-    return Math.round(Math.max(-.6, v+.7) * ss(0, 16, flat(x, z))); };
+    return Math.round(Math.max(-.6, v+.7) * ss(0, 16, flat(x, z)) * (1 - ss(R - 14, R - 2, Math.max(Math.abs(x), Math.abs(z))))); };   // flat again at the border, level with the ground plane
   const tops = [];
   for (let x = -R; x < R; x++) for (let z = -R; z < R; z++) {
     const h = hgt(x, z); let lo = h;
     for (const [dx, dz] of [[1,0], [-1,0], [0,1], [0,-1]]) lo = Math.min(lo, hgt(x+dx, z+dz));
+    if (x === -R || x === R-1 || z === -R || z === R-1) lo = Math.min(lo, 0);      // the border reaches down to the flat ground plane: no slit of sky
     for (let y = h-1; y >= Math.min(lo-1, h-1); y--) if (!W.get(x, y, z)) W.set(x, y, z, y === h-1 ? 'grass_block' : 'dirt');
     if (flat(x, z) > 2) tops.push([x, h, z]);
   }

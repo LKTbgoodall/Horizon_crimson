@@ -247,6 +247,19 @@ S.campfire = (p, ctx, d) => { const lit = p.lit !== false, log = lit ? d.tex.lit
   if (lit) { const t = d.tex.fire, g = 2.6, q = (a, b, n) => ({ quad:[[a[0],16,a[1]], [b[0],16,b[1]], [b[0],0,b[1]], [a[0],0,a[1]]], uv:[[0,0],[16,0],[16,16],[0,16]], t, n, glow:g });
     els.push(q([.8,.8], [15.2,15.2], [.7,0,-.7]), q([.8,15.2], [15.2,.8], [.7,0,.7])); }
   return { els, y: YROT[p.facing || 'north'] }; };
+// workshop blocks (round 5's forge): a front face that turns with `facing` and lights with `lit`
+S.front = (p, ctx, d) => { const lit = !!p.lit && d.tex.on, F = six(f => f === 'north' ? null : texOf(d, f));
+  F.north = lit ? { t:d.tex.on, glow:1.3 } : { t:d.tex.front };
+  return { els:[B([0,0,0], [16,16,16], F)], y: YROT[p.facing || 'north'] }; };
+S.anvil = (p, ctx, d) => { const s = d.tex.side, F = six(f => f === 'up' ? d.tex.top : s);
+  return { els:[B([2,0,2], [14,4,14], six(s)), B([4,4,3], [12,5,13], six(s)), B([6,5,4], [10,10,12], six(s)), B([3,10,0], [13,16,16], F)],
+    y: ({ north:90, south:90, east:0, west:0 })[p.facing || 'north'] }; };
+S.cauldron = (p, ctx, d) => { const s = d.tex.side, i = d.tex.inner, W = { ...six(s), up:{ t:d.tex.top } }, els = [
+  B([0,3,0], [2,16,16], W), B([14,3,0], [16,16,16], W), B([2,3,0], [14,16,2], W), B([2,3,14], [14,16,16], W), B([2,3,2], [14,4,14], { up:{ t:i }, down:{ t:d.tex.bottom } }),
+  B([0,0,0], [4,3,2], six(s)), B([0,0,2], [2,3,4], six(s)), B([12,0,0], [16,3,2], six(s)), B([14,0,2], [16,3,4], six(s)),
+  B([0,0,14], [4,3,16], six(s)), B([0,0,12], [2,3,14], six(s)), B([12,0,14], [16,3,16], six(s)), B([14,0,12], [16,3,14], six(s))];
+  if (d.tex.fill) els.push(B([2,4,2], [14,15,14], { up:{ t:d.tex.fill, glow:1.4 } }));
+  return { els }; };
 // our anchors: models that move are parts; the anchor block itself sits in one cell
 S.armillary = (p, ctx, d) => { const t = d.tex.ring, els = [B([5,5,5], [11,11,11], six(d.tex.core), { glowAwake:3 })];
   const ring = (rad, plane, part, n) => { for (let i = 0; i < n; i++) { const a = i/n*Math.PI*2, c = 8 + Math.cos(a)*rad, s = Math.sin(a)*rad, q = 1.5;
@@ -362,6 +375,15 @@ reg('flowering_azalea_leaves', { tex:'block/flowering_azalea_leaves', render:'cu
 reg('nether_brick_fence', { shape:S.fence, tex:'block/nether_bricks', fam:'nether_fence', ...nonFull });
 reg('iron_door', { shape:S.door, tex:{ top:'block/iron_door_top', bottom:'block/iron_door_bottom' }, render:'cutout', ...nonFull });
 reg('iron_trapdoor', { shape:S.trapdoor, tex:'block/iron_trapdoor', render:'cutout', ...nonFull });
+
+// workshop and mine (round 5's forge)
+reg('furnace', { shape:S.front, tex:{ front:'block/furnace_front', on:'block/furnace_front_on', side:'block/furnace_side', top:'block/furnace_top' }, light:p => p.lit ? 13 : 0 });
+reg('blast_furnace', { shape:S.front, tex:{ front:'block/blast_furnace_front', on:'block/blast_furnace_front_on', side:'block/blast_furnace_side', top:'block/blast_furnace_top' }, light:p => p.lit ? 13 : 0 });
+reg('smithing_table', { tex:{ north:'block/smithing_table_front', south:'block/smithing_table_front', side:'block/smithing_table_side', top:'block/smithing_table_top', bottom:'block/smithing_table_bottom' } });
+reg('anvil', { shape:S.anvil, tex:{ side:'block/anvil', top:'block/anvil_top' }, ...nonFull });
+reg('cauldron', { shape:S.cauldron, tex:{ side:'block/cauldron_side', top:'block/cauldron_top', inner:'block/cauldron_inner', bottom:'block/cauldron_bottom' }, ...nonFull });
+reg('lava_cauldron', { shape:S.cauldron, tex:{ side:'block/cauldron_side', top:'block/cauldron_top', inner:'block/cauldron_inner', bottom:'block/cauldron_bottom', fill:'block/lava_still' }, ...nonFull, light:15 });
+for (const id of ['iron_ore', 'gold_ore', 'copper_ore', 'deepslate_iron_ore', 'deepslate_gold_ore', 'raw_iron_block', 'raw_gold_block', 'raw_copper_block']) cube(id);
 
 // light, small things, plants
 reg('lantern', { shape:S.lantern, tex:'block/lantern', render:'cutout', ...nonFull, light:15, glow:1.6 });
