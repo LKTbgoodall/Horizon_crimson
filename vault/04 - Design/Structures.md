@@ -105,3 +105,11 @@ Three sizes: **small** (common, everywhere), **medium** (rare, a destination), *
 ## Notes
 - Small ones are the volume: they make the world feel watched. Medium ones are reasons to travel. Immense ones are what people film.
 - Overworld structures go through worldgen (content half); Pale Realm structures through the Realm's pure generator ([[ADR-018 The Pale Realm lives in the far End]]).
+
+## The colossus awakening: three stagings (2026-11-16)
+Bastien on 0.5.2 in game: "it's just lit, that's all". `preview/colossus-awakening.html` (the real colossus, only the awakening changes; Replay button):
+- **A · The Heart**: one beat shakes the ground, the beats quicken and each sends a light wave through the veins from the heart; eyes open, the head lifts and turns to the player, the sword fills from the ground up, the crown fires a beam into the moon. Game: the beat waves need our GPU pass; head = block entity model; beam = sky pass.
+- **B · The Moon's Call**: a beam comes down from the moon onto the crown, light runs down the body top to bottom into the heart (one great beat, souls spiralling in), the sword fills from the guard down, a ring round the dais lights, braziers flare, he lifts his face to the moon. Game: mostly the lit states timed as now, plus the descending beam (sky pass) and a ring of our blocks in the dais.
+- **C · The Guardian**: red mist, a turning rune ring, a quick steady heart, eyes open and the head follows the player with two red gazes, the sword lights, eight crystal shards burst from the helm and circle the head. Game: head tracking, gazes and halo are block entity models / GPU pass (seen within 64 blocks); mist = fog hook.
+- Engine additions for it (`preview/lib/viewer.js`): emissive gain and a pulse wavefront (`glow`), 4 beams, particle kinds 4 (souls spiralling in), 5 (sparks thrown once), 6 (low fog), `shakes`, `phases`, the camera passed to `groups` and `beams`, a Replay button.
+- Waiting for Bastien's pick.

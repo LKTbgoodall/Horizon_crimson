@@ -1,7 +1,10 @@
 // Crimson Eclipse preview engine: the viewer (WebGL2, HDR + bloom, day and blood moon, inspection, layer cut).
-// Particle kinds (W.part): 0 motes, 1 rising embers (ex = height), 2 drips falling from a ring, 3 a shockwave ring every 3.3 s (ex = last radius, ph = angle).
+// Particle kinds (W.part): 0 motes, 1 rising embers (ex = height), 2 drips falling from a ring, 3 a shockwave ring every 3.3 s (ex = last radius, ph = angle),
+// 4 a soul streaming in a spiral into its point (ex = start radius), 5 a spark thrown once from its point at d (ph = direction, ex = reach),
+// 6 low fog drifting over the ground (ex = drift radius).
 // A page calls CE.viewer({ variants:[{ key, name, make(W) -> meta }] }). meta: tag, cam {target, dist, yaw, pitch}, sun, moon,
-// size, shakeAt, groups(nt, t) -> [mat4 by group], beams(nt, t, G) -> [{a, b, w, e}].
+// size, shakeAt, shakes [[nt, strength]], phases [[nt, label]], groups(nt, t, eye) -> [mat4 by group], beams(nt, t, G, eye) -> [{a, b, w, e}] (4 at most),
+// glow(nt, t) -> { g: emissive gain, c: [x, y, z], r: radius of a pulse wavefront from c, s: its strength }.
 'use strict';
 (function () {
 const CE = window.CE;
@@ -65,7 +68,7 @@ const BLOCK_FS = `#version 300 es
 precision highp float; precision highp sampler2DArray;
 in vec3 vW; in vec3 vUV; in vec3 vN; in float vShade; in vec4 vL; in vec4 vM; in vec2 vX;
 uniform sampler2DArray uTex; uniform int uPass; uniform vec3 uCam, uSun, uMoon; uniform float uN, uAT, uTime, uSee;
-uniform vec4 uLP[8]; uniform vec4 uLC[8]; uniform int uNL;
+uniform vec4 uLP[8]; uniform vec4 uLC[8]; uniform int uNL; uniform vec4 uPulse; uniform float uGlow, uPulseR;
 out vec4 o;
 float lv(float l){ float x = clamp(l/15., 0., 1.); return x/(4. - 3.*x); }
 float on(float d){ return d < 0. ? 1. : smoothstep(d, d + 1.2, uAT)*uN; }
@@ -90,7 +93,8 @@ void main(){
     vec3 L = lp.xyz - vW; float d = length(L);
     lit += lc.rgb*le*smoothstep(lc.w*2., lc.w*.3, d)/(1. + d*d/(lc.w*lc.w)*2.)*(.25 + .75*max(dot(N, L/d), 0.))*fl; }
   float bright = smoothstep(.3, .9, max(tx.r, max(tx.g, tx.b)));
-  vec3 col = alb*lit + alb*bright*(vM.y + vM.z*e)*(.9 + .1*fl);
+  float pw = (length(vW - uPulse.xyz) - uPulseR)/2.5, gain = uGlow + uPulse.w*exp(-pw*pw);
+  vec3 col = alb*lit + alb*bright*(vM.y + vM.z*e*gain)*(.9 + .1*fl);
   float dist = length(vW - uCam);
   vec3 fogc = mix(vec3(.50, .56, .64), vec3(.055, .012, .016), uN);
   col = mix(col, fogc, 1. - exp(-dist*mix(.0017, .0042, uN)));
@@ -132,6 +136,11 @@ void main(){
     a = .3*(.6+.4*sin(t*.5+ph*20.)); col = mix(vec3(1.,.92,.75), vec3(1.4,.3,.22), uN); }
   else if (k == 1) { float f = fract(t*.11*(.6+ph) + ph*7.); p += vec3(sin(f*5.+ph*9.)*.8, f*ex, cos(f*4.+ph*7.)*.8); a = sin(f*3.1416)*e; }
   else if (k == 3) { float f = fract(t*.3), an = ph*6.2832; p += vec3(cos(an)*f*ex, .6*sin(f*3.1416), sin(an)*f*ex); sz *= 1. + f*5.; a = e*(1.-f)*(1.-f)*1.6; }
+  else if (k == 4) { float f = fract(t*.16*(.7+ph*.6) + ph*11.), an = ph*6.2832 + f*7.5, r = ex*(1.-f)*(1.-f);
+    p += vec3(cos(an)*r, -ex*.7*(1.-f)*(1.-f), sin(an)*r); a = e*smoothstep(0., .15, f)*(1.-f*f)*1.3; sz *= .6 + .8*(1.-f); }
+  else if (k == 5) { float f = clamp((uAT - d)/1.6, 0., 1.), an = ph*6.2832, el = .35 + fract(ph*13.)*.9;
+    p += vec3(cos(an)*cos(el), sin(el), sin(an)*cos(el))*ex*(1.-(1.-f)*(1.-f)) - vec3(0., 4.*f*f, 0.); a = uN*step(.001, f)*(1.-f)*2.2; }
+  else if (k == 6) { p += vec3(sin(t*.05+ph*6.3)*ex, sin(t*.3+ph*9.)*.3, cos(t*.04+ph*5.1)*ex); a = .09*e*(.7+.3*sin(t*.4+ph*20.)); }
   else if (k == 2) { float f = fract(t*.9 + ph*5.), an = ph*6.2832; p += vec3(cos(an)*(1.05+f*.7), -2.9*f*f, sin(an)*(1.05+f*.7)); a = e*(1.-f*.7); }
   vC = aC; vCol = col; vA = a;
   if (a <= .001) { gl_Position = vec4(2., 2., 2., 1.); return; }
@@ -143,7 +152,7 @@ void main(){ float m = max(0., 1. - dot(vC, vC)); m *= m; o = vec4(vCol*m*vA, 0.
 const BEAM_VS = `#version 300 es
 precision highp float;
 layout(location=0) in vec2 aC;
-uniform mat4 uVP; uniform vec3 uCam; uniform vec3 uBA[2]; uniform vec3 uBB[2]; uniform float uBW[2]; uniform float uBE[2];
+uniform mat4 uVP; uniform vec3 uCam; uniform vec3 uBA[4]; uniform vec3 uBB[4]; uniform float uBW[4]; uniform float uBE[4];
 out vec2 vC; out float vE;
 void main(){ int i = gl_InstanceID; vec3 A = uBA[i], B = uBB[i], ax = B - A, q = mix(A, B, aC.y*.5 + .5);
   vec3 side = normalize(cross(ax, uCam - q))*uBW[i];
@@ -200,7 +209,7 @@ const HTML = `<canvas id="cv"></canvas>
 <div id="cap" class="ui"><div class="v"><b id="vk"></b><span id="vn"></span></div><div class="tag" id="vt"></div><div class="size" id="vs"></div><div class="ph" id="ph"></div></div>
 <div id="tex" class="ui"><span id="texs"></span><button id="bJar" title="Pick your own Minecraft client jar, e.g. %APPDATA%\\.minecraft\\versions\\26.3\\26.3.jar. Read here, kept in this browser, never sent anywhere.">Load real textures…</button><input id="jar" type="file" accept=".jar,.zip" hidden></div>
 <div id="bar" class="ui"><div class="grp" id="vars"></div>
-  <div class="grp"><button id="bDay">☀ Day</button><button id="bNight">☾ Blood moon</button></div>
+  <div class="grp"><button id="bDay">☀ Day</button><button id="bNight">☾ Blood moon</button><button id="bReplay">↺ Replay</button></div>
   <div class="grp"><button id="bSpin">⟳ Turn</button><label class="cut">Cut <input id="cut" type="range" min="0" max="100" value="100"><span id="cutv">all</span></label><button id="bUi">Hide UI (H)</button></div>
   <span id="hint">drag: turn · right-drag: move · wheel: zoom · hover: block id · double-click: centre · N / D</span></div>
 <div id="tip"></div><div id="load">Building…</div><div id="err"></div>`;
@@ -311,6 +320,7 @@ CE.viewer = function (opts) {
     ld.textContent = 'Building…'; CACHE.length = 0; select(vi); };
   function setNight(on) { night = on; $('bDay').classList.toggle('on', !on); $('bNight').classList.toggle('on', on); }
   $('bDay').onclick = () => setNight(false); $('bNight').onclick = () => setNight(true);
+  $('bReplay').onclick = () => { setNight(true); nt = 0; };
   $('bSpin').onclick = () => { spin = !spin; $('bSpin').classList.toggle('on', spin); };
   $('bUi').onclick = () => document.body.classList.toggle('hide');
   $('cut').oninput = e => { const v = +e.target.value; cutY = v >= +e.target.max ? 1e9 : v; $('cutv').textContent = cutY > 1e8 ? 'all' : 'y ≤ ' + v; };
@@ -339,6 +349,7 @@ CE.viewer = function (opts) {
   const LP = new Float32Array(32), LC = new Float32Array(32), GB = new Float32Array(256);
   let last = performance.now(), time = 0, tipT = 0;
   function phase() { if (nt <= .01) return opts.dayLabel || 'Day'; if (!night) return 'Dawn: falling asleep';
+    if (cur && cur.phases) { let l = cur.phases[0][1]; for (const [at, label] of cur.phases) if (nt >= at) l = label; return l; }
     return nt < 3 ? 'Nightfall: the moon turns red' : nt < 9 ? 'Awakening' : 'Awake under the blood moon'; }
   function frame(now) { requestAnimationFrame(frame); draw(now); }
   function draw(now) {
@@ -351,15 +362,17 @@ CE.viewer = function (opts) {
     $('ph').textContent = phase();
     eye = [target[0] + dist*Math.cos(pitch)*Math.sin(yaw), target[1] + dist*Math.sin(pitch), target[2] + dist*Math.cos(pitch)*Math.cos(yaw)];
     if (cur.shakeAt != null && night && nt > cur.shakeAt) { const a = .35*Math.exp(-(nt - cur.shakeAt)*2.2); eye = eye.map((v, i) => v + Math.sin(time*(37 + i*11))*a); }
+    if (cur.shakes && night) for (const [at, k] of cur.shakes) if (nt > at) { const a = k*Math.exp(-(nt - at)*2.6); eye = eye.map((v, i) => v + Math.sin(time*(41 + i*13))*a); }
     eye[1] = Math.max(eye[1], .6);
     const view = lookAt(eye, target, [0, 1, 0]), proj = perspective(55*Math.PI/180, W/H, .1, 1500), VP = mul(proj, view);
     VPi = invert(VP);
     const R = [view[0], view[4], view[8]], U = [view[1], view[5], view[9]];
-    const G0 = cur.groups ? cur.groups(nt, time) : [], G = Array.from({ length:16 }, (_, g) => G0[g] || I4());
+    const G0 = cur.groups ? cur.groups(nt, time, eye) : [], G = Array.from({ length:16 }, (_, g) => G0[g] || I4());
     for (let g = 0; g < 16; g++) GB.set(G[g], g*16);
     const L = cur.lights; LP.fill(0); LC.fill(0);
     L.slice(0, 8).forEach((l, i) => { const p = l.grp ? applyP(G[l.grp], l.p) : l.p; LP.set([p[0], p[1], p[2], l.d], i*4); LC.set([l.c[0], l.c[1], l.c[2], l.rad], i*4); });
-    const beams = cur.beams ? cur.beams(nt, time, G) : [];
+    const beams = cur.beams ? cur.beams(nt, time, G, eye) : [];
+    const GL = cur.glow ? cur.glow(nt, time) : null;
     if (mouse && !drag && now - tipT > 90) { tipT = now; const e = pick(), tip = $('tip');
       if (e) { tip.textContent = `${CE.describe(e)}\nat ${e.x}, ${e.y}, ${e.z}`; tip.style.display = 'block';
         tip.style.left = Math.min(mouse[0] + 14, innerWidth - tip.offsetWidth - 8) + 'px'; tip.style.top = (mouse[1] + 16) + 'px'; }
@@ -378,6 +391,7 @@ CE.viewer = function (opts) {
     gl.uniformMatrix4fv(u.uVP, false, VP); gl.uniformMatrix4fv(u.uG, false, GB);
     gl.uniform3fv(u.uCam, eye); gl.uniform3fv(u.uSun, cur.sun); gl.uniform3fv(u.uMoon, cur.moon);
     gl.uniform1f(u.uN, uN); gl.uniform1f(u.uAT, nt); gl.uniform1f(u.uTime, time); gl.uniform1f(u.uCut, cutY); gl.uniform1f(u.uSee, cutY < 1e8 ? .3 : 0);
+    gl.uniform1f(u.uGlow, GL ? GL.g ?? 1 : 1); gl.uniform4fv(u.uPulse, GL && GL.c ? [...GL.c, GL.s || 0] : [0, 0, 0, 0]); gl.uniform1f(u.uPulseR, GL ? GL.r || 0 : 0);
     gl.uniform4fv(u.uLP, LP); gl.uniform4fv(u.uLC, LC); gl.uniform1i(u.uNL, Math.min(8, L.length));
     gl.uniform1i(u.uPass, 0);
     for (const m of [cur.ground, cur.solid]) if (m && m.n) { gl.bindVertexArray(m.vao); gl.drawElements(gl.TRIANGLES, m.n, gl.UNSIGNED_INT, 0); }
@@ -390,11 +404,11 @@ CE.viewer = function (opts) {
       gl.uniform1f(P_PART.u.uTime, time); gl.uniform1f(P_PART.u.uAT, nt); gl.uniform1f(P_PART.u.uN, uN);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, cur.parts.length/11); }
     if (beams.length) { gl.useProgram(P_BEAM.p); gl.bindVertexArray(vaoQ);
-      const BA = new Float32Array(6), BB = new Float32Array(6), BWd = new Float32Array(2), BE = new Float32Array(2);
-      beams.slice(0, 2).forEach((b, i) => { BA.set(b.a, i*3); BB.set(b.b, i*3); BWd[i] = b.w; BE[i] = b.e*uN; });
+      const BA = new Float32Array(12), BB = new Float32Array(12), BWd = new Float32Array(4), BE = new Float32Array(4);
+      beams.slice(0, 4).forEach((b, i) => { BA.set(b.a, i*3); BB.set(b.b, i*3); BWd[i] = b.w; BE[i] = b.e*uN; });
       gl.uniformMatrix4fv(P_BEAM.u.uVP, false, VP); gl.uniform3fv(P_BEAM.u.uCam, eye); gl.uniform1f(P_BEAM.u.uTime, time);
       gl.uniform3fv(P_BEAM.u.uBA, BA); gl.uniform3fv(P_BEAM.u.uBB, BB); gl.uniform1fv(P_BEAM.u.uBW, BWd); gl.uniform1fv(P_BEAM.u.uBE, BE);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.min(2, beams.length)); }
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, Math.min(4, beams.length)); }
     gl.depthMask(true); gl.disable(gl.BLEND); gl.disable(gl.DEPTH_TEST);
     // bloom and tone mapping
     gl.bindVertexArray(vaoE);

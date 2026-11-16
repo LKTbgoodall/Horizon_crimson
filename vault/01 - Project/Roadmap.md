@@ -77,6 +77,8 @@ Back: [[00 - Home]]
 - [x] Bastien builds 0.5.1 (2026-11-16): still dark (worldgen drops mod block entities)
 - [x] 0.5.2: anchors found in loaded chunks and set again by command (2026-11-16)
 - [x] Bastien builds 0.5.2 and watches a colossus wake (2026-11-16): it lights; his verdict "just lit, that's all": the awakening needs a show
+- [x] Preview of the awakening, three stagings: `preview/colossus-awakening.html` (2026-11-16)
+- [ ] Bastien picks a staging; build it in the game
 - [ ] The colossus moves: head lifting, heart beating (block entity renderer); far terrain checked
 - [ ] The lantern tree as the second real structure
 - [ ] The first medium structure at full quality
