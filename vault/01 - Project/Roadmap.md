@@ -76,7 +76,7 @@ Back: [[00 - Home]]
 - [x] 0.5.1: the anchor's block entity in the template, chests on the floor (2026-11-16)
 - [x] Bastien builds 0.5.1 (2026-11-16): still dark (worldgen drops mod block entities)
 - [x] 0.5.2: anchors found in loaded chunks and set again by command (2026-11-16)
-- [ ] Bastien builds 0.5.2 and watches a colossus wake (`mod/README.md` § New in 0.5.2)
+- [x] Bastien builds 0.5.2 and watches a colossus wake (2026-11-16): it lights; his verdict "just lit, that's all": the awakening needs a show
 - [ ] The colossus moves: head lifting, heart beating (block entity renderer); far terrain checked
 - [ ] The lantern tree as the second real structure
 - [ ] The first medium structure at full quality
