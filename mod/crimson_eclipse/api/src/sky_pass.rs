@@ -9,22 +9,25 @@
 //! The numbers are `crate::rise`'s, `crate::sky`'s and `crate::shell`'s;
 //! this file uploads them and draws. The shader is `preview/blood-moon-rise.html`'s
 //! version C, `preview/abyss-climax.html`'s Pale Realm (W2, S1) and
-//! `preview/sky-break.html`'s B1, in WGSL.
+//! `preview/sky-break.html`'s B1, in WGSL. It also draws the moon's beam onto a
+//! waking colossus' crown (`crate::beam`, staging D of `preview/colossus-awakening.html`).
 
+use crate::beam::{beam, landing};
 use crate::eye::Eye;
+use crate::kneeling_colossus_wake::KNEELING_COLOSSUS_CROWN;
 use crate::moon::{day_of, time_of_day};
 use crate::night::{eclipse_seconds, presence};
 use crate::rise::frame;
 use crate::server::{Shared, TARGET};
-use crate::shell::{seal, seed_for_day, FLOATS};
-use crate::sky::{colors, lid, look, moon_direction, since_open, MOON_RADIUS};
-use horizon_client::mod_api::{wgpu, RenderHooks, RenderNeedsEvent, WorldDrawnEvent};
+use crate::shell::{FLOATS, seal, seed_for_day};
+use crate::sky::{MOON_RADIUS, colors, lid, look, moon_direction, since_open};
+use horizon_client::mod_api::{RenderHooks, RenderNeedsEvent, WorldDrawnEvent, wgpu};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
-/// Floats in the uniform block: a 4 × 4 matrix and twelve `vec4`s.
-const UNIFORM_FLOATS: usize = 64;
+/// Floats in the uniform block: a 4 × 4 matrix and fourteen `vec4`s.
+const UNIFORM_FLOATS: usize = 72;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -99,9 +102,13 @@ impl RenderHooks for Sky {
         let eye = {
             let mut guard = lock(&self.eye);
             let now = Instant::now();
-            let dt = guard.1.map_or(0.0, |last| now.duration_since(last).as_secs_f32());
+            let dt = guard
+                .1
+                .map_or(0.0, |last| now.duration_since(last).as_secs_f32());
             guard.1 = Some(now);
-            guard.0.update(dt, since_open(seconds), look(forward, moon), frame.beat);
+            guard
+                .0
+                .update(dt, since_open(seconds), look(forward, moon), frame.beat);
             guard.0
         };
 
@@ -129,7 +136,11 @@ impl RenderHooks for Sky {
             gpu.ensure_copy(w.device, w.color, w.size, w.color_format);
         }
         if gpu.uploaded != Some(seed) {
-            let bytes: Vec<u8> = shell.floats().iter().flat_map(|x| x.to_le_bytes()).collect();
+            let bytes: Vec<u8> = shell
+                .floats()
+                .iter()
+                .flat_map(|x| x.to_le_bytes())
+                .collect();
             w.queue.write_buffer(&gpu.shell, 0, &bytes);
             gpu.uploaded = Some(seed);
         }
@@ -145,9 +156,19 @@ impl RenderHooks for Sky {
             w.depth_size[1] as f32,
         ]);
         // The preview's clock started 14 seconds before the eclipse.
-        u.extend_from_slice(&[seconds + 14.0, frame.progress, frame.beat, w.camera.y as f32]);
+        u.extend_from_slice(&[
+            seconds + 14.0,
+            frame.progress,
+            frame.beat,
+            w.camera.y as f32,
+        ]);
         u.extend_from_slice(&[frame.void_radius, 0.0, 0.0, frame.corona]);
-        u.extend_from_slice(&[frame.blood, frame.stars_pull, frame.grade * presence, colors.weight]);
+        u.extend_from_slice(&[
+            frame.blood,
+            frame.stars_pull,
+            frame.grade * presence,
+            colors.weight,
+        ]);
         u.extend_from_slice(&[
             1.0 - (1.0 - frame.dark) * presence,
             frame.flash,
@@ -172,6 +193,25 @@ impl RenderHooks for Sky {
         // At dawn the slabs come back one by one, then the cracks fade.
         let (open, lines) = seal(seconds);
         u.extend_from_slice(&[crack_flash, 0.0, presence * lines, open]);
+        // The moon's beam onto the nearest waking colossus' crown, camera-relative.
+        let camera = [w.camera.x, w.camera.y, w.camera.z];
+        let landed = self
+            .shared
+            .anchors()
+            .into_iter()
+            .map(|(pos, turns)| landing(pos, KNEELING_COLOSSUS_CROWN, turns))
+            .min_by(|a, b| {
+                let d = |p: &[f64; 3]| (0..3).map(|i| (p[i] - camera[i]).powi(2)).sum::<f64>();
+                d(a).total_cmp(&d(b))
+            });
+        match (landed, beam(self.shared.awake_ticks(day_time, partial))) {
+            (Some(at), Some(b)) => {
+                let rel: [f32; 3] = std::array::from_fn(|i| (at[i] - camera[i]) as f32);
+                u.extend_from_slice(&[rel[0], rel[1], rel[2], b.width]);
+                u.extend_from_slice(&[b.lower, b.strength, 0.0, 0.0]);
+            }
+            _ => u.extend_from_slice(&[0.0; 8]),
+        }
         debug_assert_eq!(u.len(), UNIFORM_FLOATS);
         let bytes: Vec<u8> = u.iter().flat_map(|f| f.to_le_bytes()).collect();
         w.queue.write_buffer(&gpu.uniform, 0, &bytes);
@@ -233,7 +273,11 @@ impl RenderHooks for Sky {
             color_attachments: &attachments,
             ..Default::default()
         });
-        pass.set_pipeline(if can_copy { &gpu.from_copy } else { &gpu.blended });
+        pass.set_pipeline(if can_copy {
+            &gpu.from_copy
+        } else {
+            &gpu.blended
+        });
         pass.set_bind_group(0, &group, &[]);
         pass.draw(0..3, 0..1);
     }
@@ -388,11 +432,25 @@ impl Gpu {
 
     /// A texture to copy the frame into, of the frame's own format and size,
     /// read through the same format the frame is drawn in.
-    fn ensure_copy(&mut self, device: &wgpu::Device, color: &wgpu::Texture, size: [u32; 2], view_format: wgpu::TextureFormat) {
-        if self.copy.as_ref().is_some_and(|(t, s, _)| *s == size && t.format() == color.format()) {
+    fn ensure_copy(
+        &mut self,
+        device: &wgpu::Device,
+        color: &wgpu::Texture,
+        size: [u32; 2],
+        view_format: wgpu::TextureFormat,
+    ) {
+        if self
+            .copy
+            .as_ref()
+            .is_some_and(|(t, s, _)| *s == size && t.format() == color.format())
+        {
             return;
         }
-        let view_formats: &[wgpu::TextureFormat] = if view_format == color.format() { &[] } else { &[view_format] };
+        let view_formats: &[wgpu::TextureFormat] = if view_format == color.format() {
+            &[]
+        } else {
+            &[view_format]
+        };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             label: Some("Crimson Eclipse frame copy"),
             size: wgpu::Extent3d {
@@ -431,6 +489,8 @@ struct U {
     zen: vec4<f32>,
     fog: vec4<f32>,     // the colour the land's fog goes to
     g: vec4<f32>,       // the flicker of what just broke, (unused), how much of the cracks shows, how much of the holes is open
+    bm: vec4<f32>,      // the moon's beam: xyz where it lands (camera-relative), w its width in blocks
+    bn: vec4<f32>,      // its lower end's height above the landing along the moon's direction, its strength
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var depth_tex: texture_depth_2d;
@@ -1225,6 +1285,40 @@ fn is_sky(v: V) -> bool {
     return y > 192.0 && y < 196.7 && dot(rel, rel) > 256.0;
 }
 
+// How far the world drawn at this pixel is from the camera (very far for sky).
+fn scene_dist(v: V) -> f32 {
+    let at = min(vec2<i32>(v.uv * u.size.zw), vec2<i32>(u.size.zw) - vec2<i32>(1, 1));
+    let depth = textureLoad(depth_tex, max(at, vec2<i32>(0, 0)), 0);
+    if (depth <= 0.0) { return 1.0e9; }
+    let ndc = vec2<f32>(v.uv.x * 2.0 - 1.0, 1.0 - v.uv.y * 2.0);
+    let p = u.inv * vec4<f32>(ndc, depth, 1.0);
+    return length(p.xyz / p.w);
+}
+
+// The moon's beam: a line from where it lands up toward the moon, from its lower end on. The point of the beam
+// nearest the pixel's ray glows by its distance to the ray; hidden where the world drawn is nearer. Far away it
+// keeps a width of a few pixels, dimmer, so it reads from across the land.
+fn moon_beam(v: V) -> vec3<f32> {
+    if (u.bn.y <= 0.0) { return vec3<f32>(0.0); }
+    let d = normalize(v.ray);
+    let m = u.moon.xyz;
+    let a = u.bm.xyz;
+    let b = dot(d, m);
+    let dd = dot(d, -a);
+    let e = dot(m, -a);
+    let den = max(1.0 - b * b, 0.00001);
+    let tb = max((e - b * dd) / den, u.bn.x);
+    let q = a + m * tb;
+    let sr = max(dot(q, d), 0.0);
+    if (sr > scene_dist(v) + 0.5) { return vec3<f32>(0.0); }
+    let half = u.bm.w * 0.5;
+    let r = max(half, sr * 0.0016);
+    let x = length(d * sr - q) / r;
+    let core = exp(-x * x * 4.0) * 2.2 + exp(-x * x * 0.6) * 0.35;
+    let along = (0.85 + 0.15 * sin(tb * 0.25 - u.a.x * 9.0)) * (1.0 - 0.6 * clamp((tb - u.bn.x) / 300.0, 0.0, 1.0));
+    return vec3<f32>(3.0, 0.34, 0.24) * core * along * sqrt(half / r) * u.bn.y;
+}
+
 fn flash_light(v: V) -> vec3<f32> {
     let ang = acos(clamp(dot(normalize(v.ray), u.moon.xyz), -1.0, 1.0));
     return u.d.y * vec3<f32>(1.0, 0.55, 0.45) * (0.3 + 0.7 * exp(-ang * 1.5));
@@ -1270,7 +1364,7 @@ fn fs_copy(v: V) -> @location(0) vec4<f32> {
         let lum = dot(scene, vec3<f32>(0.3, 0.5, 0.2));
         col = mix(scene, lum * to_target(vec3<f32>(1.5, 0.16, 0.12)), u.c.z);
     }
-    col = col * u.d.x + to_target(flash_light(v));
+    col = col * u.d.x + to_target(flash_light(v) + moon_beam(v));
     return vec4<f32>(col, 1.0);
 }
 

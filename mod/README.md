@@ -19,6 +19,17 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.6.1: step 2, the moon's beam onto the crown
+- About 9 s after the eclipse begins (preview 3 s), a red beam comes down from the moon's real place in the sky and
+  lands on the colossus' crown 6 s later, just as the crown lights; it stays all night, thinning a little after
+  half a minute. Drawn in our sky pass: hidden behind hills and trees, a few pixels wide from far away.
+- The anchor tells where it is when it ticks (a player within its ticking range); the nearest colossus gets the beam.
+- Not yet: the sparks and mist, the ring, the heartbeat, the head and the shards. Single player only (a remote client
+  is not told where the anchors are).
+
+**Test**: `/crimson start` near a colossus, watch from 30 to 60 blocks away; then walk away (100, 200 blocks) and
+look back. Screenshots: the beam landing, and from far. `latest.log` if nothing shows.
+
 ## New in 0.6.0: the colossus wakes as staging D, step 1 (timing)
 Bastien picked staging D of `preview/colossus-awakening.html` ("The Moon's Gift", without the souls). Step 1 of 5
 (ADR-023 in the vault): only the timing of what lights, from the builder, 60 game ticks for each preview second.

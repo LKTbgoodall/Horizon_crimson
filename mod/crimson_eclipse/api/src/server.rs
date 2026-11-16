@@ -2,10 +2,10 @@
 //! command. The rules are `crate::night`'s; this file only talks to Horizon.
 
 use crate::kneeling_colossus_wake::KNEELING_COLOSSUS;
-use crate::shell::{plan, seed_for_day, Plan};
-use crate::wake;
 use crate::moon::{day_of, time_of_day};
 use crate::night::{Night, Phase};
+use crate::shell::{Plan, plan, seed_for_day};
+use crate::wake;
 use horizon_client::mod_api::{
     Flow, Host, NativeCommand, NativeHeightmap, PerformCommandEvent, RegisterCommandsEvent, Text,
 };
@@ -35,6 +35,8 @@ pub struct Shared {
     shell: Mutex<Option<(i64, Arc<Plan>)>>,
     /// Overworld chunks loaded since the last look for anchors.
     loaded_chunks: Mutex<Vec<[i32; 2]>>,
+    /// The anchors that ticked lately (near a player): where, how many quarter turns, and when.
+    anchors: Mutex<Vec<([i32; 3], u8, Instant)>>,
 }
 
 impl Default for Shared {
@@ -46,13 +48,16 @@ impl Default for Shared {
             sound_tick: AtomicI64::new(NO_DAY),
             shell: Mutex::new(None),
             loaded_chunks: Mutex::new(Vec::new()),
+            anchors: Mutex::new(Vec::new()),
         }
     }
 }
 
 impl Shared {
     fn night(&self) -> MutexGuard<'_, Night> {
-        self.night.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.night
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// Whether a blood moon shows at `day_time`, for the client.
@@ -74,14 +79,42 @@ impl Shared {
     /// Notes the hour of this client tick and gives the last one's, if a
     /// blood moon showed then too. `None` forgets it.
     pub fn swap_sound_tick(&self, now: Option<i64>) -> Option<i64> {
-        let last = self.sound_tick.swap(now.unwrap_or(NO_DAY), Ordering::Relaxed);
+        let last = self
+            .sound_tick
+            .swap(now.unwrap_or(NO_DAY), Ordering::Relaxed);
         (last != NO_DAY).then_some(last)
+    }
+
+    /// Ticks since the structures woke (`crate::wake::awake_ticks`), with the
+    /// fraction of a tick past `day_time`; None while they sleep.
+    pub fn awake_ticks(&self, day_time: i64, partial: f32) -> Option<f32> {
+        let phase = self.night().phase_at(day_time);
+        wake::awake_ticks(phase, day_time).map(|t| t as f32 + partial)
+    }
+
+    /// An anchor ticked at `pos`, its structure turned `turns` quarter turns.
+    fn note_anchor(&self, pos: [i32; 3], turns: u8) {
+        let mut anchors = lock(&self.anchors);
+        anchors.retain(|&(p, _, at)| p != pos && at.elapsed().as_secs_f32() < ANCHOR_FORGOTTEN);
+        anchors.push((pos, turns, Instant::now()));
+    }
+
+    /// The anchors that ticked in the last few seconds.
+    pub fn anchors(&self) -> Vec<([i32; 3], u8)> {
+        lock(&self.anchors)
+            .iter()
+            .filter(|&&(_, _, at)| at.elapsed().as_secs_f32() < ANCHOR_FORGOTTEN)
+            .map(|&(p, t, _)| (p, t))
+            .collect()
     }
 
     /// The break of the sky for the blood moon of `day_time`'s day, planned once.
     pub fn shell(&self, day_time: i64) -> Arc<Plan> {
         let day = day_of(day_time);
-        let mut guard = self.shell.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut guard = self
+            .shell
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         if let Some((d, p)) = guard.as_ref() {
             if *d == day {
                 return Arc::clone(p);
@@ -93,7 +126,9 @@ impl Shared {
     }
 
     fn clock(&self) -> MutexGuard<'_, Option<(i64, f32, Instant)>> {
-        self.clock.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.clock
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn publish(&self, day_time: i64) {
@@ -108,7 +143,11 @@ pub fn register_commands(event: &mut RegisterCommandsEvent<'_>) {
     }
 }
 
-pub fn perform_command(shared: &Shared, host: &mut dyn Host, event: &mut PerformCommandEvent<'_>) -> Flow {
+pub fn perform_command(
+    shared: &Shared,
+    host: &mut dyn Host,
+    event: &mut PerformCommandEvent<'_>,
+) -> Flow {
     let mut words = event.command.split_whitespace();
     if words.next() != Some("crimson") {
         return Flow::Continue;
@@ -148,6 +187,9 @@ pub fn perform_command(shared: &Shared, host: &mut dyn Host, event: &mut Perform
     Flow::Cancel
 }
 
+/// Seconds after its last tick when an anchor is no longer drawn (it ticks every half second while a player is near).
+const ANCHOR_FORGOTTEN: f32 = 3.0;
+
 /// The block hidden in the Kneeling Colossus' heart; its block entity wakes the colossus.
 pub const ANCHOR: &str = "crimson_eclipse:colossus_anchor";
 /// `Level.setBlock`'s flag that tells the clients and no neighbour: lighting a candle must not pop it off.
@@ -162,22 +204,33 @@ pub fn anchor_tick(shared: &Shared, host: &mut dyn Host, pos: [i32; 3]) {
     let Some(level) = host.level(OVERWORLD) else {
         return;
     };
-    let (Some(game_time), Some(day_time)) = (host.level_game_time(level), host.level_day_time(level))
+    let (Some(game_time), Some(day_time)) =
+        (host.level_game_time(level), host.level_day_time(level))
     else {
         return;
     };
     if game_time.rem_euclid(10) != 0 {
         return;
     }
-    let Some(turns) = host.block_property(pos, "facing").and_then(|facing| wake::turns(&facing))
+    let Some(turns) = host
+        .block_property(pos, "facing")
+        .and_then(|facing| wake::turns(&facing))
     else {
         return;
     };
+    shared.note_anchor(pos, turns);
     let awake = wake::awake_ticks(shared.night().phase_at(day_time), day_time);
     for &(offset, delay) in KNEELING_COLOSSUS {
         let at = wake::place(pos, offset, turns);
-        let want = if wake::lit(awake, delay) { "true" } else { "false" };
-        if host.block_property(at, "lit").is_some_and(|now| now != want) {
+        let want = if wake::lit(awake, delay) {
+            "true"
+        } else {
+            "false"
+        };
+        if host
+            .block_property(at, "lit")
+            .is_some_and(|now| now != want)
+        {
             host.set_block_property_with(at, "lit", want, UPDATE_CLIENTS);
         }
     }
@@ -208,14 +261,22 @@ fn reseat_anchors(shared: &Shared, host: &mut dyn Host) {
     for chunk in chunks {
         let columns = wake::chunk_columns(chunk);
         let depth = wake::ANCHOR_SEARCH_DEPTH;
-        let Ok(read) =
-            host.read_columns(OVERWORLD, &columns, NativeHeightmap::WorldSurface, (depth, 0))
-        else {
+        let Ok(read) = host.read_columns(
+            OVERWORLD,
+            &columns,
+            NativeHeightmap::WorldSurface,
+            (depth, 0),
+        ) else {
             continue;
         };
-        for pos in
-            wake::find_in_columns(ANCHOR, &read.palette, &read.blocks, &columns, &read.bases, depth)
-        {
+        for pos in wake::find_in_columns(
+            ANCHOR,
+            &read.palette,
+            &read.blocks,
+            &columns,
+            &read.bases,
+            depth,
+        ) {
             let Some(facing) = host.block_property(pos, "facing") else {
                 continue;
             };
@@ -234,7 +295,9 @@ fn reseat_anchors(shared: &Shared, host: &mut dyn Host) {
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
-    mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 pub fn level_tick_post(shared: &Shared, host: &mut dyn Host, dimension: &str) {
@@ -242,7 +305,10 @@ pub fn level_tick_post(shared: &Shared, host: &mut dyn Host, dimension: &str) {
         return;
     }
     reseat_anchors(shared, host);
-    let Some(day_time) = host.level(OVERWORLD).and_then(|level| host.level_day_time(level)) else {
+    let Some(day_time) = host
+        .level(OVERWORLD)
+        .and_then(|level| host.level_day_time(level))
+    else {
         return;
     };
     let change = shared.night().tick(day_time);

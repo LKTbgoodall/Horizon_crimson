@@ -81,7 +81,8 @@ Back: [[00 - Home]]
 - [x] Bastien picks D, without the souls (2026-11-16, [[ADR-023 The colossus awakening is staging D, built in steps]])
 - [x] Step 1, timing (0.6.0, 2026-11-16)
 - [ ] Bastien builds 0.6.0 and watches the light run down
-- [ ] Step 2, the moon's beam onto the crown
+- [x] Step 2, the moon's beam onto the crown (0.6.1, 2026-11-16)
+- [ ] Bastien builds 0.6.1 and looks at the beam, near and far
 - [ ] Step 3, sparks, embers, mist
 - [ ] Step 4, the ring on the dais
 - [ ] Step 5, heartbeat, head, shards

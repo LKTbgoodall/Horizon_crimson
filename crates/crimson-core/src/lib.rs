@@ -2,6 +2,7 @@
 //! blood moon happens, the phases of its night, what the rise looks like at
 //! each instant, how the eye behaves, which events the night holds.
 //! The hook layer reads these and translates; it decides nothing.
+pub mod beam;
 pub mod eye;
 pub mod kneeling_colossus_wake;
 pub mod moon;

@@ -298,3 +298,6 @@ pub const KNEELING_COLOSSUS: &[([i16; 3], u16)] = &[
     ([6, -21, 20], 960),
     ([16, -20, 13], 960),
 ];
+
+/// The cell over the top of its crown, where the moon's beam lands, from the anchor (as built).
+pub const KNEELING_COLOSSUS_CROWN: [i16; 3] = [0, 20, 3];
