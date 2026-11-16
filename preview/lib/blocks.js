@@ -390,16 +390,17 @@ REG.open_eyeblossom.glowAwake = 0; REG.open_eyeblossom.glow = .8;
 
 // ------------------------------------------------------------------ ours (crimson_eclipse:)
 const ours = (id, def) => reg('crimson_eclipse:' + id, { lightColor:'red', ...def });
-ours('crimson_crystal', { tex:'ce:crimson_crystal', glow:.12, glowAwake:2.2, lightAwake:13 });
-ours('crimson_crystal_cluster', { gameProps:{ facing:'up' }, shape:S.cross, tex:'ce:crimson_crystal_cluster', render:'cutout', ...nonFull, glow:.15, glowAwake:2.6, lightAwake:9 });
+ours('crimson_crystal', { wakes:true, gameProps:{ lit:false }, tex:'ce:crimson_crystal', glow:.12, glowAwake:2.2, lightAwake:13 });
+ours('crimson_crystal_cluster', { wakes:true, gameProps:{ facing:'up', lit:false }, shape:S.cross, tex:'ce:crimson_crystal_cluster', render:'cutout', ...nonFull, glow:.15, glowAwake:2.6, lightAwake:9 });
 ours('eclipse_glass', { tex:'ce:eclipse_glass', render:'translucent', opaque:false, cullSame:true, glow:.05, glowAwake:1.8, lightAwake:9 });
 ours('eclipse_eye', { tex:'ce:eclipse_eye', glow:.05, glowAwake:4.5, lightAwake:15 });
-ours('helm_eye', { gameProps:{ facing:'south' }, tex:{ south:'ce:eclipse_eye', side:'block/black_concrete', top:'block/black_concrete', bottom:'block/black_concrete' }, glow:.05, glowAwake:4.5, lightAwake:10 });
+ours('helm_eye', { wakes:true, gameProps:{ facing:'south', lit:false }, tex:{ south:'ce:helm_eye', side:'block/black_concrete', top:'block/black_concrete', bottom:'block/black_concrete' }, glow:.05, glowAwake:4.5, lightAwake:10 });
 ours('moon_lens',{ tex:'ce:moon_lens', glow:.05, glowAwake:6, lightAwake:12 });
 ours('blood_leaves', { tex:'ce:blood_leaves', render:'cutout', opaque:false, damp:1, glow:.25 });
-ours('vigil_lantern', { gameProps:{ lit:false }, shape:S.lantern, tex:'ce:vigil_lantern', render:'cutout', ...nonFull, glowAwake:2.4, lightAwake:13 });
-ours('crimson_vein', { tex:'ce:crimson_vein', glow:.05, glowAwake:2.2, lightAwake:5 });
-ours('rune_stone',{ tex:'ce:rune_stone', glowAwake:2.5, lightAwake:7 });
+ours('vigil_lantern', { wakes:true, gameProps:{ lit:false }, shape:S.lantern, tex:'ce:vigil_lantern', render:'cutout', ...nonFull, glowAwake:2.4, lightAwake:13 });
+ours('crimson_vein', { wakes:true, gameProps:{ lit:false }, tex:'ce:crimson_vein', glow:.05, glowAwake:2.2, lightAwake:5 });
+ours('colossus_anchor', { tex:'ce:crimson_crystal', gameProps:{ facing:'south' }, glow:.12, glowAwake:2.2, lightAwake:13 });   // hidden in the heart: its block entity wakes the colossus
+ours('rune_stone', { tex:'ce:rune_stone', glowAwake:2.5, lightAwake:7 });
 ours('blood_water', { shape:S.liquid, tex:'ce:blood_water', render:'translucent', opaque:false, cullSame:true, glow:.4, light:8, damp:1 });
 ours('armillary', { shape:S.armillary, tex:{ ring:'ce:brass', core:'ce:crimson_crystal' }, ...nonFull, lightAwake:12 });
 ours('vigil_clock', { shape:S.clockHands, tex:{ hand:'block/black_concrete', face:'block/calcite' }, ...nonFull });

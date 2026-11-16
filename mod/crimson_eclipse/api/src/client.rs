@@ -12,6 +12,23 @@ use crate::sound::{cues, Cue};
 use horizon_client::fog::FogType;
 use horizon_client::mod_api::{CameraShakeEvent, ComputeFogColorEvent, Host, RenderFogEvent};
 
+/// Our blocks' lit textures glow: each sprite with its overlay in
+/// `assets/crimson_eclipse/textures/emissive/`, drawn full bright where it is
+/// opaque (`tools/make-block-textures.mjs` makes both). Only the lit states
+/// use these sprites, so the glow comes and goes with the blood moon.
+const GLOWING: [(&str, &str); 5] = [
+    ("crimson_eclipse:block/crimson_crystal_lit", "crimson_eclipse:emissive/crimson_crystal_lit"),
+    ("crimson_eclipse:block/crimson_crystal_cluster_lit", "crimson_eclipse:emissive/crimson_crystal_cluster_lit"),
+    ("crimson_eclipse:block/crimson_vein_lit", "crimson_eclipse:emissive/crimson_vein_lit"),
+    ("crimson_eclipse:block/helm_eye_lit", "crimson_eclipse:emissive/helm_eye_lit"),
+    ("crimson_eclipse:block/vigil_lantern_lit", "crimson_eclipse:emissive/vigil_lantern_lit"),
+];
+
+/// Each world frame: ask for our glowing layers.
+pub fn emissive(layers: &mut Vec<(&'static str, &'static str)>) {
+    layers.extend(GLOWING);
+}
+
 /// The rise's picture now and how present the blood moon is (0 to 1), or
 /// None when no blood moon shows.
 fn now(shared: &Shared, host: &dyn Host, partial: f32) -> Option<(f32, Frame, f32)> {

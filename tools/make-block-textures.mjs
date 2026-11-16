@@ -11,9 +11,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-// game texture name -> preview painter
-const TEXTURES = { crimson_crystal:'crimson_crystal', crimson_crystal_cluster:'crimson_crystal_cluster', crimson_vein:'crimson_vein',
-  helm_eye:'eclipse_eye', vigil_lantern:'vigil_lantern', vigil_lantern_lit:'vigil_lantern_lit' };
+// our blocks in the game: each has a day texture and a lit one (the state the blood moon turns on); the lit one's
+// glowing pixels also make its emissive layer (textures/emissive/<name>_lit.png, drawn full bright by the game)
+const BLOCKS = ['crimson_crystal', 'crimson_crystal_cluster', 'crimson_vein', 'helm_eye', 'vigil_lantern'];
 
 // a canvas that only keeps the pixels the painters put
 const document = { createElement: () => { const c = { width:0, height:0, getContext: () => ({
@@ -31,9 +31,15 @@ function png({ width:w, height:h, data }) {
   const raw = Buffer.alloc((w*4 + 1)*h); for (let y = 0; y < h; y++) { raw[y*(w*4 + 1)] = 0; Buffer.from(data.buffer, y*w*4, w*4).copy(raw, y*(w*4 + 1) + 1); }
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]);
 }
-const dir = join(root, 'mod', 'content', 'assets', 'crimson_eclipse', 'textures', 'block');
-mkdirSync(dir, { recursive:true });
-for (const [name, painter] of Object.entries(TEXTURES)) {
-  const c = ctx.CE.textures.OURS[painter](); if (!c.image) throw new Error('no pixels for ' + painter);
-  writeFileSync(join(dir, name + '.png'), png(c.image)); console.log(`${name}.png (${c.image.width}x${c.image.height}) from ${painter}`);
+const tex = join(root, 'mod', 'content', 'assets', 'crimson_eclipse', 'textures'), dir = join(tex, 'block'), glow = join(tex, 'emissive');
+mkdirSync(dir, { recursive:true }); mkdirSync(glow, { recursive:true });
+const paint = name => { const c = ctx.CE.textures.OURS[name](); if (!c.image) throw new Error('no pixels for ' + name); return c.image; };
+for (const block of BLOCKS) for (const name of [block, block + '_lit']) {
+  const im = paint(name); writeFileSync(join(dir, name + '.png'), png(im)); console.log(`block/${name}.png (${im.width}x${im.height})`);
+  if (!name.endsWith('_lit')) continue;
+  // the layer: the lit pixels, opaque where they are bright and saturated (glass, crystal, the eye), clear on iron and stone
+  const d = new Uint8ClampedArray(im.data);
+  for (let i = 0; i < d.length; i += 4) { const mx = Math.max(d[i], d[i+1], d[i+2])/255, mn = Math.min(d[i], d[i+1], d[i+2])/255;
+    const a = Math.max(0, Math.min(1, (mx - .42)/.38))*Math.max(0, Math.min(1, (mx - mn)/.35 + .3)); d[i+3] = Math.round(d[i+3]*a); }
+  writeFileSync(join(glow, name + '.png'), png({ width:im.width, height:im.height, data:d })); console.log(`emissive/${name}.png`);
 }

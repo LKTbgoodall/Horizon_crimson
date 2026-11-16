@@ -19,6 +19,24 @@ powershell -ExecutionPolicy Bypass -File tools\build-mod.ps1 -Instance cagebound
 Claude checks the glue first with `tools/check-glue.sh` and the sky shader with `tools/check-shader.sh`
 (no game, nothing of the mod run).
 
+## New in 0.5.0: the colossus wakes under the blood moon
+- **It lights up**: a block hidden in its heart (`colossus_anchor`, a block entity that ticks while you are near)
+  turns on 293 blocks one after the other during the eclipse, over about 13 seconds: the heart and the crystal sword,
+  the veins spreading over the stone, the eyes, the crown's points, the lanterns, the candles and the braziers. They go
+  out at dawn. Each of our blocks has a `lit` state (its light: crystal 4 to 12, eyes 1 to 12, lanterns 0 to 13...).
+- **It glows**: the lit states draw textures with an emissive layer (`textures/emissive/`), drawn full bright: the
+  crystal, the veins, the eyes and the lantern glass shine at night, not by day.
+- **64 × 64 textures** for our five blocks, day and lit (painted by the preview's painters, `tools/make-block-textures.mjs`).
+- Not yet: the head lifting and the heart beating (moving parts need a block entity renderer).
+
+**Test** (a world where the colossus already stands works: its anchor is in the template):
+1. Find one (`/locate structure crimson_eclipse:kneeling_colossus`) or place one (`/place structure crimson_eclipse:kneeling_colossus`).
+   A colossus placed by 0.4.0 has no anchor: place a new one.
+2. Stand near it and `/crimson start`: about a minute later the eclipse begins and the colossus lights up in a wave.
+   Look: do the crystal, veins, eyes and lanterns shine (full bright) at night and not by day? Do candles and braziers catch?
+3. Wait for dawn (or `/time set 23000`): everything goes out.
+4. Screenshots by day and at night; `latest.log` if something is off.
+
 ## New in 0.4.0: the Kneeling Colossus generates in the world
 The first real structure, block for block as `preview/kneeling-colossus.html` draws it (day state: nothing moves
 yet, candles out, lanterns dark; the blood moon's awakening needs the mod's code, next step).

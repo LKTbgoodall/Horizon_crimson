@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "crimson_eclipse:block/crimson_crystal"
+    },
+    "facing=east": {
+      "model": "crimson_eclipse:block/crimson_crystal"
+    },
+    "facing=south": {
+      "model": "crimson_eclipse:block/crimson_crystal"
+    },
+    "facing=west": {
+      "model": "crimson_eclipse:block/crimson_crystal"
+    }
+  }
+}

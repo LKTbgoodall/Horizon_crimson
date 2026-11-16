@@ -30,6 +30,7 @@ CE.World = function () {
       let awake = null;
       if (opts.awake) { awake = typeof opts.awake === 'string' ? parseState(opts.awake) : { id:s.id, props:{ ...s.props, ...opts.awake } };
         if (awake.id !== 'air' && !REG[awake.id]) throw new Error('Unknown block: ' + awake.id); }
+      else if (REG[s.id].wakes) awake = { id:s.id, props:{ ...s.props, lit:true } };      // ours light under the blood moon, as in the game
       const e = { x, y, z, id:s.id, p:{ ...s.props }, g:opts.g || 0, d:opts.d || 0, awake, parts:opts.parts || null };
       M.set(KEY(x, y, z), e); return e;
     },
@@ -214,7 +215,8 @@ CE.mesh = function (W) {
     const ckey = dyn ? null : id + JSON.stringify(props);
     if (ckey && cache.has(ckey)) return cache.get(ckey);
     const ctx = { nb: dir => { const d = DIRV[dir]; return W.get(e.x + d[0], e.y + d[1], e.z + d[2]); } };
-    const q = bake(def.shape(props, ctx, def));
+    let q = bake(def.shape(props, ctx, def));
+    if (props.lit && def.wakes) q = q.map(k => { const lit = /^ce:[a-z_]+$/.test(k.t) && CE.textures?.OURS[k.t.slice(3) + '_lit'] ? k.t + '_lit' : k.t; return lit === k.t ? k : { ...k, t:lit }; });
     if (ckey) cache.set(ckey, q); return q;
   }
   let quads = 0;

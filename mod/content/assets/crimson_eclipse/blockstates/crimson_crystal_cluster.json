@@ -1,28 +1,54 @@
 {
   "variants": {
-    "facing=up": {
+    "facing=up,lit=false": {
       "model": "crimson_eclipse:block/crimson_crystal_cluster"
     },
-    "facing=down": {
+    "facing=up,lit=true": {
+      "model": "crimson_eclipse:block/crimson_crystal_cluster_lit"
+    },
+    "facing=down,lit=false": {
       "model": "crimson_eclipse:block/crimson_crystal_cluster",
       "x": 180
     },
-    "facing=north": {
+    "facing=down,lit=true": {
+      "model": "crimson_eclipse:block/crimson_crystal_cluster_lit",
+      "x": 180
+    },
+    "facing=north,lit=false": {
       "model": "crimson_eclipse:block/crimson_crystal_cluster",
       "x": 90
     },
-    "facing=south": {
+    "facing=north,lit=true": {
+      "model": "crimson_eclipse:block/crimson_crystal_cluster_lit",
+      "x": 90
+    },
+    "facing=south,lit=false": {
       "model": "crimson_eclipse:block/crimson_crystal_cluster",
       "x": 90,
       "y": 180
     },
-    "facing=east": {
+    "facing=south,lit=true": {
+      "model": "crimson_eclipse:block/crimson_crystal_cluster_lit",
+      "x": 90,
+      "y": 180
+    },
+    "facing=east,lit=false": {
       "model": "crimson_eclipse:block/crimson_crystal_cluster",
       "x": 90,
       "y": 90
     },
-    "facing=west": {
+    "facing=east,lit=true": {
+      "model": "crimson_eclipse:block/crimson_crystal_cluster_lit",
+      "x": 90,
+      "y": 90
+    },
+    "facing=west,lit=false": {
       "model": "crimson_eclipse:block/crimson_crystal_cluster",
+      "x": 90,
+      "y": 270
+    },
+    "facing=west,lit=true": {
+      "model": "crimson_eclipse:block/crimson_crystal_cluster_lit",
       "x": 90,
       "y": 270
     }

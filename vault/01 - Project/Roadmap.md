@@ -71,7 +71,9 @@ Back: [[00 - Home]]
 - [ ] Bastien loads his real textures (button on the page) and picks one (or mixes), then we refine it on the page
 - [x] The colossus kept, its real structure: template from the preview's builder, our blocks, loot, worldgen (0.4.0, [[ADR-021 One builder for the preview and the game]], 2026-11-16)
 - [ ] Bastien builds 0.4.0 and looks at the colossus in a new world (test in `mod/README.md`)
-- [ ] The colossus wakes: anchor code (head, heart, eyes, crown, candles, lanterns, braziers) under the blood moon; far terrain checked
+- [x] The colossus wakes: an anchor block entity lights 293 blocks in a wave, emissive glow, 64 px textures (0.5.0, [[ADR-022 A structure wakes through its anchor]], 2026-11-16)
+- [ ] Bastien builds 0.5.0 and watches a colossus wake (`mod/README.md` § New in 0.5.0)
+- [ ] The colossus moves: head lifting, heart beating (block entity renderer); far terrain checked
 - [ ] The lantern tree as the second real structure
 - [ ] The first medium structure at full quality
 - [ ] A first immense one

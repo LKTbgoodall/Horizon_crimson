@@ -1,7 +1,21 @@
 {
   "template": "minecraft:polished_deepslate",
-  "properties": {
-    "light": 2
+  "state_properties": {
+    "lit": {
+      "type": "boolean"
+    }
+  },
+  "default_state": {
+    "lit": "false"
+  },
+  "state_light": {
+    "properties": [
+      "lit"
+    ],
+    "values": {
+      "false": 0,
+      "true": 6
+    }
   },
   "item": true
 }

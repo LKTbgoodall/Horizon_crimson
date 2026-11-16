@@ -12,36 +12,50 @@ const files = [];
 const put = (path, obj) => { const p = join(root, path); mkdirSync(dirname(p), { recursive:true }); writeFileSync(p, JSON.stringify(obj, null, 2) + '\n'); files.push(path); };
 const M = name => `${NS}:block/${name}`;
 
-// ---- our blocks: each copies a vanilla template (behaviour, states, shape) and changes what differs
+// ---- our blocks: each copies a vanilla template (behaviour, states, shape) and changes what differs.
+// Each has a `lit` state (false by day): the mod's code turns it on under the blood moon, with its lit model, whose
+// texture has an emissive layer (textures/emissive/<name>_lit.png, the `emissive` hook in client.rs).
+const LIT = { lit:{ type:'boolean' } };
+const lights = (off, on) => ({ properties:['lit'], values:{ false:off, true:on } });
+// blockstate variants for every value of `axes` (property -> {value: {x, y}}) times lit
+function variants(name, axes = {}) {
+  const out = {}, keys = Object.keys(axes);
+  const walk = (i, key, rot) => { if (i === keys.length) { for (const lit of [false, true]) out[[...key, `lit=${lit}`].join(',')] = { model:M(name + (lit ? '_lit' : '')), ...rot }; return; }
+    for (const [v, r] of Object.entries(axes[keys[i]])) walk(i + 1, [...key, `${keys[i]}=${v}`], { ...rot, ...r }); };
+  walk(0, [], {}); return { variants:out };
+}
+const both = (name, model) => ({ [name]:model(name), [name + '_lit']:model(name + '_lit') });
 const BLOCKS = {
-  crimson_crystal: { name:'Crimson Crystal', decl:{ template:'minecraft:amethyst_block', properties:{ hardness:2.0, explosion_resistance:6.0, light:6, requires_tool:true }, item:true },
-    states:{ variants:{ '':{ model:M('crimson_crystal') } } }, models:{ crimson_crystal:{ parent:'minecraft:block/cube_all', textures:{ all:M('crimson_crystal') } } } },
-  crimson_crystal_cluster: { name:'Crimson Crystal Cluster', decl:{ template:'minecraft:amethyst_cluster', properties:{ light:5 }, item:true },
-    states:{ variants:{ 'facing=up':{ model:M('crimson_crystal_cluster') }, 'facing=down':{ model:M('crimson_crystal_cluster'), x:180 },
-      'facing=north':{ model:M('crimson_crystal_cluster'), x:90 }, 'facing=south':{ model:M('crimson_crystal_cluster'), x:90, y:180 },
-      'facing=east':{ model:M('crimson_crystal_cluster'), x:90, y:90 }, 'facing=west':{ model:M('crimson_crystal_cluster'), x:90, y:270 } } },
-    models:{ crimson_crystal_cluster:{ parent:'minecraft:block/cross', textures:{ cross:M('crimson_crystal_cluster') } } } },
-  crimson_vein: { name:'Crimson Vein', decl:{ template:'minecraft:polished_deepslate', properties:{ light:2 }, item:true },
-    states:{ variants:{ '':{ model:M('crimson_vein') } } }, models:{ crimson_vein:{ parent:'minecraft:block/cube_all', textures:{ all:M('crimson_vein') } } } },
+  crimson_crystal: { name:'Crimson Crystal', decl:{ template:'minecraft:amethyst_block', state_properties:LIT, default_state:{ lit:'false' },
+      properties:{ hardness:2.0, explosion_resistance:6.0, requires_tool:true }, state_light:lights(4, 12), item:true },
+    states:variants('crimson_crystal'), models:both('crimson_crystal', t => ({ parent:'minecraft:block/cube_all', textures:{ all:M(t) } })) },
+  crimson_crystal_cluster: { name:'Crimson Crystal Cluster', decl:{ template:'minecraft:amethyst_cluster', state_properties:LIT, default_state:{ lit:'false' },
+      state_light:lights(3, 9), item:true },
+    states:variants('crimson_crystal_cluster', { facing:{ up:{}, down:{ x:180 }, north:{ x:90 }, south:{ x:90, y:180 }, east:{ x:90, y:90 }, west:{ x:90, y:270 } } }),
+    models:both('crimson_crystal_cluster', t => ({ parent:'minecraft:block/cross', textures:{ cross:M(t) } })) },
+  crimson_vein: { name:'Crimson Vein', decl:{ template:'minecraft:polished_deepslate', state_properties:LIT, default_state:{ lit:'false' }, state_light:lights(0, 6), item:true },
+    states:variants('crimson_vein'), models:both('crimson_vein', t => ({ parent:'minecraft:block/cube_all', textures:{ all:M(t) } })) },
   // an eye on one face only (the helm's eyes): a template with a facing and no behaviour of its own
-  helm_eye: { name:'Helm Eye', decl:{ template:'minecraft:black_glazed_terracotta', properties:{ light:9 }, item:true },
-    states:{ variants:{ 'facing=north':{ model:M('helm_eye') }, 'facing=east':{ model:M('helm_eye'), y:90 }, 'facing=south':{ model:M('helm_eye'), y:180 }, 'facing=west':{ model:M('helm_eye'), y:270 } } },
-    models:{ helm_eye:{ parent:'minecraft:block/orientable', textures:{ front:M('helm_eye'), side:'minecraft:block/black_concrete', top:'minecraft:block/black_concrete' } } } },
-  // dark by day; `lit` is for the mod's code to turn on under the blood moon
-  vigil_lantern: { name:'Vigil Lantern', decl:{ template:'minecraft:lantern', state_properties:{ lit:{ type:'boolean' } }, default_state:{ lit:'false' },
-      state_light:{ properties:['lit'], values:{ false:0, true:13 } }, item:true },
-    states:{ variants:{ 'hanging=false,lit=false':{ model:M('vigil_lantern') }, 'hanging=true,lit=false':{ model:M('vigil_lantern_hanging') },
-      'hanging=false,lit=true':{ model:M('vigil_lantern_lit') }, 'hanging=true,lit=true':{ model:M('vigil_lantern_hanging_lit') } } },
-    models:{ vigil_lantern:{ parent:'minecraft:block/template_lantern', textures:{ lantern:M('vigil_lantern') } },
-      vigil_lantern_hanging:{ parent:'minecraft:block/template_hanging_lantern', textures:{ lantern:M('vigil_lantern') } },
-      vigil_lantern_lit:{ parent:'minecraft:block/template_lantern', textures:{ lantern:M('vigil_lantern_lit') } },
-      vigil_lantern_hanging_lit:{ parent:'minecraft:block/template_hanging_lantern', textures:{ lantern:M('vigil_lantern_lit') } } } },
+  helm_eye: { name:'Helm Eye', decl:{ template:'minecraft:black_glazed_terracotta', state_properties:LIT, default_state:{ lit:'false' }, state_light:lights(1, 12), item:true },
+    states:variants('helm_eye', { facing:{ north:{}, east:{ y:90 }, south:{ y:180 }, west:{ y:270 } } }),
+    models:both('helm_eye', t => ({ parent:'minecraft:block/orientable', textures:{ front:M(t), side:'minecraft:block/black_concrete', top:'minecraft:block/black_concrete' } })) },
+  vigil_lantern: { name:'Vigil Lantern', decl:{ template:'minecraft:lantern', state_properties:LIT, default_state:{ lit:'false' }, state_light:lights(0, 13), item:true },
+    states:variants('vigil_lantern', { hanging:{ false:{}, true:{} } }),
+    models:{ ...both('vigil_lantern', t => ({ parent:'minecraft:block/template_lantern', textures:{ lantern:M(t) } })),
+      ...both('vigil_lantern_hanging', t => ({ parent:'minecraft:block/template_hanging_lantern', textures:{ lantern:M(t.replace('_hanging', '')) } })) } },
+  // hidden in the colossus' heart: its block entity (server.rs) wakes the colossus around it; no item
+  colossus_anchor: { name:'Colossus Anchor', decl:{ template:'minecraft:black_glazed_terracotta', properties:{ hardness:-1.0, explosion_resistance:3600000.0 }, item:false },
+    states:{ variants:{ 'facing=north':{ model:M('crimson_crystal') }, 'facing=east':{ model:M('crimson_crystal') }, 'facing=south':{ model:M('crimson_crystal') }, 'facing=west':{ model:M('crimson_crystal') } } },
+    models:{} },
 };
+// the hanging lantern's states draw the hanging models
+for (const [k, v] of Object.entries(BLOCKS.vigil_lantern.states.variants)) if (k.includes('hanging=true')) v.model = v.model.replace('vigil_lantern', 'vigil_lantern_hanging');
 const lang = {};
 for (const [id, b] of Object.entries(BLOCKS)) {
   put(`data/${NS}/horizon/block/${id}.json`, b.decl);
   put(`assets/${NS}/blockstates/${id}.json`, b.states);
   for (const [m, model] of Object.entries(b.models)) put(`assets/${NS}/models/block/${m}.json`, model);
+  if (b.decl.item === false) { lang[`block.${NS}.${id}`] = b.name; continue; }
   put(`assets/${NS}/items/${id}.json`, { model:{ type:'minecraft:model', model:M(id) } });
   put(`data/${NS}/loot_table/blocks/${id}.json`, { type:'minecraft:block', pools:[{ rolls:1, entries:[{ type:'minecraft:item', name:`${NS}:${id}` }],
     conditions:[{ condition:'minecraft:survives_explosion' }] }] });

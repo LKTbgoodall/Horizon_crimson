@@ -1,10 +1,26 @@
 {
   "template": "minecraft:amethyst_block",
+  "state_properties": {
+    "lit": {
+      "type": "boolean"
+    }
+  },
+  "default_state": {
+    "lit": "false"
+  },
   "properties": {
     "hardness": 2,
     "explosion_resistance": 6,
-    "light": 6,
     "requires_tool": true
+  },
+  "state_light": {
+    "properties": [
+      "lit"
+    ],
+    "values": {
+      "false": 4,
+      "true": 12
+    }
   },
   "item": true
 }

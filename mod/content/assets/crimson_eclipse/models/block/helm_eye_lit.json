@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "front": "crimson_eclipse:block/helm_eye_lit",
+    "side": "minecraft:block/black_concrete",
+    "top": "minecraft:block/black_concrete"
+  }
+}

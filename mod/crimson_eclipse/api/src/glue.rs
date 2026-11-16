@@ -6,7 +6,8 @@ use crate::client;
 use crate::server::{self, Shared};
 use crate::sky_pass::Sky;
 use horizon_client::mod_api::{
-    CameraShakeEvent, ComputeFogColorEvent, Flow, Hooks, Host, LevelTickPostEvent,
+    BlockEntityEvent, BlockEntityTickEvent, BlockEntityTicksEvent, CameraShakeEvent, Compound,
+    ComputeFogColorEvent, EmissiveEvent, Flow, Hooks, Host, LevelTickPostEvent,
     PerformCommandEvent, RegisterCommandsEvent, RenderFogEvent, RenderHooks, TickEvent,
 };
 use std::sync::Arc;
@@ -57,5 +58,29 @@ impl Hooks for CrimsonEclipse {
 
     fn camera_shake(&self, host: &dyn Host, event: &mut CameraShakeEvent<'_>) {
         client::camera_shake(&self.shared, host, event);
+    }
+
+    fn emissive(&self, _host: &dyn Host, event: &mut EmissiveEvent<'_>) {
+        client::emissive(event.layers);
+    }
+
+    fn block_entity(
+        &self,
+        _host: &mut dyn Host,
+        event: &mut BlockEntityEvent<'_>,
+    ) -> Option<(String, Compound)> {
+        (event.block == server::ANCHOR).then(|| (server::ANCHOR.to_string(), Compound::new()))
+    }
+
+    fn block_entity_ticks(&self, _host: &dyn Host, event: &mut BlockEntityTicksEvent<'_>) {
+        if event.block == server::ANCHOR {
+            event.ticks = true;
+        }
+    }
+
+    fn block_entity_tick(&self, host: &mut dyn Host, event: &mut BlockEntityTickEvent<'_>) {
+        if event.entity.id == server::ANCHOR {
+            server::anchor_tick(&self.shared, host, event.pos);
+        }
     }
 }

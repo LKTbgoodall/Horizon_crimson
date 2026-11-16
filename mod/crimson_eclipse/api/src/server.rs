@@ -1,7 +1,9 @@
 //! Server side: ticks the night with the overworld clock and runs the test
 //! command. The rules are `crate::night`'s; this file only talks to Horizon.
 
+use crate::kneeling_colossus_wake::KNEELING_COLOSSUS;
 use crate::shell::{plan, seed_for_day, Plan};
+use crate::wake;
 use crate::moon::{day_of, time_of_day};
 use crate::night::{Night, Phase};
 use horizon_client::mod_api::{
@@ -141,6 +143,41 @@ pub fn perform_command(shared: &Shared, host: &mut dyn Host, event: &mut Perform
     };
     host.feedback(Text::literal(reply));
     Flow::Cancel
+}
+
+/// The block hidden in the Kneeling Colossus' heart; its block entity wakes the colossus.
+pub const ANCHOR: &str = "crimson_eclipse:colossus_anchor";
+/// `Level.setBlock`'s flag that tells the clients and no neighbour: lighting a candle must not pop it off.
+const UPDATE_CLIENTS: i32 = 2;
+
+/// A tick of the colossus anchor's block entity (it ticks while players are
+/// near): every half second, each block of the colossus' wake table gets the
+/// `lit` that `crate::wake` gives for now: lit one after the other during the
+/// eclipse, out from dawn. A block that is not there now (an unloaded chunk,
+/// one a player replaced) has no `lit` and is left; it is tried again.
+pub fn anchor_tick(shared: &Shared, host: &mut dyn Host, pos: [i32; 3]) {
+    let Some(level) = host.level(OVERWORLD) else {
+        return;
+    };
+    let (Some(game_time), Some(day_time)) = (host.level_game_time(level), host.level_day_time(level))
+    else {
+        return;
+    };
+    if game_time.rem_euclid(10) != 0 {
+        return;
+    }
+    let Some(turns) = host.block_property(pos, "facing").and_then(|facing| wake::turns(&facing))
+    else {
+        return;
+    };
+    let awake = wake::awake_ticks(shared.night().phase_at(day_time), day_time);
+    for &(offset, delay) in KNEELING_COLOSSUS {
+        let at = wake::place(pos, offset, turns);
+        let want = if wake::lit(awake, delay) { "true" } else { "false" };
+        if host.block_property(at, "lit").is_some_and(|now| now != want) {
+            host.set_block_property_with(at, "lit", want, UPDATE_CLIENTS);
+        }
+    }
 }
 
 pub fn level_tick_post(shared: &Shared, host: &mut dyn Host, dimension: &str) {

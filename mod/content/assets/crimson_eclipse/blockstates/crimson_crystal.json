@@ -1,7 +1,10 @@
 {
   "variants": {
-    "": {
+    "lit=false": {
       "model": "crimson_eclipse:block/crimson_crystal"
+    },
+    "lit=true": {
+      "model": "crimson_eclipse:block/crimson_crystal_lit"
     }
   }
 }

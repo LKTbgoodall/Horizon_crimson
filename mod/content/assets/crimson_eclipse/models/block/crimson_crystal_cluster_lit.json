@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cross",
+  "textures": {
+    "cross": "crimson_eclipse:block/crimson_crystal_cluster_lit"
+  }
+}

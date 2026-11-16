@@ -6,7 +6,7 @@
 'use strict';
 (function () {
 const CE = window.CE = window.CE || {};
-const { hash3 } = CE.math;
+const { hash3, vnoise } = CE.math;
 const LAYER = 64;
 
 const hex = h => { h = h.replace('#', ''); return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]; };
@@ -102,17 +102,7 @@ function standIn(name) {
 }
 
 // ------------------------------------------------------------------ our own textures (crimson_eclipse)
-const crystalPx = (x, y, s) => { // faceted crimson crystal
-  let best = 1e9, second = 1e9, id = 0;
-  for (let i = 0; i < 6; i++) { const cx = hash3(i, 1, s)*16, cy = hash3(i, 2, s)*16;
-    for (const ox of [-16, 0, 16]) for (const oy of [-16, 0, 16]) { const d = Math.hypot(x - cx - ox, y - cy - oy); if (d < best) { second = best; best = d; id = i; } else if (d < second) second = d; } }
-  const shade = .45 + .7*hash3(id, 3, s), edge = second - best < 1.1;
-  let c = mix([70, 4, 14], [235, 40, 55], shade); if (edge) c = mix(c, [255, 130, 140], .55);
-  if (hash3(x, y, s + 9) > .965) c = [255, 210, 215]; return c; };
 const OURS = {
-  crimson_crystal: () => paint(16, 16, (x, y) => crystalPx(x, y, 4)),
-  crimson_crystal_cluster: () => paint(16, 16, (x, y) => { const shards = [[8, 1, 2.6], [4, 6, 2], [12, 5, 2.2], [6, 10, 1.6], [11, 10, 1.6]];
-    for (const [cx, top, w] of shards) { const k = (y - top) / (16 - top); if (k >= 0 && Math.abs(x + .5 - cx) < w*(.25 + .75*Math.min(1, k*2.2))) return crystalPx(x, y, 7); } return null; }),
   eclipse_glass: () => paint(16, 16, (x, y) => { const lead = x === 0 || y === 0 || x === 15 || y === 15 || (x + y) % 8 === 0 || (x - y + 16) % 8 === 0;
     if (lead) return [24, 16, 18, 255]; const v = hash3(x, y, 21); return [150 + 70*v, 12 + 20*v, 24 + 18*v, 165]; }),
   eclipse_eye: () => paint(16, 16, (x, y) => { const r = Math.hypot(x - 7.5, y - 7.5);
@@ -122,16 +112,7 @@ const OURS = {
     return mix([255, 230, 220], [200, 40, 40], Math.min(1, r/7)) .map((v, i) => v*(Math.floor(r) % 2 ? .85 : 1)); }),
   blood_leaves: () => paint(16, 16, (x, y) => { const v = hash3(x, y, 31); if (v < .2) return null;
     return v > .93 ? [255, 90, 70] : sh([150, 18, 24], .55 + .6*hash3(x >> 1, y >> 1, 32)); }),
-  vigil_lantern: () => vigilLantern([196, 66, 58]),
-  vigil_lantern_lit: () => vigilLantern([255, 104, 80]),
-  crimson_vein: () => paint(16, 16, (x, y) => { const v = Math.abs(x - 7.5 - 3.5*Math.sin(y*.55) - 1.5*Math.sin(y*1.3 + 1)) < .9 || (y === 4 && x > 8 && x < 14) || (Math.abs(y - 11 - (x - 9)*.5) < .7 && x > 8);
-    return v ? [235, 44, 38] : sh([62, 60, 68], .82 + .3*hash3(x, y, 12)); }),
 };
-// the lantern sheet, laid out as vanilla's lantern texture (body sides, top and bottom, cap, handle)
-function vigilLantern(glass) { return paint(16, 16, (x, y) => { const iron = [44, 40, 46];
-    if (x < 6 && y >= 2 && y < 9) return (x === 0 || x === 5 || y === 2 || y === 8 || x === 3) ? iron : sh(glass, .85 + .3*hash3(x, y, 3));
-    if (x < 6 && y >= 9 && y < 15) return sh(iron, .9 + .2*hash3(x, y, 4)); if (x >= 1 && x < 5 && y < 2) return iron;
-    if (x >= 11 && x < 14 && ((y >= 1 && y < 3) || (y >= 10 && y < 12))) return iron; return null; }); }
 Object.assign(OURS, {
   rune_stone: () => paint(16, 16, (x, y) => { const rune = (x === 7 && y > 2 && y < 13) || (y === 5 && x > 4 && x < 11) || (x - y === 2 && x > 6 && x < 12) || (x + y === 20 && x > 7 && x < 12);
     if (x === 0 || y === 0 || x === 15 || y === 15) return [32, 28, 36]; return rune ? [230, 46, 40] : sh([46, 40, 50], .85 + .3*hash3(x, y, 5)); }),
@@ -141,6 +122,88 @@ Object.assign(OURS, {
   brass: () => paint(16, 16, (x, y) => sh([196, 150, 64], .75 + .4*hash3(x, y, 11) + (y % 5 === 0 ? -.15 : 0))),
   figure: () => paint(16, 16, (x, y) => sh([34, 32, 40], .85 + .3*hash3(x, y, 2))),
   missing: () => paint(16, 16, (x, y) => ((x >> 3) + (y >> 3)) % 2 ? [255, 0, 220] : [10, 10, 10]),
+});
+
+// ------------------------------------------------------------------ 64 px: the blocks that are in the game (Bastien: 64 x 64 minimum)
+// Each has a day look and a lit look (`_lit`, the state the blood moon turns on; its glowing pixels become the
+// game's emissive layer). Painted in [0, 1) so they tile; the game and the previews use the same pixels.
+const HD = 64, cl = v => Math.max(0, Math.min(1, v)), smooth = (a, b, x) => { x = cl((x - a)/(b - a)); return x*x*(3 - 2*x); };
+const hd = f => paint(HD, HD, (x, y) => f((x + .5)/HD, (y + .5)/HD, x, y));
+function voronoi(u, v, n, seed) { let d1 = 9, d2 = 9, id = 0, cx = 0, cy = 0;
+  for (let i = 0; i < n; i++) { const px = hash3(i, 1, seed), py = hash3(i, 2, seed);
+    for (const ox of [-1, 0, 1]) for (const oy of [-1, 0, 1]) { const d = Math.hypot(u - px - ox, v - py - oy);
+      if (d < d1) { d2 = d1; d1 = d; id = i; cx = px + ox; cy = py + oy; } else if (d < d2) d2 = d; } }
+  return { d1, d2, id, cx, cy }; }
+// faceted crimson crystal: each facet a lit plane, bright ridges, a groove beside them, sparkles
+function crystalHD(u, v, x, y, lit, seed = 4) {
+  const c = voronoi(u, v, 10, seed), a = hash3(c.id, 3, seed)*6.283;
+  const k = cl(.3 + .5*hash3(c.id, 5, seed) + (Math.cos(a)*(u - c.cx) + Math.sin(a)*(v - c.cy))*3.4 - (u + v - 1)*.25);
+  let col = mix([56, 3, 12], [226, 36, 56], k);
+  const edge = c.d2 - c.d1;
+  if (edge < .016) col = mix(col, [255, 156, 166], .8*(1 - edge/.016)); else if (edge < .035) col = sh(col, .78);
+  const inner = 1 - smooth(.0, .22, c.d1);                                          // a soft light deep in each facet
+  col = mix(col, [255, 70, 84], .18*inner);
+  if (hash3(x, y, seed + 9) > .988) col = [255, 222, 228];
+  if (lit) { col = mix(col, [255, 96, 104], .22 + .25*inner); col = col.map(v => Math.min(255, v*1.12)); }
+  return col; }
+// iron, bevelled: lighter on the top-left edge of a part, darker bottom-right
+const iron = (k, n) => sh(mix([30, 28, 34], [96, 92, 104], k), .88 + .2*n);
+function lanternHD(lit) {
+  // vanilla's lantern sheet, in 16ths: body sides 0..6 x 2..9, top and bottom 0..6 x 9..15, cap sides 1..5 x 0..2,
+  // cap top 1..5 x 10..14, handles 11..14 x 1..3 and 11..14 x 10..12
+  return hd((u, v, x, y) => { const X = u*16, Y = v*16, n = hash3(x, y, 77);
+    const inR = (x0, y0, x1, y1) => X >= x0 && X < x1 && Y >= y0 && Y < y1;
+    const bevel = (x0, y0, x1, y1) => cl(1 - ((X - x0)/(x1 - x0) + (Y - y0)/(y1 - y0))*.5);
+    if (inR(0, 2, 6, 9)) {                                                           // a body side: frame, a mid bar, glass
+      const fx = X - 0, fy = Y - 2, frame = fx < .75 || fx > 5.25 || fy < .75 || fy > 6.25, bar = Math.abs(fx - 3) < .3;
+      if (frame || bar) return iron(frame ? bevel(0, 2, 6, 9) : .4, n);
+      const g = 1 - Math.hypot((fx - 3)/2.6, (fy - 3.6)/3.2);
+      const flame = lit && Math.abs(fx - 3) < .9*(1 - (fy - 2)/4.2) && fy > 2 && fy < 6;
+      if (flame) return mix([255, 190, 90], [255, 246, 200], cl(1 - Math.abs(fx - 3)/.9));
+      return lit ? mix([200, 36, 28], [255, 132, 80], cl(g + .15*n)) : mix([46, 18, 18], [104, 34, 30], cl(g*.8 + .2*n)); }
+    if (inR(1, 10, 5, 14)) return iron(.55 + .3*(((x >> 2) + (y >> 2)) % 2), n);    // cap top: a grill
+    if (inR(0, 9, 6, 15)) { const rivet = [[1, 10], [5, 10], [1, 14], [5, 14]].some(([a, b]) => Math.hypot(X - a, Y - b) < .45);
+      return rivet ? [130, 124, 136] : iron(bevel(0, 9, 6, 15)*.8, n); }
+    if (inR(1, 0, 5, 2)) return iron(bevel(1, 0, 5, 2), n);
+    if (inR(11, 1, 14, 3) || inR(11, 10, 14, 12)) return iron(.7 - (Y % 1)*.4, n);
+    return null; }); }
+function veinHD(lit) {
+  const path = v => .5 + .22*Math.sin(v*Math.PI*1.6 + 1) + .07*Math.sin(v*Math.PI*5.2);
+  return hd((u, v, x, y) => { const n = hash3(x, y, 12), m = vnoise(u*9, v*9, 3);
+    let col = sh([66, 64, 72], .84 + .16*m + .08*n);                                  // polished deepslate
+    if (x % 32 === 0 || y % 32 === 0) col = sh(col, .82);
+    const d = Math.min(Math.abs(u - path(v)), Math.hypot(u - (.5 + .3*(v - .3)), v - .3) < .2 && v > .3 && v < .5 ? Math.abs((u - .55) - (v - .3)*1.1) : 1,
+      v > .62 && v < .8 && u < .5 ? Math.abs(v - (.62 + (.5 - u)*.4)) : 1)*HD;
+    if (d < 1.3) return lit ? mix([255, 70, 44], [255, 214, 150], cl(1 - d/1.3)) : mix([90, 14, 16], [140, 22, 22], cl(1 - d/1.3));
+    if (d < 3.2) return lit ? mix(col, [190, 40, 36], .55*(1 - (d - 1.3)/1.9)) : sh(col, .7);
+    return col; }); }
+function eyeHD(lit) {
+  return hd((u, v, x, y) => { const n = hash3(x, y, 21), dx = (u - .5)/.42, dy = (v - .5)/.22;
+    let col = sh([20, 18, 24], .8 + .3*n);                                             // the dark of the helm behind
+    const almond = dx*dx + dy*dy/(1 - .35*dx*dx);
+    if (almond > 1.12) return col; if (almond > 1) return [44, 8, 10];
+    const r = Math.hypot(u - .5, v - .5)/.19;
+    if (r > 1) return lit ? mix([150, 22, 20], [230, 60, 40], cl(1 - almond)) : mix([40, 8, 10], [76, 14, 14], cl(1 - almond));
+    if (Math.abs(u - .5) < .035*(1 - r*r) + .006) return [6, 2, 3];                   // the slit pupil
+    const ring = .5 + .5*Math.sin(r*22 + Math.atan2(v - .5, u - .5)*3);
+    col = lit ? mix([255, 210, 120], [255, 70, 30], r) : mix([150, 60, 30], [80, 16, 12], r);
+    col = sh(col, .86 + .2*ring);
+    if (Math.hypot(u - .45, v - .45) < .025) col = lit ? [255, 255, 230] : [200, 150, 130];
+    return col; }); }
+function clusterHD(lit) {
+  const shards = [[.27, .36, .1], [.75, .3, .11], [.5, .04, .14], [.38, .62, .08], [.66, .6, .085]];    // back to front
+  return hd((u, v, x, y) => { let hit = null;
+    for (const [cx, top, w] of shards) { const k = (v - top)/(1 - top); if (k < 0) continue; const half = w*Math.min(1, k*2.4)*(1 - .2*k);
+      if (Math.abs(u - cx) < half) hit = [cx, half, k]; }
+    if (!hit) return null;
+    const [cx, half, k] = hit, side = (u - cx)/half, c = crystalHD(u, v, x, y, lit, 7);
+    return sh(c, (side < 0 ? .78 : 1.12) - .2*k + (Math.abs(side) < .12 ? .25 : 0)); }); }
+Object.assign(OURS, {
+  crimson_crystal: () => hd((u, v, x, y) => crystalHD(u, v, x, y, false)), crimson_crystal_lit: () => hd((u, v, x, y) => crystalHD(u, v, x, y, true)),
+  crimson_crystal_cluster: () => clusterHD(false), crimson_crystal_cluster_lit: () => clusterHD(true),
+  crimson_vein: () => veinHD(false), crimson_vein_lit: () => veinHD(true),
+  helm_eye: () => eyeHD(false), helm_eye_lit: () => eyeHD(true),
+  vigil_lantern: () => lanternHD(false), vigil_lantern_lit: () => lanternHD(true),
 });
 
 // ------------------------------------------------------------------ the vanilla pack: textures.js, or read from the player's jar in the page

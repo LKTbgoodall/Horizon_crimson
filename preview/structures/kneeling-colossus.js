@@ -71,6 +71,7 @@ function colossus(W) {
   for (let x = -5; x <= 5; x++) for (let z = -6; z <= 3; z++) if (chamber([x, Y + 26.5, z + .5]) < 0) put(W, x, Y + 26, z, 'polished_blackstone');
   for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (let dz = -2; dz <= 2; dz++) if (Math.abs(dx) + Math.abs(dy) + Math.abs(dz) <= 2)
     W.set(HEART[0] + dx, HEART[1] + dy, HEART[2] + dz, 'crimson_eclipse:crimson_crystal', { g:2, d:4 });
+  W.set(HEART[0], HEART[1], HEART[2], 'crimson_eclipse:colossus_anchor[facing=south]', { g:2 });      // in the game its block entity wakes the colossus
   for (const e of [...W.M.values()]) if (e.z >= 2 && Math.abs(e.x) < 3.5 + 1.5*vnoise(e.x*.5, e.y*.5, 2) && e.y >= Y + 28 && e.y <= Y + 34 && e.g === 0 && BODY.get(key(e.x, e.y, e.z)) === 'armor') W.del(e.x, e.y, e.z);
   // the crystal sword
   for (let y = Y - 1; y <= Y + 16; y++) for (let x = -1; x <= 1; x++) W.set(x, y, 15, 'crimson_eclipse:crimson_crystal', { d:4.4 + (y - Y)*.09 });
@@ -80,7 +81,7 @@ function colossus(W) {
   // veins, moss, a broken pauldron
   for (const e of [...W.M.values()]) { const k = BODY.get(key(e.x, e.y, e.z)); if (!k || k === 'gold' || e.g) continue;
     if (!W.get(e.x, e.y + 1, e.z) && e.y > Y + 6 && hash3(e.x, e.y, e.z) < .3) W.set(e.x, e.y + 1, e.z, 'moss_carpet');
-    if (k === 'body' && Math.abs(vnoise(e.x*.11, e.y*.11, e.z*.11) - .5) < .017) { e.id = 'crimson_eclipse:crimson_vein'; e.d = 4 + Math.hypot(e.x - HEART[0], e.y - HEART[1], e.z - HEART[2])*.07; } }
+    if (k === 'body' && Math.abs(vnoise(e.x*.11, e.y*.11, e.z*.11) - .5) < .017) { e.id = 'crimson_eclipse:crimson_vein'; e.p = { lit:false }; e.awake = { id:e.id, props:{ lit:true } }; e.d = 4 + Math.hypot(e.x - HEART[0], e.y - HEART[1], e.z - HEART[2])*.07; } }
   K.collapse(W, e => Math.hypot(e.x + 15, e.y - Y - 37, e.z + 1) < 2.6 + 1.6*vnoise(e.x*.4, e.y*.4, e.z*.4), 'cobbled_deepslate', .5);
   // ---- inside: the crypt under the dais, a stair tower between the legs, the reliquary in the pelvis
   for (let x = -9; x <= 9; x++) for (let z = -13; z <= 5; z++) for (let y = -9; y <= -1; y++) {

@@ -1,7 +1,21 @@
 {
   "template": "minecraft:black_glazed_terracotta",
-  "properties": {
-    "light": 9
+  "state_properties": {
+    "lit": {
+      "type": "boolean"
+    }
+  },
+  "default_state": {
+    "lit": "false"
+  },
+  "state_light": {
+    "properties": [
+      "lit"
+    ],
+    "values": {
+      "false": 1,
+      "true": 12
+    }
   },
   "item": true
 }
