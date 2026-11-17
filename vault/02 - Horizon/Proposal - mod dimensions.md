@@ -15,6 +15,12 @@ Back: [[ADR-018 The Pale Realm lives in the far End]] · [[Horizon hooks and API
   3. Travel and the client: respawn, client dimension types, sky and fog from `dimension_type`. **Not started.**
 - Mods (native or `.hmod`) are not mentioned anywhere.
 
+## Re-read 2026-11-17
+- Still open. Step 1: 8 PRs merged (#15004 and #15028 on 11-11); the last two pieces ("Levels in a list keyed by level", "Dim is a level key: any dimension, the three built-ins as constants") were pushed on 11-12 to **sunrise-org/sunrise**, which mirrors Horizon's issues (Bastien saw this one there as sunrise#385). The page does not show whether #15030 and #15041 were merged.
+- Steps 2 (data pack levels, the one we need) and 3 (client): still no PR.
+- Our comment of 11-14 has no reply yet.
+- So nothing usable for the Pale Realm yet; [[ADR-018 The Pale Realm lives in the far End]] stands. Even once step 2 lands, our pin `9f42064` has to move up to get it.
+
 ## What we would bring
 Not a second refactor: UMCEKO already does steps 1-3. Our part is the **mod side**, on the mod API fork `arismoko/horizon` once step 2 lands:
 1. A **content mod ships a dimension**: `data/<ns>/dimension/*.json` and `dimension_type/*.json` inside a `.hmod` count as a data pack (so step 2 creates the level).
