@@ -31,7 +31,7 @@ Update: Horizon's issue #11282 already turns `Dim` into a level key and plans da
 - Waiting for Horizon to load data pack dimensions: not in our hands; an upstream contribution is possible later, and the region can move into a real dimension then without changing the generator.
 
 ## Option found 2026-11-17: replace the whole End with the Realm
-The Sift's Horizon port replaces the End with its own dimension through a data pack (`data/minecraft/dimension/the_end.json`), and Horizon `9f42064` honours it ([[Horizon hooks and API]] § Levels). For us: the Pale Realm's terrain, biomes and structures could come from Horizon's own worldgen (noise settings, density functions, surface rules) instead of our generator writing blocks. Cost: worlds with the mod lose the vanilla End (dragon, End cities, elytra), and it only applies to chunks generated after. Not decided: Bastien's call → [[Open questions]].
+The Sift's Horizon port replaces the End with its own dimension through a data pack (`data/minecraft/dimension/the_end.json`), and Horizon `9f42064` honours it ([[Horizon hooks and API]] § Levels). For us: the Pale Realm's terrain, biomes and structures could come from Horizon's own worldgen (noise settings, density functions, surface rules) instead of our generator writing blocks. Cost: worlds with the mod lose the vanilla End (dragon, End cities, elytra), and it only applies to chunks generated after. **Bastien, 2026-11-17: keep the vanilla End.** The Realm does not replace the End; the far-End region (our generator) stays the way until Horizon has real mod dimensions.
 
 ## To check before coding
 - ❓ `chunk_load` fires in the End and `native_edit_blocks` can write a whole new chunk without a visible pop for a player nearby.
