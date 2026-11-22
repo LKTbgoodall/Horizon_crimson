@@ -2,7 +2,8 @@
 # Validates the sky pass's WGSL with Horizon's own naga (the pinned source's
 # patched copy), without the game: parses the SHADER constant of
 # mod/crimson_eclipse/api/src/sky_pass.rs, validates it, and checks that the
-# uniform block is the size the Rust side uploads. Nothing of the mod is run.
+# uniform block is the size the Rust side uploads (UNIFORM_FLOATS of
+# crates/crimson-core/src/sky_uniforms.rs). Nothing of the mod is run.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 rev="$(sed -n 's/.*"horizon_revision": "\([0-9a-f]*\)".*/\1/p' "$root/mod/compatibility.json")"
@@ -30,11 +31,13 @@ use naga::valid::{Capabilities, ValidationFlags, Validator};
 fn main() {
     let path = std::env::args().nth(1).expect("the path of sky_pass.rs");
     let rust = std::fs::read_to_string(&path).expect("sky_pass.rs");
+    let packer = std::env::args().nth(2).expect("the path of sky_uniforms.rs");
+    let packer = std::fs::read_to_string(&packer).expect("sky_uniforms.rs");
     let marker = "pub const SHADER: &str = r#\"";
     let start = rust.find(marker).expect("the SHADER constant") + marker.len();
     let end = start + rust[start..].find("\"#;").expect("the end of SHADER");
     let source = &rust[start..end];
-    let floats: usize = rust
+    let floats: usize = packer
         .split("const UNIFORM_FLOATS: usize = ")
         .nth(1)
         .and_then(|rest| rest.split(';').next())
@@ -68,4 +71,4 @@ fn main() {
 }
 EOF
 cd "$out"
-CARGO_TARGET_DIR="$out/target" cargo run --quiet -- "$root_m/mod/crimson_eclipse/api/src/sky_pass.rs"
+CARGO_TARGET_DIR="$out/target" cargo run --quiet -- "$root_m/mod/crimson_eclipse/api/src/sky_pass.rs" "$root_m/crates/crimson-core/src/sky_uniforms.rs"

@@ -16,18 +16,16 @@ use crate::beam::{beam, landing};
 use crate::eye::Eye;
 use crate::kneeling_colossus_wake::KNEELING_COLOSSUS_CROWN;
 use crate::moon::{day_of, time_of_day};
-use crate::night::{eclipse_seconds, presence};
+use crate::night::eclipse_seconds;
 use crate::rise::frame;
 use crate::server::{Shared, TARGET};
-use crate::shell::{FLOATS, seal, seed_for_day};
-use crate::sky::{MOON_RADIUS, colors, lid, look, moon_direction, since_open};
+use crate::shell::{FLOATS, seed_for_day};
+use crate::sky::{look, moon_direction, since_open};
+use crate::sky_uniforms::{Landed, UNIFORM_FLOATS, View, forward, uniforms};
 use horizon_client::mod_api::{RenderHooks, RenderNeedsEvent, WorldDrawnEvent, wgpu};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
-
-/// Floats in the uniform block: a 4 × 4 matrix and fourteen `vec4`s.
-const UNIFORM_FLOATS: usize = 72;
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|e| e.into_inner())
@@ -89,8 +87,6 @@ impl RenderHooks for Sky {
         let tod = time_of_day(day_time);
         let seconds = eclipse_seconds(day_time, partial);
         let frame = frame(seconds);
-        let presence = presence(tod);
-        let colors = colors(&frame, presence);
         let moon = moon_direction(tod as f32 + partial);
         // Tonight's break, planned once per night (shared with the sounds and the shake).
         let seed = seed_for_day(day_of(day_time));
@@ -144,58 +140,17 @@ impl RenderHooks for Sky {
             w.queue.write_buffer(&gpu.shell, 0, &bytes);
             gpu.uploaded = Some(seed);
         }
-        let crack_flash = shell.flash(seconds);
-
-        let mut u = Vec::with_capacity(UNIFORM_FLOATS);
-        u.extend_from_slice(&inverse);
-        u.extend_from_slice(&[moon[0], moon[1], moon[2], MOON_RADIUS * frame.moon_scale]);
-        u.extend_from_slice(&[
-            w.size[0] as f32,
-            w.size[1] as f32,
-            w.depth_size[0] as f32,
-            w.depth_size[1] as f32,
-        ]);
-        // The preview's clock started 14 seconds before the eclipse.
-        u.extend_from_slice(&[
-            seconds + 14.0,
-            frame.progress,
-            frame.beat,
-            w.camera.y as f32,
-        ]);
-        u.extend_from_slice(&[frame.void_radius, 0.0, 0.0, frame.corona]);
-        u.extend_from_slice(&[
-            frame.blood,
-            frame.stars_pull,
-            frame.grade * presence,
-            colors.weight,
-        ]);
-        u.extend_from_slice(&[
-            1.0 - (1.0 - frame.dark) * presence,
-            frame.flash,
-            frame.shock_radius,
-            frame.shock_strength,
-        ]);
-        u.extend_from_slice(&[
-            frame.seam,
-            lid(&frame, seconds, presence),
-            eye.pupil,
-            if can_copy { 1.0 } else { 0.0 },
-        ]);
-        u.extend_from_slice(&[
-            eye.gaze[0],
-            eye.gaze[1],
-            colors.moon,
-            if w.color_format.is_srgb() { 1.0 } else { 0.0 },
-        ]);
-        u.extend_from_slice(&[colors.horizon[0], colors.horizon[1], colors.horizon[2], 0.0]);
-        u.extend_from_slice(&[colors.zenith[0], colors.zenith[1], colors.zenith[2], 0.0]);
-        u.extend_from_slice(&[frame.fog_rgb[0], frame.fog_rgb[1], frame.fog_rgb[2], 0.0]);
-        // At dawn the slabs come back one by one, then the cracks fade.
-        let (open, lines) = seal(seconds);
-        u.extend_from_slice(&[crack_flash, 0.0, presence * lines, open]);
+        let view = View {
+            inverse,
+            size: w.size,
+            depth_size: w.depth_size,
+            camera_y: w.camera.y as f32,
+            can_copy,
+            srgb: w.color_format.is_srgb(),
+        };
         // The moon's beam onto the nearest waking colossus' crown, camera-relative.
         let camera = [w.camera.x, w.camera.y, w.camera.z];
-        let landed = self
+        let nearest = self
             .shared
             .anchors()
             .into_iter()
@@ -204,15 +159,14 @@ impl RenderHooks for Sky {
                 let d = |p: &[f64; 3]| (0..3).map(|i| (p[i] - camera[i]).powi(2)).sum::<f64>();
                 d(a).total_cmp(&d(b))
             });
-        match (landed, beam(self.shared.awake_ticks(day_time, partial))) {
-            (Some(at), Some(b)) => {
-                let rel: [f32; 3] = std::array::from_fn(|i| (at[i] - camera[i]) as f32);
-                u.extend_from_slice(&[rel[0], rel[1], rel[2], b.width]);
-                u.extend_from_slice(&[b.lower, b.strength, 0.0, 0.0]);
-            }
-            _ => u.extend_from_slice(&[0.0; 8]),
-        }
-        debug_assert_eq!(u.len(), UNIFORM_FLOATS);
+        let landed = match (nearest, beam(self.shared.awake_ticks(day_time, partial))) {
+            (Some(at), Some(beam)) => Some(Landed {
+                rel: std::array::from_fn(|i| (at[i] - camera[i]) as f32),
+                beam,
+            }),
+            _ => None,
+        };
+        let u = uniforms(day_time, partial, &view, &eye, &shell, landed);
         let bytes: Vec<u8> = u.iter().flat_map(|f| f.to_le_bytes()).collect();
         w.queue.write_buffer(&gpu.uniform, 0, &bytes);
 
@@ -280,24 +234,6 @@ impl RenderHooks for Sky {
         });
         pass.set_bind_group(0, &group, &[]);
         pass.draw(0..3, 0..1);
-    }
-}
-
-/// The camera's forward direction, from the inverse of its view-projection
-/// (column-major): the ray through the middle of the screen. Depth is
-/// reversed: 1 is the near plane.
-fn forward(inverse: &[f32; 16]) -> [f32; 3] {
-    let at = |z: f32| {
-        let p: [f32; 4] = std::array::from_fn(|row| inverse[8 + row] * z + inverse[12 + row]);
-        [p[0] / p[3], p[1] / p[3], p[2] / p[3]]
-    };
-    let (near, far) = (at(1.0), at(0.5));
-    let d = [far[0] - near[0], far[1] - near[1], far[2] - near[2]];
-    let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
-    if len.is_finite() && len > 0.0 {
-        [d[0] / len, d[1] / len, d[2] / len]
-    } else {
-        [0.0, 0.0, 1.0]
     }
 }
 

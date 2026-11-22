@@ -12,5 +12,6 @@ pub mod rng;
 pub mod schedule;
 pub mod shell;
 pub mod sky;
+pub mod sky_uniforms;
 pub mod sound;
 pub mod wake;

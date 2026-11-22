@@ -45,6 +45,12 @@ cargo test
 - Hand-copied signatures prove nothing about visibility: a stub crate once missed a real build break (`native_as_player` private).
 - Horizon's own crates give two warnings in the stage; read the ones naming our files.
 
+## Look at the sky pass without the game (2026-11-22)
+- `tools/sky-preview.sh` renders the **real** WGSL of `sky_pass.rs` offscreen with wgpu 30.0.1 (Horizon's patched naga and wgpu-hal from `ext/src-<rev>/third_party`), over a synthetic scene (rolling land, water, night sky; reversed `Depth32Float`, 0 = sky; `Bgra8Unorm` like the game's frame), with the uniforms `crimson_core::sky_uniforms::uniforms` packs for the game too, tonight's break and the eye stepped from the eclipse's start.
+- Output: `build/sky-preview/out/sheet.png` (rows the views `moon`, `horizon`, `up`, `away`; columns the seconds since the eclipse began, omens negative) and each frame. Options: `-t -30,0,60`, `-v moon,up`, `--size 960x540`, `--day 3`. 36 frames in about 2.4 s on the dev PC's RX 9070 XT (Vulkan).
+- The land is not the game's (no blocks, no vanilla fog or clouds): judge the sky, the moon, the break and the eye; the land's grade only roughly. Idea from [[From Orbital Laser]].
+- `tools/check-shader.sh` validates the same WGSL with naga and checks the uniform size against `sky_uniforms.rs`.
+
 ## Re-pinning on a new Nightly
 - Update `horizon_revision`, the horizon-mixins revision and `hooks` everywhere together (manifest, `compatibility.json`, scripts).
 - If the launcher has not built that Nightly yet: `git archive <rev>` of a Horizon clone into `ext/src-<rev>`, delete its symlinks (horizon-mixins refuses them: `E_INVALID_PATH`), write the full revision into `.horizon-revision`, then run the glue check against it.
