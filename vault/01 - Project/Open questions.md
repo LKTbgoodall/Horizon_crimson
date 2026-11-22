@@ -1,9 +1,12 @@
 ---
 tags: [project, questions]
 status: living
-updated: 2026-11-16
+updated: 2026-11-22
 ---
 # Open questions
+
+## Launcher mod format (found 2026-11-22)
+- ❓ Orbital Laser's README says Horizon's launcher **moved to a new mod format on 2026-11-18 and no longer installs `.hnmod`**. Our combined `.hmod` built fine on 2026-11-18 23:01 (`build.log`). To check before the next build: the launcher's current format, and whether `tools/build-mod.ps1` and [[ADR-013 One combined hmod]] still hold. → [[From Orbital Laser]]
 
 ## Structures (asked to Bastien on 2026-11-15, answered the same day)
 - ✅ **S-1 The tie**: both, depending on the structure (some wake under the blood moon, some are always alive).

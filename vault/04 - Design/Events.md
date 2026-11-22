@@ -5,6 +5,8 @@ date: 2026-11-14
 ---
 # Events
 
+> Reference level and techniques per event (sky glass breaking, crystals, meteors, lightning, giants): [[From Orbital Laser]] (2026-11-22).
+
 Back: [[Concept]]
 
 Proposals for what can happen during a blood moon. Nothing picked yet. Each names how it would be drawn ([[Rendering toolkit]]).

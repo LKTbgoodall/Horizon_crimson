@@ -5,7 +5,7 @@ date: 2026-11-14
 ---
 # Rendering toolkit
 
-Back: [[Concept]] · API details: [[Horizon hooks and API]] § A8, § C
+Back: [[Concept]] · API details: [[Horizon hooks and API]] § A8, § C · Techniques from another mod: [[From Orbital Laser]]
 
 How the looks of [[Events]] can be made on Horizon `9f42064` (read in the source; only the block entity part was seen in game, on Cagebound).
 
@@ -25,4 +25,5 @@ How the looks of [[Events]] can be made on Horizon `9f42064` (read in the source
 | `music_layers`, sounds | heartbeat, deep cracks | ✅ read |
 | Anchor block entities in [[Structures]] | altar crystals, lantern cages, eyes, bells: animated models with `spin` / `rotate_about`, up to 64 blocks away | ✅ seen (Cagebound's block entity drawing) |
 | `native_edit_blocks`, falling blocks | structure awakenings (doors opening, a fault splitting) and the Pale Realm's generator | ✅ read |
+| Offscreen pass preview + WGSL check | look at our WGSL at any second without the game; real naga errors | ⏳ idea from [[From Orbital Laser]] (`tools/preview`, `tools/wgslcheck`; wgpu and naga 30.0.1 are in the pin's lock) |
 | `structure_template` | a structure that builds itself block by block | ⏳ not numbered at `9f42064` |

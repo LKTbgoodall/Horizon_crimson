@@ -19,6 +19,7 @@ verified_on: 2026-11-13
 - Mixins: https://github.com/horizon-rust/horizon-mixins
 - Native mod template: https://github.com/horizon-rust/horizon-native-mod-template
 - AE2 for Horizon (big native mod with content): https://github.com/Joeypc6/AE2-Horizon (read to understand; check its license before reusing anything)
+- Orbital Laser (Stink-O, MIT): the Horizon mod of the strike videos, WASM on a Horizon fork; techniques and tools in [[From Orbital Laser]]: https://github.com/Stink-O/orbital-laser · its fork: https://github.com/Stink-O/horizon (branch `mod-api-input-ui-render-world`) · model2mc (3D model → blocks): https://github.com/Stink-O/model2mc
 - Discord: https://discord.gg/HcTeMZxe5E
 - Useful old PRs and issues: #3996 block entities, #4055 slots, #5061 screens, #6216 typed API, #6300 blocks declared in code, #15933 / #16007 combined `.hmod` content.
 

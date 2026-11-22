@@ -48,6 +48,8 @@ Back: [[00 - Home]]
 - [ ] In-game test in `cagebound-dev`
 
 ## Phase 2: the first signature event 🔴
+- [x] Reference mod read: [[From Orbital Laser]] (2026-11-22)
+- [ ] Offscreen preview of our WGSL passes and a naga check (idea from Orbital Laser)
 - [ ] The event Bastien picks first, at full quality (models, textures, passes, sound)
 
 ## Phase 3: more events and rewards 🟠
